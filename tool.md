@@ -283,3 +283,25 @@ Referencia de arquitectura y fases: [project.md](project.md).
 - **Filtrar** (botón Filtros): muestra solo las tarjetas con alguna de las etiquetas elegidas; las columnas indican "1 de 2 tarjetas". El filtro es de la sesión (no se guarda).
 - **Buscar** encuentra tarjetas por el nombre de su etiqueta.
 - Se sincronizan con el servidor (tabla `labels`) como el resto de los datos.
+
+## 14. Tipo de columna y límite de tarjetas (implementado)
+
+Cada columna tiene un **tipo** que se elige con radios en el botón de ajustes del encabezado ("Tipo de columna"):
+
+| Tipo | Límite | Para qué |
+|---|---|---|
+| Estándar | sin límite | Por hacer, Listo, archivo… |
+| Next | **4** tarjetas | Lo que sigue |
+| Doing | **2** tarjetas | Lo que se ejecuta ahora |
+
+- El encabezado muestra el contador (`Doing 1/2`); al llegar al tope se pinta en ámbar y "Agregar tarjeta" pasa a "Límite alcanzado" (deshabilitado).
+- **Se aplica siempre**: al crear, al arrastrar (ratón, dedo o teclado), al cambiar de columna desde el detalle y al eliminar una columna moviendo sus tarjetas. Si no cabe, no se mueve y aparece un aviso. Durante el arrastre la columna llena se resalta en ámbar.
+- Reordenar dentro de la misma columna siempre se permite.
+- No se puede cambiar una columna a un tipo con menos cupo que sus tarjetas actuales (mueve algunas primero).
+- Deshacer el borrado de una tarjeta no se aplica si la columna ya se llenó.
+- Los tableros nuevos crean "En curso" como Doing; los existentes siguen como Estándar hasta que lo cambies.
+- El tipo se guarda en la columna (`kind`) y se sincroniza como cualquier otro dato.
+
+## 15. Papelera en la tarjeta (implementado)
+
+Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al apuntarla; siempre visible en táctil y atenuado en la última columna) para eliminar rápido sin abrir el detalle. Usa el mismo aviso "Deshacer" de 10 s.

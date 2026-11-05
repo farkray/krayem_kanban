@@ -71,3 +71,10 @@ export async function waitForStored(
     )
     .toBe(true)
 }
+
+/** Cambia el tipo de una columna desde su menú (Estándar / Next / Doing). */
+export async function setKind(page: Page, columnName: string, kind: 'Estándar' | 'Next' | 'Doing') {
+  const col = column(page, columnName)
+  await col.getByRole('button', { name: /^Tipo de columna/ }).click()
+  await col.getByRole('radio', { name: new RegExp(`^${kind}`) }).click()
+}

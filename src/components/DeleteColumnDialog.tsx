@@ -1,17 +1,26 @@
 import { useState } from 'react'
 import { pluralize } from '../lib/format'
-import type { Column } from '../lib/types'
+import { limitOf, type Column } from '../lib/types'
 import { ConfirmDialog } from './ConfirmDialog'
 
 interface Props {
   column: Column
   others: Column[]
   cardCount: number
+  /** Tarjetas actuales por columna, para respetar los límites al mover. */
+  countOf?: (columnId: string) => number
   onConfirm: (moveToId?: string) => void
   onCancel: () => void
 }
 
-export function DeleteColumnDialog({ column, others, cardCount, onConfirm, onCancel }: Props) {
+export function DeleteColumnDialog({
+  column,
+  others,
+  cardCount,
+  countOf,
+  onConfirm,
+  onCancel,
+}: Props) {
   const [target, setTarget] = useState('')
   return (
     <ConfirmDialog
@@ -31,11 +40,15 @@ export function DeleteColumnDialog({ column, others, cardCount, onConfirm, onCan
             onChange={(e) => setTarget(e.target.value)}
           >
             <option value="">Eliminar las tarjetas</option>
-            {others.map((c) => (
-              <option key={c.id} value={c.id}>
-                Mover a “{c.title}”
-              </option>
-            ))}
+            {others.map((c) => {
+              const limit = limitOf(c)
+              const fits = limit === null || (countOf?.(c.id) ?? 0) + cardCount <= limit
+              return (
+                <option key={c.id} value={c.id} disabled={!fits}>
+                  Mover a “{c.title}”{fits ? '' : ' (no caben)'}
+                </option>
+              )
+            })}
           </select>
         </>
       )}

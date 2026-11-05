@@ -8,12 +8,15 @@ import {
   LIMITS,
   MAX_COLUMNS,
   TABLE_KEYS,
+  COLUMN_KIND_NAMES,
+  limitOf,
   type Board,
   LABEL_COLORS,
   type Attachment,
   type Card,
   type ChecklistItem,
   type Column,
+  type ColumnKind,
   type Comment,
   type Data,
   type Label,
@@ -69,7 +72,10 @@ interface Actions {
   renameColumn: (id: string, title: string) => boolean
   deleteColumn: (id: string, moveToId?: string) => boolean
   moveColumn: (id: string, index: number) => void
+  /** Cambia el tipo de columna (Estándar / Next / Doing). Falla si ya tiene más tarjetas que el límite. */
+  setColumnKind: (id: string, kind: ColumnKind) => boolean
   // tarjetas
+  /** Devuelve null si el título es inválido o la columna llegó a su límite. */
   addCard: (columnId: string, title: string) => string | null
   updateCard: (
     id: string,
@@ -80,7 +86,8 @@ interface Actions {
       >
     >,
   ) => boolean
-  moveCard: (id: string, toColumnId: string, index: number) => void
+  /** Devuelve false si la columna destino llegó a su límite (la tarjeta no se mueve). */
+  moveCard: (id: string, toColumnId: string, index: number) => boolean
   deleteCard: (id: string) => void
   // etiquetas
   createLabel: (name: string, color: LabelColor) => string | null
@@ -194,6 +201,16 @@ export const useStore = create<Store>((set, get) => {
     }
   }
 
+  const isFull = (col: Column) => {
+    const limit = limitOf(col)
+    return limit !== null && cardsOf(col.id).length >= limit
+  }
+
+  const notifyFull = (col: Column) =>
+    notify(
+      `“${col.title}” está en su límite: ${limitOf(col)} ${limitOf(col) === 1 ? 'tarjeta' : 'tarjetas'} (${COLUMN_KIND_NAMES[col.kind ?? 'standard']}). Termina o mueve una primero.`,
+    )
+
   const colsOf = (boardId: string) =>
     live(get().columns)
       .filter((c) => c.boardId === boardId)
@@ -259,6 +276,7 @@ export const useStore = create<Store>((set, get) => {
         boardId: board.id,
         title: name,
         position: keys[i],
+        ...(name === 'En curso' ? { kind: 'doing' as const } : {}),
       }))
       put('boards', [board])
       put('columns', columns)
@@ -315,6 +333,9 @@ export const useStore = create<Store>((set, get) => {
       const cards = cardsOf(id)
 
       if (moveToId && cards.length > 0) {
+        const dest = live(get().columns).find((c) => c.id === moveToId)
+        const limit = dest ? limitOf(dest) : null
+        if (limit !== null && cardsOf(moveToId).length + cards.length > limit) return false
         // al final de la columna destino, conservando el orden
         const ts = stamp()
         const placed: Card[] = cardsOf(moveToId)
@@ -354,12 +375,33 @@ export const useStore = create<Store>((set, get) => {
       put('columns', [{ ...col, position: positionAt(siblings, index), updatedAt: stamp() }])
     },
 
+    setColumnKind: (id, kind) => {
+      const col = live(get().columns).find((c) => c.id === id)
+      if (!col) return false
+      const limit = limitOf({ kind })
+      if (limit !== null && cardsOf(id).length > limit) {
+        notify(
+          `“${col.title}” tiene ${cardsOf(id).length} tarjetas y ${COLUMN_KIND_NAMES[kind]} admite ${limit}. Mueve algunas primero.`,
+        )
+        return false
+      }
+      const next: Column = { ...col, updatedAt: stamp() }
+      if (kind === 'standard') delete next.kind
+      else next.kind = kind
+      put('columns', [next])
+      return true
+    },
+
     /* ---------- tarjetas ---------- */
 
     addCard: (columnId, title) => {
       const t = clean(title, LIMITS.card)
       const col = live(get().columns).find((c) => c.id === columnId)
       if (!t || !col) return null
+      if (isFull(col)) {
+        notifyFull(col)
+        return null
+      }
       const cards = cardsOf(columnId)
       const card: Card = {
         ...base(),
@@ -393,8 +435,13 @@ export const useStore = create<Store>((set, get) => {
     moveCard: (id, toColumnId, index) => {
       const card = get().cards.find((c) => c.id === id)
       const col = live(get().columns).find((c) => c.id === toColumnId)
-      if (!card || !col) return
+      if (!card || !col) return false
       const siblings = cardsOf(toColumnId).filter((c) => c.id !== id)
+      const limit = limitOf(col)
+      if (card.columnId !== toColumnId && limit !== null && siblings.length >= limit) {
+        notifyFull(col)
+        return false
+      }
       put('cards', [
         {
           ...card,
@@ -404,6 +451,7 @@ export const useStore = create<Store>((set, get) => {
           updatedAt: stamp(),
         },
       ])
+      return true
     },
 
     deleteCard: (id) => {
@@ -411,7 +459,14 @@ export const useStore = create<Store>((set, get) => {
       if (!card) return
       const snap = cardSnapshot([id])
       markDeleted(snap)
-      notify(`Tarjeta “${card.title}” eliminada`, () => restore(snap))
+      notify(`Tarjeta “${card.title}” eliminada`, () => {
+        const col = live(get().columns).find((c) => c.id === card.columnId)
+        if (col && isFull(col)) {
+          notify(`No se pudo deshacer: “${col.title}” ya está en su límite de tarjetas.`)
+          return
+        }
+        restore(snap)
+      })
     },
 
     /* ---------- etiquetas ---------- */

@@ -23,7 +23,7 @@ import {
 } from '@dnd-kit/sortable'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
-import { LIMITS, type Board as BoardModel } from '../lib/types'
+import { LIMITS, limitOf, type Board as BoardModel } from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
 import { useStore } from '../store/store'
@@ -279,9 +279,16 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
                 siblings={columns}
                 cards={cardsByColumn.get(col.id) ?? []}
                 total={totalByColumn.get(col.id) ?? 0}
+                counts={totalByColumn}
                 stats={stats}
                 isLast={col.id === lastColumnId}
                 dropTarget={active?.type === 'card' && overColumn === col.id}
+                blocked={
+                  active?.type === 'card' &&
+                  activeCard?.columnId !== col.id &&
+                  limitOf(col) !== null &&
+                  (totalByColumn.get(col.id) ?? 0) >= (limitOf(col) ?? 0)
+                }
                 tone={
                   columns.length > 1
                     ? idx === 0

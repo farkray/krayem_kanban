@@ -6,7 +6,8 @@ import { useAttachmentIndex, useLabelIndex } from '../store/hooks'
 import { useAttachmentUrl } from '../store/useAttachmentUrl'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
-import { CalendarIcon, CheckSquareIcon, CommentIcon, GripIcon } from './Icons'
+import { useStore } from '../store/store'
+import { CalendarIcon, CheckSquareIcon, CommentIcon, GripIcon, TrashIcon } from './Icons'
 import styles from './Card.module.css'
 
 export interface CardStats {
@@ -101,6 +102,7 @@ interface Props extends ViewProps {
 }
 
 export function SortableCard({ card, stats, finished, onOpen }: Props) {
+  const deleteCard = useStore((s) => s.deleteCard)
   // Tarjeta recién creada: entra con un pequeño movimiento (las ya existentes no se animan al cargar)
   const [fresh] = useState(() => Date.now() - Date.parse(card.createdAt) < 1500)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -114,18 +116,32 @@ export function SortableCard({ card, stats, finished, onOpen }: Props) {
   }
 
   return (
-    <article
+    <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`${styles.card} ${isDragging ? styles.dragging : ''} ${fresh ? styles.fresh : ''}`}
-      {...attributes}
-      aria-roledescription="tarjeta que se puede mover"
-      {...listeners}
-      onKeyDown={onKeyDown}
-      onClick={() => onOpen(card.id)}
+      className={`${styles.item} ${isDragging ? styles.dragging : ''}`}
     >
-      <CardView card={card} stats={stats} finished={finished} />
-    </article>
+      <article
+        className={`${styles.card} ${fresh ? styles.fresh : ''}`}
+        {...attributes}
+        aria-roledescription="tarjeta que se puede mover"
+        {...listeners}
+        onKeyDown={onKeyDown}
+        onClick={() => onOpen(card.id)}
+      >
+        <CardView card={card} stats={stats} finished={finished} />
+      </article>
+      {/* Hermano de la tarjeta (no hijo): un botón dentro de otro control no es accesible */}
+      <button
+        type="button"
+        className={`${styles.trash} ${finished ? styles.trashDone : ''}`}
+        aria-label={`Eliminar tarjeta ${card.title}`}
+        title="Eliminar (puedes deshacer)"
+        onClick={() => deleteCard(card.id)}
+      >
+        <TrashIcon width={15} height={15} />
+      </button>
+    </div>
   )
 }
 

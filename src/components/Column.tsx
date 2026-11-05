@@ -3,9 +3,17 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { pluralize } from '../lib/format'
-import { LIMITS, type Card as CardModel, type Column as ColumnModel } from '../lib/types'
+import {
+  COLUMN_KIND_NAMES,
+  LIMITS,
+  kindOf,
+  limitOf,
+  type Card as CardModel,
+  type Column as ColumnModel,
+} from '../lib/types'
 import { useStore } from '../store/store'
 import { SortableCard, type CardStats } from './Card'
+import { ColumnKindMenu } from './ColumnKindMenu'
 import { DeleteColumnDialog } from './DeleteColumnDialog'
 import { GripIcon, PlusIcon, TrashIcon } from './Icons'
 import { InlineInput } from './InlineInput'
@@ -18,9 +26,13 @@ interface Props {
   /** Total de tarjetas de la columna (con filtro activo, `cards` son solo las que coinciden). */
   total?: number
   stats: Map<string, CardStats>
+  /** Tarjetas por columna del tablero (para validar límites al eliminar). */
+  counts?: Map<string, number>
   isLast: boolean
   /** Hay una tarjeta arrastrada sobre esta columna: se resalta como destino. */
   dropTarget?: boolean
+  /** La tarjeta arrastrada no cabe aquí (columna en su límite). */
+  blocked?: boolean
   /** Etapa de la columna: inicio, en proceso o terminada (punto de color junto al contador). */
   tone?: 'start' | 'progress' | 'done'
   onOpenCard: (id: string) => void
@@ -32,14 +44,20 @@ export function Column({
   cards,
   total = cards.length,
   stats,
+  counts,
   isLast,
   dropTarget,
+  blocked,
   tone = 'start',
   onOpenCard,
 }: Props) {
   const renameColumn = useStore((s) => s.renameColumn)
   const deleteColumn = useStore((s) => s.deleteColumn)
   const addCard = useStore((s) => s.addCard)
+  const setColumnKind = useStore((s) => s.setColumnKind)
+  const kind = kindOf(column)
+  const limit = limitOf(column)
+  const full = limit !== null && total >= limit
 
   const [renaming, setRenaming] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -61,7 +79,7 @@ export function Column({
         transform: CSS.Transform.toString(sortable.transform),
         transition: sortable.transition,
       }}
-      className={`${styles.column} ${sortable.isDragging ? styles.dragging : ''} ${dropTarget ? styles.dropTarget : ''}`}
+      className={`${styles.column} ${sortable.isDragging ? styles.dragging : ''} ${dropTarget ? (blocked ? styles.dropBlocked : styles.dropTarget) : ''}`}
       aria-label={column.title}
     >
       <header className={styles.header}>
@@ -107,8 +125,17 @@ export function Column({
             {total === cards.length
               ? pluralize(cards.length, 'tarjeta', 'tarjetas')
               : `${cards.length} de ${pluralize(total, 'tarjeta', 'tarjetas')}`}
+            {limit !== null && (
+              <span
+                className={`${styles.wip} ${full ? styles.wipFull : ''}`}
+                title={`${COLUMN_KIND_NAMES[kind]}: máximo ${limit} tarjetas`}
+              >
+                {COLUMN_KIND_NAMES[kind]} {total}/{limit}
+              </span>
+            )}
           </span>
         </div>
+        <ColumnKindMenu column={column} onChange={(k) => setColumnKind(column.id, k)} />
         <button
           type="button"
           className={styles.delete}
@@ -146,9 +173,14 @@ export function Column({
             onCancel={() => setAdding(false)}
           />
         ) : (
-          <button type="button" className={styles.add} onClick={() => setAdding(true)}>
+          <button
+            type="button"
+            className={styles.add}
+            disabled={full}
+            onClick={() => setAdding(true)}
+          >
             <PlusIcon width={16} height={16} />
-            Agregar tarjeta
+            {full ? `Límite alcanzado (${limit})` : 'Agregar tarjeta'}
           </button>
         )}
       </div>
@@ -158,6 +190,7 @@ export function Column({
           column={column}
           others={siblings.filter((c) => c.id !== column.id)}
           cardCount={cards.length}
+          countOf={(id) => counts?.get(id) ?? 0}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={(moveTo) => {
             deleteColumn(column.id, moveTo)

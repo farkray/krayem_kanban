@@ -40,10 +40,31 @@ export interface Board extends Base {
   position: string
 }
 
+/** Tipo de columna: define el límite de tarjetas simultáneas (regla WIP). */
+export const COLUMN_KINDS = ['standard', 'next', 'doing'] as const
+export type ColumnKind = (typeof COLUMN_KINDS)[number]
+
+export const COLUMN_KIND_NAMES: Record<ColumnKind, string> = {
+  standard: 'Estándar',
+  next: 'Next',
+  doing: 'Doing',
+}
+
+/** Máximo de tarjetas por tipo de columna; `standard` no tiene límite. */
+export const WIP_LIMITS: Record<ColumnKind, number | null> = {
+  standard: null,
+  next: 4,
+  doing: 2,
+}
+
+export const kindOf = (c: { kind?: ColumnKind }): ColumnKind => c.kind ?? 'standard'
+export const limitOf = (c: { kind?: ColumnKind }): number | null => WIP_LIMITS[kindOf(c)]
+
 export interface Column extends Base {
   boardId: string
   title: string
   position: string
+  kind?: ColumnKind // ausente = estándar
 }
 
 export interface Card extends Base {

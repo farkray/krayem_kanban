@@ -83,7 +83,7 @@ describe('tableros y columnas', () => {
 
   it('eliminar columna moviendo tarjetas y deshacer', () => {
     const b = S().createBoard('X')!
-    const [c1, c2] = liveCols(b)
+    const [c1, , c2] = liveCols(b) // "Listo": estándar, sin límite
     S().addCard(c1.id, 'A')
     S().addCard(c1.id, 'B')
     S().addCard(c2.id, 'C')
@@ -281,5 +281,72 @@ describe('etiquetas', () => {
     await flush()
     expect(await db.outbox.get(`labels:${id}`)).toBeTruthy()
     expect((await db.labels.get(id))?.name).toBe('Coppel')
+  })
+})
+
+describe('tipo de columna y límites (WIP)', () => {
+  const setup = () => {
+    const b = S().createBoard('X')!
+    const [todo, doing, done] = liveCols(b)
+    return { b, todo, doing, done }
+  }
+
+  it('"En curso" nace como Doing y admite 2 tarjetas', () => {
+    const { doing } = setup()
+    expect(doing.kind).toBe('doing')
+    expect(S().addCard(doing.id, 'A')).toBeTruthy()
+    expect(S().addCard(doing.id, 'B')).toBeTruthy()
+    expect(S().addCard(doing.id, 'C')).toBeNull()
+    expect(S().toast?.message).toContain('límite')
+    expect(liveCards(doing.id)).toHaveLength(2)
+  })
+
+  it('Next admite 4 y una columna estándar no tiene límite', () => {
+    const { todo, done } = setup()
+    expect(S().setColumnKind(todo.id, 'next')).toBe(true)
+    for (const t of ['1', '2', '3', '4']) expect(S().addCard(todo.id, t)).toBeTruthy()
+    expect(S().addCard(todo.id, '5')).toBeNull()
+    for (let i = 0; i < 6; i++) expect(S().addCard(done.id, `d${i}`)).toBeTruthy()
+  })
+
+  it('mover a una columna llena se rechaza; reordenar dentro de ella sí', () => {
+    const { todo, doing } = setup()
+    const a = S().addCard(doing.id, 'A')!
+    S().addCard(doing.id, 'B')
+    const x = S().addCard(todo.id, 'X')!
+    expect(S().moveCard(x, doing.id, 0)).toBe(false)
+    expect(S().cards.find((c) => c.id === x)?.columnId).toBe(todo.id)
+    expect(S().moveCard(a, doing.id, 2)).toBe(true) // misma columna
+    S().deleteCard(a)
+    expect(S().moveCard(x, doing.id, 0)).toBe(true)
+  })
+
+  it('no deja cambiar a un tipo con menos cupo que las tarjetas actuales', () => {
+    const { todo } = setup()
+    for (const t of ['1', '2', '3']) S().addCard(todo.id, t)
+    expect(S().setColumnKind(todo.id, 'doing')).toBe(false)
+    expect(liveCols(todo.boardId)[0].kind).toBeUndefined()
+    expect(S().setColumnKind(todo.id, 'next')).toBe(true)
+    expect(S().setColumnKind(todo.id, 'standard')).toBe(true)
+    expect(liveCols(todo.boardId)[0].kind).toBeUndefined()
+  })
+
+  it('deshacer el borrado de una tarjeta no rebasa el límite', () => {
+    const { doing } = setup()
+    const a = S().addCard(doing.id, 'A')!
+    S().addCard(doing.id, 'B')
+    S().deleteCard(a)
+    const undo = S().toast!.undo!
+    S().addCard(doing.id, 'C')
+    undo()
+    expect(liveCards(doing.id).map((c) => c.title)).toEqual(['B', 'C'])
+    expect(S().toast?.message).toContain('No se pudo deshacer')
+  })
+
+  it('eliminar una columna no mueve tarjetas a una columna a la que no caben', () => {
+    const { todo, doing } = setup()
+    for (const t of ['1', '2', '3']) S().addCard(todo.id, t)
+    expect(S().deleteColumn(todo.id, doing.id)).toBe(false)
+    expect(liveCols(todo.boardId)).toHaveLength(3)
   })
 })

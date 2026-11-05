@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { addCard, card, column, openFirstBoard } from './helpers'
+import { addCard, card, column, openFirstBoard, setKind } from './helpers'
 
 /** Arrastra con el mouse hasta un punto absoluto (dnd-kit necesita movimiento real). */
 async function dragToPoint(page: Page, from: Locator, x: number, y: number) {
@@ -21,6 +21,7 @@ const titles = (page: Page, col: string) => column(page, col).locator('article h
 
 async function seed(page: Page) {
   await openFirstBoard(page)
+  await setKind(page, 'En curso', 'Estándar') // estos tests miden el arrastre, no el límite de Doing
   for (const [col, names] of [
     ['Por hacer', ['A1', 'A2']],
     ['En curso', ['B1', 'B2']],

@@ -276,3 +276,31 @@
     height: 44px;
   }
 }
+
+/* Contador del límite (Next / Doing) */
+.wip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-fill-2);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+.wipFull {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.add:disabled {
+  border-color: var(--color-border);
+  background: var(--color-fill-1);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.dropBlocked {
+  box-shadow:
+    0 0 0 2px var(--color-warning),
+    0 0 0 6px var(--color-warning-soft),
+    var(--shadow-card);
+}

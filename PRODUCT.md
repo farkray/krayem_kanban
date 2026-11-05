@@ -36,7 +36,8 @@ datos ni esa independencia.
 
 ## Capabilities and Constraints
 
-- Máximo 5 columnas por tablero; 3 por defecto: "Por hacer", "En curso", "Listo".
+- Máximo 5 columnas por tablero; 3 por defecto: "Por hacer", "En curso" (Doing), "Listo".
+- Tipos de columna con límite de tarjetas: Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - Funciones fuera de alcance por ahora: tableros compartidos, menciones, ayuda (botón sin función).
   Los filtros existen solo por etiqueta.
 - Borrados con "Deshacer" durante 10 s. Cerrar sesión borra los datos locales del dispositivo.
