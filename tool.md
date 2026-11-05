@@ -305,3 +305,10 @@ Cada columna tiene un **tipo** que se elige con radios en el botón de ajustes d
 ## 15. Papelera en la tarjeta (implementado)
 
 Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al apuntarla; siempre visible en táctil y atenuado en la última columna) para eliminar rápido sin abrir el detalle. Usa el mismo aviso "Deshacer" de 10 s.
+
+## 16. Actualizaciones y editor con formato (implementado)
+
+- La tarjeta tiene dos pestañas: **Detalles** (todo lo anterior, con la sección Comentarios) y **Actualizaciones / n**.
+- Actualizaciones muestra el feed (lo más nuevo primero) con un editor arriba y el botón **Actualizar**. Son los mismos datos que los comentarios: lo que se escribe en una pestaña aparece en la otra.
+- El editor tiene barra de formato (título, negrita, cursiva, tachado, listas con viñetas / numeradas / de tareas, cita, código, enlace, línea separadora; Ctrl/Cmd+B, I, K; Ctrl/Cmd+Enter envía). Guarda Markdown plano.
+- El Markdown se renderiza en el feed y en la **descripción** (se edita con "Editar"; vacía, muestra el editor directamente).

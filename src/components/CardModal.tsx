@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { byPosition } from '../lib/position'
 import { LIMITS } from '../lib/types'
-import { useColumns } from '../store/hooks'
+import { useColumns, useComments } from '../store/hooks'
 import { useStore } from '../store/store'
 import { Attachments } from './Attachments'
 import { Checklist } from './Checklist'
 import { LabelPicker } from './LabelPicker'
 import { Comments } from './Comments'
+import { FormatEditor } from './FormatEditor'
+import { Markdown } from './Markdown'
 import { Modal } from './Modal'
 import styles from './CardModal.module.css'
 
@@ -25,6 +27,9 @@ export function CardModal({ cardId, onClose }: Props) {
   const [title, setTitle] = useState(card?.title ?? '')
   const [description, setDescription] = useState(card?.description ?? '')
   const [showDates, setShowDates] = useState(false)
+  const [tab, setTab] = useState<'details' | 'updates'>('details')
+  const [editingDesc, setEditingDesc] = useState(false)
+  const updatesCount = useComments(cardId).length
   const [dateError, setDateError] = useState<string | null>(null)
 
   // Guarda la descripción pendiente al cerrar (Esc, clic fuera, etc.).
@@ -100,98 +105,157 @@ export function CardModal({ cardId, onClose }: Props) {
         </button>
       </header>
 
-      <div className={styles.body}>
-        <section className={styles.details} aria-label="Detalles">
-          <label className={styles.field}>
-            <span>Columna</span>
-            <select value={card.columnId} onChange={(e) => changeColumn(e.target.value)}>
-              {[...columns].sort(byPosition).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          {showDateFields ? (
-            <>
-              <label className={styles.field}>
-                <span>Inicio</span>
-                <input
-                  type="date"
-                  value={card.startDate ?? ''}
-                  onChange={(e) => setDate('startDate', e.target.value)}
-                />
-              </label>
-              <label className={styles.field}>
-                <span>Final</span>
-                <input
-                  type="date"
-                  value={card.endDate ?? ''}
-                  min={card.startDate}
-                  onChange={(e) => setDate('endDate', e.target.value)}
-                />
-              </label>
-            </>
-          ) : (
-            <button type="button" className={styles.link} onClick={() => setShowDates(true)}>
-              + Agregar fechas
-            </button>
-          )}
-          {dateError && (
-            <p className={styles.error} role="alert">
-              {dateError}
-            </p>
-          )}
-        </section>
-
-        <section className={styles.section}>
-          <h3>Etiquetas</h3>
-          <LabelPicker cardId={card.id} labelIds={card.labelIds ?? []} />
-        </section>
-
-        <section className={styles.section}>
-          <h3>Descripción</h3>
-          <textarea
-            className={styles.textarea}
-            rows={4}
-            value={description}
-            maxLength={LIMITS.description}
-            placeholder="Agrega una descripción…"
-            aria-label="Descripción"
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={commitDescription}
-          />
-        </section>
-
-        <section className={styles.section}>
-          <h3>Lista de tareas</h3>
-          <Checklist cardId={card.id} />
-        </section>
-
-        <section className={styles.section}>
-          <h3>Imágenes</h3>
-          <Attachments cardId={card.id} coverId={card.coverAttachmentId} />
-        </section>
-
-        <section className={styles.section}>
-          <h3>Comentarios</h3>
-          <Comments cardId={card.id} />
-        </section>
-
-        <section className={styles.dangerZone} aria-label="Eliminar">
+      <div className={styles.tabs} role="tablist" aria-label="Secciones de la tarjeta">
+        {(
+          [
+            ['details', 'Detalles'],
+            ['updates', `Actualizaciones${updatesCount > 0 ? ` / ${updatesCount}` : ''}`],
+          ] as const
+        ).map(([id, text]) => (
           <button
+            key={id}
             type="button"
-            className={styles.danger}
-            onClick={() => {
-              deleteCard(card.id)
-              onClose()
-            }}
+            role="tab"
+            id={`tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls={`panel-${id}`}
+            className={tab === id ? styles.tabOn : styles.tab}
+            onClick={() => setTab(id)}
           >
-            Eliminar tarjeta
+            {text}
           </button>
-          <span className={styles.dangerHint}>Podrás deshacerlo durante unos segundos.</span>
-        </section>
+        ))}
       </div>
+
+      {tab === 'updates' ? (
+        <div
+          className={styles.body}
+          role="tabpanel"
+          id="panel-updates"
+          aria-labelledby="tab-updates"
+        >
+          <Comments cardId={card.id} variant="updates" />
+        </div>
+      ) : (
+        <div
+          className={styles.body}
+          role="tabpanel"
+          id="panel-details"
+          aria-labelledby="tab-details"
+        >
+          <section className={styles.details} aria-label="Detalles">
+            <label className={styles.field}>
+              <span>Columna</span>
+              <select value={card.columnId} onChange={(e) => changeColumn(e.target.value)}>
+                {[...columns].sort(byPosition).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {showDateFields ? (
+              <>
+                <label className={styles.field}>
+                  <span>Inicio</span>
+                  <input
+                    type="date"
+                    value={card.startDate ?? ''}
+                    onChange={(e) => setDate('startDate', e.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Final</span>
+                  <input
+                    type="date"
+                    value={card.endDate ?? ''}
+                    min={card.startDate}
+                    onChange={(e) => setDate('endDate', e.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <button type="button" className={styles.link} onClick={() => setShowDates(true)}>
+                + Agregar fechas
+              </button>
+            )}
+            {dateError && (
+              <p className={styles.error} role="alert">
+                {dateError}
+              </p>
+            )}
+          </section>
+
+          <section className={styles.section}>
+            <h3>Etiquetas</h3>
+            <LabelPicker cardId={card.id} labelIds={card.labelIds ?? []} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3>Descripción</h3>
+              {!editingDesc && description.trim() !== '' && (
+                <button type="button" className={styles.link} onClick={() => setEditingDesc(true)}>
+                  Editar
+                </button>
+              )}
+            </div>
+            {editingDesc || description.trim() === '' ? (
+              <div
+                onBlur={(e) => {
+                  // El foco sigue dentro del editor (barra de formato): no se cierra
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+                  commitDescription()
+                  if (description.trim() !== '') setEditingDesc(false)
+                }}
+              >
+                <FormatEditor
+                  value={description}
+                  onChange={setDescription}
+                  label="Descripción"
+                  placeholder="Agrega una descripción… (admite Markdown)"
+                  rows={5}
+                  maxLength={LIMITS.description}
+                  autoFocus={editingDesc}
+                />
+              </div>
+            ) : (
+              <div className={styles.rendered}>
+                <Markdown source={description} />
+              </div>
+            )}
+          </section>
+
+          <section className={styles.section}>
+            <h3>Lista de tareas</h3>
+            <Checklist cardId={card.id} />
+          </section>
+
+          <section className={styles.section}>
+            <h3>Imágenes</h3>
+            <Attachments cardId={card.id} coverId={card.coverAttachmentId} />
+          </section>
+
+          <section className={styles.section}>
+            <h3>Comentarios</h3>
+            <Comments cardId={card.id} />
+          </section>
+
+          <section className={styles.dangerZone} aria-label="Eliminar">
+            <button
+              type="button"
+              className={styles.danger}
+              onClick={() => {
+                deleteCard(card.id)
+                onClose()
+              }}
+            >
+              Eliminar tarjeta
+            </button>
+            <span className={styles.dangerHint}>Podrás deshacerlo durante unos segundos.</span>
+          </section>
+        </div>
+      )}
 
       <footer className={styles.footer}>
         <span className={styles.autosave}>Los cambios se guardan solos</span>

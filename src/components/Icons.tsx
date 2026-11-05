@@ -92,3 +92,39 @@ export const TuneIcon = (p: SVGProps<SVGSVGElement>) => (
     <circle cx="9" cy="17" r="2" />
   </Svg>
 )
+
+export const ListIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+  </Svg>
+)
+export const OrderedListIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M10 6h10M10 12h10M10 18h10M4 5l1-1v4M3.5 14h2l-2 3h2.5" />
+  </Svg>
+)
+export const TaskListIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M4 6l1.5 1.5L8 5M4 13l1.5 1.5L8 12M11 7h9M11 14h9M5 19h.01M11 19h9" />
+  </Svg>
+)
+export const LinkIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </Svg>
+)
+export const QuoteIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M5 8h5v5a4 4 0 0 1-4 4M14 8h5v5a4 4 0 0 1-4 4" />
+  </Svg>
+)
+export const RuleIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M4 12h16" />
+  </Svg>
+)
+export const CodeIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
+  </Svg>
+)

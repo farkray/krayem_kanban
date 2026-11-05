@@ -19,9 +19,7 @@ test.describe('detalle de tarjeta: acción principal y eliminar', () => {
     await waitForStored(page, 'cards', 'Título nuevo')
     await page.reload()
     await card(page, 'Título nuevo').click()
-    await expect(detail(page).getByLabel('Descripción')).toHaveValue(
-      'Descripción escrita justo antes de cerrar',
-    )
+    await expect(detail(page)).toContainText('Descripción escrita justo antes de cerrar')
   })
 
   test('el pie solo tiene "Listo" y el aviso de autoguardado; Eliminar vive dentro del scroll', async ({
@@ -65,7 +63,7 @@ test.describe('detalle de tarjeta: acción principal y eliminar', () => {
     await page.keyboard.press('Escape')
     await expect(detail(page)).toHaveCount(0)
     await card(page, 'Con Escape').click()
-    await expect(detail(page).getByLabel('Descripción')).toHaveValue('Se guarda al salir')
+    await expect(detail(page)).toContainText('Se guarda al salir')
   })
 })
 

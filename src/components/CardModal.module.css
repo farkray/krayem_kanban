@@ -250,3 +250,58 @@
     height: 48px;
   }
 }
+
+/* Pestañas: Detalles / Actualizaciones */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab,
+.tabOn {
+  margin-bottom: -1px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tabOn {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-accent-text);
+  font-weight: var(--weight-semibold);
+}
+
+.body {
+  padding-top: var(--space-4);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.rendered {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-1);
+}
+
+@media (pointer: coarse) {
+  .tab,
+  .tabOn {
+    min-height: 44px;
+  }
+}

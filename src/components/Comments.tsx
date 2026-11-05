@@ -3,6 +3,7 @@ import { relativeTime } from '../lib/format'
 import { LIMITS, type Comment } from '../lib/types'
 import { useComments } from '../store/hooks'
 import { useStore } from '../store/store'
+import { FormatEditor } from './FormatEditor'
 import { Markdown } from './Markdown'
 import styles from './Comments.module.css'
 
@@ -10,6 +11,8 @@ interface EditorProps {
   initial?: string
   submitLabel: string
   label?: string
+  placeholder?: string
+  rows?: number
   onSubmit: (text: string) => boolean
   onCancel?: () => void
 }
@@ -18,19 +21,17 @@ function CommentEditor({
   initial = '',
   submitLabel,
   label = 'Comentario',
+  placeholder = 'Escribe un comentario… (admite Markdown)',
+  rows = 3,
   onSubmit,
   onCancel,
 }: EditorProps) {
   const [text, setText] = useState(initial)
-  const [preview, setPreview] = useState(false)
   const empty = text.trim().length === 0
 
   const submit = () => {
     if (empty) return
-    if (onSubmit(text)) {
-      setText('')
-      setPreview(false)
-    }
+    if (onSubmit(text)) setText('')
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -41,58 +42,27 @@ function CommentEditor({
   }
 
   return (
-    <div className={styles.editor}>
-      <div className={styles.tabs} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={!preview}
-          className={!preview ? styles.tabOn : styles.tab}
-          onClick={() => setPreview(false)}
-        >
-          Escribir
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={preview}
-          className={preview ? styles.tabOn : styles.tab}
-          onClick={() => setPreview(true)}
-        >
-          Vista previa
-        </button>
-      </div>
-      {preview ? (
-        <div className={styles.preview}>
-          {empty ? (
-            <em className={styles.muted}>Nada que previsualizar</em>
-          ) : (
-            <Markdown source={text} />
+    <FormatEditor
+      value={text}
+      onChange={setText}
+      label={label}
+      placeholder={placeholder}
+      rows={rows}
+      maxLength={LIMITS.comment}
+      onKeyDown={onKeyDown}
+      footer={
+        <>
+          {onCancel && (
+            <button type="button" className={styles.secondary} onClick={onCancel}>
+              Cancelar
+            </button>
           )}
-        </div>
-      ) : (
-        <textarea
-          className={styles.textarea}
-          value={text}
-          maxLength={LIMITS.comment}
-          rows={3}
-          placeholder="Escribe un comentario… (admite Markdown)"
-          aria-label={label}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-      )}
-      <div className={styles.actions}>
-        {onCancel && (
-          <button type="button" className={styles.secondary} onClick={onCancel}>
-            Cancelar
+          <button type="button" className={styles.primary} disabled={empty} onClick={submit}>
+            {submitLabel}
           </button>
-        )}
-        <button type="button" className={styles.primary} disabled={empty} onClick={submit}>
-          {submitLabel}
-        </button>
-      </div>
-    </div>
+        </>
+      }
+    />
   )
 }
 
@@ -143,20 +113,50 @@ function Item({ comment }: { comment: Comment }) {
   )
 }
 
-export function Comments({ cardId }: { cardId: string }) {
+interface CommentsProps {
+  cardId: string
+  /** "comments": lista y cuadro al final. "updates": cuadro arriba y lo más nuevo primero. */
+  variant?: 'comments' | 'updates'
+}
+
+export function Comments({ cardId, variant = 'comments' }: CommentsProps) {
   const comments = useComments(cardId)
   const addComment = useStore((s) => s.addComment)
+  const updates = variant === 'updates'
+  const shown = updates ? [...comments].reverse() : comments
 
-  return (
+  const feed =
+    shown.length > 0 ? (
+      <ul className={styles.feed} aria-label={updates ? 'Actualizaciones' : 'Comentarios'}>
+        {shown.map((c) => (
+          <Item key={c.id} comment={c} />
+        ))}
+      </ul>
+    ) : updates ? (
+      <p className={styles.empty}>Aún no hay actualizaciones. Escribe la primera arriba.</p>
+    ) : null
+
+  const editor = updates ? (
+    <CommentEditor
+      label="Nueva actualización"
+      placeholder="Escribe una actualización…"
+      rows={5}
+      submitLabel="Actualizar"
+      onSubmit={(t) => addComment(cardId, t) !== null}
+    />
+  ) : (
+    <CommentEditor submitLabel="Comentar" onSubmit={(t) => addComment(cardId, t) !== null} />
+  )
+
+  return updates ? (
+    <div className={styles.updates}>
+      {editor}
+      {feed}
+    </div>
+  ) : (
     <div>
-      {comments.length > 0 && (
-        <ul className={styles.feed} aria-label="Comentarios">
-          {comments.map((c) => (
-            <Item key={c.id} comment={c} />
-          ))}
-        </ul>
-      )}
-      <CommentEditor submitLabel="Comentar" onSubmit={(t) => addComment(cardId, t) !== null} />
+      {feed}
+      {editor}
     </div>
   )
 }
