@@ -59,6 +59,13 @@ export function CardModal({ cardId, onClose }: Props) {
     if (updateCard(card.id, { description })) saved.current = description
   }
 
+  /** "Listo": guarda lo pendiente (título y descripción) y cierra. */
+  const finish = () => {
+    commitTitle()
+    commitDescription()
+    onClose()
+  }
+
   const setDate = (field: 'startDate' | 'endDate', value: string) => {
     const ok = updateCard(card.id, { [field]: value || undefined })
     setDateError(ok ? null : 'La fecha final no puede ser anterior a la de inicio.')
@@ -170,18 +177,26 @@ export function CardModal({ cardId, onClose }: Props) {
           <h3>Comentarios</h3>
           <Comments cardId={card.id} />
         </section>
+
+        <section className={styles.dangerZone} aria-label="Eliminar">
+          <button
+            type="button"
+            className={styles.danger}
+            onClick={() => {
+              deleteCard(card.id)
+              onClose()
+            }}
+          >
+            Eliminar tarjeta
+          </button>
+          <span className={styles.dangerHint}>Podrás deshacerlo durante unos segundos.</span>
+        </section>
       </div>
 
       <footer className={styles.footer}>
-        <button
-          type="button"
-          className={styles.danger}
-          onClick={() => {
-            deleteCard(card.id)
-            onClose()
-          }}
-        >
-          Eliminar tarjeta
+        <span className={styles.autosave}>Los cambios se guardan solos</span>
+        <button type="button" className={styles.done} onClick={finish}>
+          Listo
         </button>
       </footer>
     </Modal>

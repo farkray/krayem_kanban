@@ -70,11 +70,12 @@ export function Column({
           ref={sortable.setActivatorNodeRef}
           className={styles.grip}
           aria-label={`Mover columna ${column.title}`}
+          title="Arrastra para mover la columna"
           {...sortable.attributes}
           aria-roledescription="columna que se puede mover"
           {...sortable.listeners}
         >
-          <GripIcon width={14} height={14} />
+          <GripIcon width={18} height={18} />
         </button>
         <div className={styles.headText}>
           {renaming ? (

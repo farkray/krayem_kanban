@@ -173,7 +173,7 @@ test.describe('etiquetas en teléfono', () => {
       const b = (await d.getByRole('button', { name }).first().boundingBox())!
       expect(b.height).toBeGreaterThanOrEqual(44)
     }
-    await d.getByRole('button', { name: 'Listo' }).tap()
+    await d.getByRole('button', { name: 'Ocultar' }).tap()
     await page.keyboard.press('Escape')
 
     const filter = page.getByRole('button', { name: 'Filtros' })

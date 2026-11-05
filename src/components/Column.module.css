@@ -219,3 +219,60 @@
     padding-bottom: var(--space-2);
   }
 }
+
+/* Agarre de la columna: siempre visible (atenuado) y más grande; se enciende al apuntarlo */
+.grip {
+  width: 20px;
+  height: 36px;
+  color: var(--color-text-muted);
+  opacity: 0.65;
+  cursor: grab;
+}
+
+.grip:hover,
+.grip:focus-visible {
+  background: var(--color-fill-2);
+  opacity: 1;
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+@media (hover: none) {
+  .grip {
+    opacity: 1; /* en táctil no hay "apuntar": siempre a plena intensidad */
+  }
+}
+
+@media (pointer: coarse) {
+  .grip {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* El agarre va a la derecha, junto a "eliminar": así nunca tapa el título */
+.headText {
+  order: 1;
+}
+
+.grip {
+  position: static;
+  order: 2;
+  width: 28px;
+  height: 32px;
+  margin-left: 0;
+  transform: none;
+}
+
+.delete {
+  order: 3;
+}
+
+@media (pointer: coarse) {
+  .grip {
+    width: 44px;
+    height: 44px;
+  }
+}

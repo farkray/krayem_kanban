@@ -6,7 +6,7 @@ import { useAttachmentIndex, useLabelIndex } from '../store/hooks'
 import { useAttachmentUrl } from '../store/useAttachmentUrl'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
-import { CalendarIcon, CheckSquareIcon, CommentIcon } from './Icons'
+import { CalendarIcon, CheckSquareIcon, CommentIcon, GripIcon } from './Icons'
 import styles from './Card.module.css'
 
 export interface CardStats {
@@ -35,6 +35,11 @@ export function CardView({ card, stats, finished, overlay }: ViewProps) {
 
   return (
     <>
+      {!overlay && (
+        <span className={styles.grip} aria-hidden="true" title="Arrastra para mover">
+          <GripIcon width={16} height={16} />
+        </span>
+      )}
       {cover && (
         <div
           className={styles.cover}

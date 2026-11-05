@@ -44,10 +44,11 @@ function Row({ item }: { item: ChecklistItem }) {
         ref={sortable.setActivatorNodeRef}
         className={styles.grip}
         aria-label={`Mover ítem ${item.text}`}
+        title="Arrastra para reordenar"
         {...sortable.attributes}
         {...sortable.listeners}
       >
-        <GripIcon width={14} height={14} />
+        <GripIcon width={16} height={16} />
       </button>
       <input
         type="checkbox"

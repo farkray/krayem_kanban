@@ -156,3 +156,14 @@
     margin-left: -22px;
   }
 }
+
+.grip {
+  color: var(--color-text-muted);
+  opacity: 0.55;
+  cursor: grab;
+}
+
+.grip:hover,
+.grip:focus-visible {
+  opacity: 1;
+}

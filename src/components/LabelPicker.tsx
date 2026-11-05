@@ -128,7 +128,7 @@ export function LabelPicker({ cardId, labelIds }: { cardId: string; labelIds: st
             setLimitNote(false)
           }}
         >
-          {open ? 'Listo' : assigned.length ? '+ Etiqueta' : '+ Agregar etiqueta'}
+          {open ? 'Ocultar' : assigned.length ? '+ Etiqueta' : '+ Agregar etiqueta'}
         </button>
       </div>
 

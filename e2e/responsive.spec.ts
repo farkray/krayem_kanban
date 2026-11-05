@@ -111,7 +111,7 @@ test.describe('teléfono (390×844, táctil)', () => {
     ).toBe('16px')
   })
 
-  test('detalle de tarjeta como hoja inferior: ocupa el ancho, "Eliminar" siempre a la vista', async ({
+  test('detalle de tarjeta como hoja inferior: ocupa el ancho y "Listo" siempre a la vista', async ({
     page,
   }) => {
     await openFirstBoard(page)
@@ -123,7 +123,7 @@ test.describe('teléfono (390×844, táctil)', () => {
     const box = await sizeOf(dlg)
     expect(box.width).toBe(390)
     expect(Math.round(box.y + box.height)).toBe(844) // pegada al borde inferior
-    const del = dlg.getByRole('button', { name: 'Eliminar tarjeta' })
+    const del = dlg.getByRole('button', { name: 'Listo' })
     const d = await sizeOf(del)
     expect(d.y + d.height).toBeLessThanOrEqual(844) // visible sin desplazar
     expect(d.height).toBeGreaterThanOrEqual(44)
@@ -212,7 +212,7 @@ test.describe('teléfono apaisado (844×390)', () => {
     const box = await sizeOf(dlg)
     expect(box.y).toBeGreaterThanOrEqual(0)
     expect(box.y + box.height).toBeLessThanOrEqual(390.5) // tolerancia de subpíxel
-    await expect(dlg.getByRole('button', { name: 'Eliminar tarjeta' })).toBeInViewport()
+    await expect(dlg.getByRole('button', { name: 'Listo' })).toBeInViewport()
   })
 })
 

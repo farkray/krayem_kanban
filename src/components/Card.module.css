@@ -156,3 +156,36 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
+
+/* Pista de que la tarjeta se puede arrastrar (aparece al apuntarla con mouse) */
+.card {
+  position: relative;
+}
+
+.grip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  background: var(--color-chip);
+  color: var(--color-text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.card:hover .grip,
+.card:focus-visible .grip {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .grip {
+    display: none; /* en táctil se arrastra con pulsación larga */
+  }
+}
