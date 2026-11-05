@@ -1,0 +1,158 @@
+.openBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.progressLabel {
+  width: 36px;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-fill-3);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+.quitBtn {
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.quitBtn:hover {
+  color: var(--color-danger-text);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 0;
+  background: var(--color-surface);
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
+.grip,
+.remove {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.row:hover .grip,
+.row:hover .remove,
+.grip:focus-visible,
+.remove:focus-visible {
+  opacity: 1;
+}
+
+.text {
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.done {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.add {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+@media (hover: none) {
+  .grip,
+  .remove {
+    opacity: 1;
+    color: var(--color-text-muted);
+  }
+}
+
+@media (pointer: coarse) {
+  .row {
+    min-height: 48px;
+  }
+
+  .grip,
+  .remove {
+    width: 44px;
+    height: 44px;
+  }
+
+  .row input[type='checkbox'] {
+    width: 24px;
+    height: 24px;
+  }
+
+  .add {
+    height: 48px;
+  }
+
+  .quitBtn,
+  .openBtn {
+    padding: 12px 4px;
+  }
+}
+
+/* Con mouse, el agarre vive en el margen: casillas y campo quedan alineados en el mismo borde */
+@media (hover: hover) and (pointer: fine) {
+  .grip {
+    margin-left: -22px;
+  }
+}

@@ -1,0 +1,73 @@
+.md {
+  max-width: 72ch; /* medida cómoda de lectura */
+  font-size: var(--text-md);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  text-wrap: pretty;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre {
+  margin: 0 0 var(--space-2);
+}
+
+.md h1,
+.md h2,
+.md h3 {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: var(--text-md);
+}
+
+.md a {
+  color: var(--color-accent-text);
+}
+
+.md code {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--color-fill-2);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.md pre {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-2);
+  overflow-x: auto;
+}
+
+.md pre code {
+  padding: 0;
+  background: none;
+}
+
+.md blockquote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.md table {
+  border-collapse: collapse;
+}
+
+.md th,
+.md td {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+}

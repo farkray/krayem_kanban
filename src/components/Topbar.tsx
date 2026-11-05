@@ -1,0 +1,48 @@
+import type { SearchResult } from '../lib/search'
+import { FilterMenu } from './FilterMenu'
+import { HelpIcon, HomeIcon, SidebarIcon } from './Icons'
+import { InstallButton } from './PwaPrompts'
+import { SearchBox } from './SearchBox'
+import { SyncStatus } from './SyncStatus'
+import styles from './Topbar.module.css'
+
+interface Props {
+  /** Mostrar el botón de menú (barra lateral oculta o panel deslizable). */
+  menuVisible: boolean
+  onToggleSidebar: () => void
+  onHome: () => void
+  onPick: (r: SearchResult) => void
+}
+
+export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick }: Props) {
+  return (
+    <header className={styles.topbar}>
+      <div className={styles.left}>
+        {menuVisible && (
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={onToggleSidebar}
+            aria-label="Mostrar barra lateral"
+          >
+            <SidebarIcon />
+          </button>
+        )}
+        <button type="button" className={styles.iconBtn} onClick={onHome} aria-label="Inicio">
+          <HomeIcon />
+        </button>
+      </div>
+      <div className={styles.right}>
+        <SyncStatus />
+        <span className={styles.install}>
+          <InstallButton />
+        </span>
+        <button type="button" className={`${styles.iconBtn} ${styles.extra}`} aria-label="Ayuda">
+          <HelpIcon />
+        </button>
+        <FilterMenu />
+        <SearchBox onPick={onPick} />
+      </div>
+    </header>
+  )
+}

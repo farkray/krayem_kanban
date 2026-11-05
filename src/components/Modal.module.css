@@ -1,0 +1,107 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-scrim);
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lifted);
+  outline: 0;
+}
+
+.sm {
+  width: min(420px, 100%);
+  padding: var(--space-5);
+}
+
+.lg {
+  width: min(720px, 100%);
+  padding: var(--space-5);
+}
+
+/* Teléfono: el diálogo es una hoja que sube desde abajo */
+@media (max-width: 640px), (max-height: 500px) and (pointer: coarse) {
+  .overlay {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .dialog {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    animation: sheet-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .sm,
+  .lg {
+    width: 100%;
+    padding: var(--space-5) var(--space-4) max(var(--space-5), env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
+  }
+}
+
+/* Contenido con cabecera/pie fijos y cuerpo desplazable (detalle de tarjeta) */
+.dialog.flush {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  max-height: min(90dvh, 860px);
+}
+
+@media (max-width: 640px), (max-height: 500px) and (pointer: coarse) {
+  .dialog.flush {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top));
+  }
+}
+
+.overlay {
+  animation: veil-in var(--duration-fast) ease-out;
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Escritorio: el diálogo aparece con un leve acercamiento (en teléfono es una hoja: ver sheet-in) */
+@media (min-width: 641px) and (min-height: 501px), (pointer: fine) {
+  .dialog {
+    animation: dialog-in var(--duration-base) var(--ease-out);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay {
+    animation: none;
+  }
+}

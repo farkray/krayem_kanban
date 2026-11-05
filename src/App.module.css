@@ -1,0 +1,51 @@
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+  height: 100dvh; /* móvil: descuenta la barra del navegador */
+}
+
+.collapsed {
+  grid-template-columns: 1fr;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-4) max(var(--space-5), env(safe-area-inset-right))
+    env(safe-area-inset-bottom) max(var(--space-5), env(safe-area-inset-left));
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--color-text-muted);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  background: var(--color-scrim);
+  animation: scrim-in 0.2s ease-out;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim {
+    animation: none;
+  }
+}

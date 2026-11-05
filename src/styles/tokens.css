@@ -1,0 +1,252 @@
+/*
+ * Tokens de diseño. Dos capas:
+ *  1) Primitivos (escala de espacio, radios, tamaños de texto): no cambian con el tema.
+ *  2) Roles semánticos (superficies, texto, acción, estado): se reasignan en modo oscuro.
+ * Los componentes usan SOLO roles semánticos; no hay colores literales fuera de este archivo.
+ *
+ * Paleta "Bruma y salvia": neutros con un matiz verde-azulado muy bajo (calma), un único acento
+ * azul-petróleo para la acción y estados en tonos apagados (coral, ámbar, salvia) en vez de
+ * rojos/verdes saturados.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ───────── Roles de color · claro ───────── */
+
+  /* Tinta: base de los grises translúcidos (rgb(var(--ink) / .08)) */
+  --ink: 23 38 43;
+
+  /* Superficies */
+  --bg-app: linear-gradient(135deg, #e6efec 0%, #e1ecef 50%, #dce8ef 100%);
+  --color-surface: #ffffff; /* diálogos, panel lateral en móvil */
+  --color-surface-glass: rgba(250, 253, 252, 0.74); /* barra superior */
+  --color-sidebar: rgba(255, 255, 255, 0.5);
+  --color-column: #f6f9f8;
+  --color-card: #e7edeb; /* gris verdoso: destaca sobre la columna */
+  --color-card-border: rgb(var(--ink) / 0.18);
+  --color-card-border-hover: rgb(var(--ink) / 0.34);
+  --color-field: #ffffff; /* campos de texto, áreas y selectores */
+  --color-control: rgba(255, 255, 255, 0.88); /* botones circulares y buscador */
+  --color-control-hover: #ffffff;
+  --color-fill-1: rgb(var(--ink) / 0.05); /* comentarios, adjuntos */
+  --color-fill-2: rgb(var(--ink) / 0.08); /* hover, código en línea */
+  --color-fill-3: rgb(var(--ink) / 0.12); /* pistas de barras */
+  --color-selected: rgb(var(--ink) / 0.14);
+  --color-chip: rgba(255, 255, 255, 0.78); /* chips sobre la tarjeta */
+  --color-border: rgb(var(--ink) / 0.12);
+  --color-scrim: rgba(14, 32, 38, 0.4);
+
+  /* Texto */
+  --color-text: #17262b;
+  --color-text-muted: #4a5c61; /* AA también sobre la tarjeta gris */
+  --color-text-faint: #566a6f; /* metadatos: aún ≥ 4.5:1 sobre la tarjeta */
+
+  /* Acción (azul petróleo) */
+  --color-accent: #168fa3; /* rellenos, anillo de foco */
+  --color-accent-text: #0a6275; /* texto sobre claro (AA) */
+  --color-accent-solid: #0d7388; /* fondo de botón primario con texto blanco (AA) */
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #dcf0f3; /* botones "Agregar" */
+  --color-accent-soft-hover: #cbe8ed;
+  --color-accent-border: #b4dbe2;
+  --color-accent-wash: rgba(143, 205, 217, 0.32);
+  --color-accent-wash-hover: rgba(143, 205, 217, 0.5);
+  --color-accent-glow: rgba(22, 143, 163, 0.22);
+  --color-focus: #168fa3;
+  --brand-from: #3fbfd0; /* icono de tablero */
+  --brand-to: #0d7388;
+
+  /* Estado (tonos apagados) */
+  --color-danger: #d4574d;
+  --color-danger-text: #a52f27;
+  --color-danger-solid: #b3261e;
+  --color-danger-soft: rgba(212, 87, 77, 0.14);
+  --color-warning: #d9922e;
+  --color-warning-text: #7f4b12;
+  --color-warning-soft: rgba(217, 146, 46, 0.2);
+  --color-success: #3aa57f;
+  --color-success-text: #1b6a4b;
+  --color-success-soft: rgba(58, 165, 127, 0.18);
+
+  /* Etiquetas: sólido (punto/muestra), fondo suave y texto legible (AA sobre la tarjeta) */
+  --label-blue: #4a7fd0;
+  --label-blue-soft: rgba(74, 127, 208, 0.16);
+  --label-blue-text: #274f98;
+  --label-green: #43a07c;
+  --label-green-soft: rgba(67, 160, 124, 0.18);
+  --label-green-text: #1d5f43;
+  --label-red: #d4635a;
+  --label-red-soft: rgba(212, 99, 90, 0.16);
+  --label-red-text: #9a3029;
+  --label-orange: #dc8f3a;
+  --label-orange-soft: rgba(220, 143, 58, 0.2);
+  --label-orange-text: #774510;
+  --label-yellow: #d1ae3b;
+  --label-yellow-soft: rgba(209, 174, 59, 0.28);
+  --label-yellow-text: #5c4b09;
+  --label-purple: #8a70cc;
+  --label-purple-soft: rgba(138, 112, 204, 0.18);
+  --label-purple-text: #55409a;
+  --label-pink: #cb6590;
+  --label-pink-soft: rgba(203, 101, 144, 0.16);
+  --label-pink-text: #8e3459;
+  --label-gray: #7a8894;
+  --label-gray-soft: rgba(122, 136, 148, 0.2);
+  --label-gray-text: #3f4c56;
+
+  /* Avisos (toast / banner): siempre una superficie oscura flotante */
+  --color-toast-bg: rgba(22, 38, 43, 0.94);
+  --color-toast-text: #ffffff;
+  --color-toast-muted: rgba(255, 255, 255, 0.7);
+  --color-toast-accent: #7fd3e1;
+
+  /* Profundidad (sombras con el tinte de la tinta) */
+  --shadow-card: 0 1px 2px rgba(16, 40, 48, 0.05), 0 2px 8px rgba(16, 40, 48, 0.06);
+  --shadow-card-hover: 0 1px 2px rgba(16, 40, 48, 0.07), 0 4px 12px rgba(16, 40, 48, 0.1);
+  --shadow-lifted: 0 8px 24px rgba(16, 40, 48, 0.18);
+
+  /* ───────── Primitivos ───────── */
+
+  /* Tipografía: Google Sans (variable, OFL) autoalojada; si no carga, la fuente del sistema */
+  --font-sans:
+    'Google Sans Variable', 'Google Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 12px; /* metadatos, contadores, chips */
+  --text-sm: 13px; /* etiquetas, botones, texto de apoyo */
+  --text-md: 15px; /* cuerpo, títulos de tarjeta */
+  --text-lg: 17px; /* títulos de columna y de panel */
+  --text-xl: 20px; /* título del detalle */
+  --text-title: 28px; /* título del tablero */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+
+  /* Radios */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  /* Espaciado (base 4) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Layout */
+  --sidebar-width: 257px;
+  --column-width: 320px;
+  --topbar-height: 52px;
+
+  /* Movimiento */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* llegadas: desaceleración exponencial */
+  --duration-fast: 120ms; /* respuesta inmediata (hover, pulsar) */
+  --duration-base: 200ms; /* cambio de estado y entradas */
+}
+
+/* ───────── Modo oscuro: compuesto, no invertido (pizarra verde-azulada) ───────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: 222 238 240;
+
+    --bg-app: linear-gradient(135deg, #0b1215 0%, #0f181c 50%, #121e24 100%);
+    --color-surface: #172227;
+    --color-surface-glass: rgba(17, 27, 31, 0.74);
+    --color-sidebar: rgba(17, 27, 31, 0.5);
+    --color-column: #131d21;
+    --color-card: #1f2d33; /* un escalón por encima de la columna */
+    --color-card-border: rgb(var(--ink) / 0.1);
+    --color-card-border-hover: rgb(var(--ink) / 0.22);
+    --color-field: rgb(var(--ink) / 0.06);
+    --color-control: rgba(255, 255, 255, 0.08);
+    --color-control-hover: rgba(255, 255, 255, 0.14);
+    --color-fill-1: rgb(var(--ink) / 0.05);
+    --color-fill-2: rgb(var(--ink) / 0.09);
+    --color-fill-3: rgb(var(--ink) / 0.14);
+    --color-selected: rgb(var(--ink) / 0.14);
+    --color-chip: rgba(255, 255, 255, 0.08);
+    --color-border: rgb(var(--ink) / 0.1);
+    --color-scrim: rgba(0, 8, 10, 0.6);
+
+    --color-text: #e6f0f1;
+    --color-text-muted: #9fb2b7;
+    --color-text-faint: #8ea2a7;
+
+    --color-accent: #3fb8cc;
+    --color-accent-text: #7fd3e1;
+    --color-accent-solid: #0d7388;
+    --color-on-accent: #ffffff;
+    --color-accent-soft: rgba(63, 184, 204, 0.16);
+    --color-accent-soft-hover: rgba(63, 184, 204, 0.26);
+    --color-accent-border: rgba(63, 184, 204, 0.34);
+    --color-accent-wash: rgba(63, 184, 204, 0.14);
+    --color-accent-wash-hover: rgba(63, 184, 204, 0.24);
+    --color-accent-glow: rgba(63, 184, 204, 0.35);
+    --color-focus: #55c6d9;
+
+    --color-danger: #e5766d;
+    --color-danger-text: #f2a199;
+    --color-danger-solid: #b3261e;
+    --color-danger-soft: rgba(229, 118, 109, 0.2);
+    --color-warning: #e8a352;
+    --color-warning-text: #f2c284;
+    --color-warning-soft: rgba(232, 163, 82, 0.2);
+    --color-success: #55b891;
+    --color-success-text: #7fd6b3;
+    --color-success-soft: rgba(85, 184, 145, 0.18);
+
+    --label-blue: #5f93e6;
+    --label-blue-soft: rgba(95, 147, 230, 0.24);
+    --label-blue-text: #a4c1f7;
+    --label-green: #55b891;
+    --label-green-soft: rgba(85, 184, 145, 0.22);
+    --label-green-text: #85d8b8;
+    --label-red: #e5766d;
+    --label-red-soft: rgba(229, 118, 109, 0.24);
+    --label-red-text: #f4a8a0;
+    --label-orange: #e8a352;
+    --label-orange-soft: rgba(232, 163, 82, 0.22);
+    --label-orange-text: #f3c78d;
+    --label-yellow: #dcc052;
+    --label-yellow-soft: rgba(220, 192, 82, 0.22);
+    --label-yellow-text: #ecd884;
+    --label-purple: #a38be0;
+    --label-purple-soft: rgba(163, 139, 224, 0.26);
+    --label-purple-text: #cdbff5;
+    --label-pink: #dc7ea6;
+    --label-pink-soft: rgba(220, 126, 166, 0.24);
+    --label-pink-text: #f2b1cb;
+    --label-gray: #8d9ba6;
+    --label-gray-soft: rgba(141, 155, 166, 0.26);
+    --label-gray-text: #c4ced6;
+
+    --color-toast-bg: rgba(46, 64, 71, 0.96);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-card-hover: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.35);
+    --shadow-lifted: 0 10px 30px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Teléfono: márgenes y título más compactos */
+@media (max-width: 640px) {
+  :root {
+    --space-5: 16px;
+    --text-title: 24px;
+  }
+}
+
+/* Dedo en lugar de mouse: texto de al menos 16 px (iOS no hace zoom al enfocar campos) */
+@media (pointer: coarse) {
+  :root {
+    --text-md: 16px;
+    --text-sm: 14px;
+    --text-xs: 12px;
+  }
+}

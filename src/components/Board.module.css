@@ -1,0 +1,144 @@
+.board {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.headAction {
+  margin-left: auto;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.titleBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: text;
+}
+
+.titleInput {
+  max-width: 360px;
+  font-size: var(--text-lg);
+}
+
+.delete {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.delete:hover,
+.delete:focus-visible {
+  background: var(--color-selected);
+  color: var(--color-danger-text);
+}
+
+.columns {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: var(--space-4);
+  min-height: 0;
+  padding-bottom: var(--space-4);
+  overflow-x: auto;
+}
+
+/* Pantallas angostas o táctiles: las columnas encajan al desplazar (sin forzar, y no mientras se arrastra) */
+@media (max-width: 899px), (pointer: coarse) {
+  .columns {
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--space-4);
+    overscroll-behavior-x: contain;
+  }
+
+  .columns.dragging {
+    scroll-snap-type: none;
+  }
+
+  .columns > * {
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .head {
+    margin-bottom: var(--space-3);
+  }
+}
+
+@media (pointer: coarse) {
+  .delete {
+    width: 44px;
+    height: 44px;
+  }
+
+  .titleBtn {
+    min-height: 44px;
+  }
+}
+
+@media (hover: none) {
+  .delete {
+    opacity: 1;
+  }
+}
+
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+}
+
+.filterLabel {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.clearFilter {
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .clearFilter {
+    min-height: 44px;
+  }
+}
+
+/* Espacio para el aro de "soltar aquí" (si no, el contenedor con scroll lo recorta en los bordes) */
+.columns {
+  padding-top: 8px;
+  padding-inline: 8px;
+  margin: -8px -8px 0;
+}

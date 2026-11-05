@@ -1,0 +1,89 @@
+@import './fonts.css';
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  accent-color: var(--color-accent); /* casillas, selector de fecha */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  font-variant-numeric: tabular-nums; /* contadores y fechas no "bailan" */
+  color: var(--color-text);
+  background: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain; /* desplazar una columna no recarga la página */
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Campos: color y fondo del tema (si no, el navegador pone el suyo, p. ej. gris claro en oscuro) */
+input,
+textarea,
+select {
+  background: var(--color-field);
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Superficies del navegador que también llevan el diseño */
+::selection {
+  background: var(--color-accent-glow);
+}
+
+::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--ink) / 0.3) transparent;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Respuesta al pulsar en controles pequeños */
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+button {
+  transition:
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform var(--duration-fast) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active {
+    transform: none;
+  }
+}

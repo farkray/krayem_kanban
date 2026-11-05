@@ -1,0 +1,130 @@
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-fill-1);
+}
+
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.itemActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.itemActions button {
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.itemActions button:hover {
+  color: var(--color-accent-text);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tab,
+.tabOn {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.tabOn {
+  background: var(--color-selected);
+  font-weight: 600;
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  resize: vertical;
+}
+
+.preview {
+  min-height: 74px;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.primary,
+.secondary {
+  height: 32px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-accent-solid);
+  background: var(--color-accent-solid); /* texto blanco con contraste AA en ambos temas */
+  color: var(--color-on-accent);
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .itemActions button,
+  .tab,
+  .tabOn {
+    min-height: 44px;
+    padding: 0 10px;
+  }
+
+  .primary,
+  .secondary {
+    height: 44px;
+  }
+}

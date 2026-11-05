@@ -1,0 +1,7 @@
+# {$DOMAIN} viene de .env. Caddy obtiene y renueva el certificado solo
+# (requiere que el DNS apunte al VPS y que los puertos 80 y 443 estén abiertos).
+{$DOMAIN} {
+	# nginx ya comprime y fija Cache-Control / CSP: aquí solo se añade HSTS.
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy web:80
+}

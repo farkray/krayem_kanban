@@ -1,0 +1,46 @@
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.offline .dot {
+  background: var(--color-warning);
+}
+
+.error .dot {
+  background: var(--color-danger);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .status {
+    margin-right: 0;
+    max-width: 40vw;
+  }
+
+  /* Todo en orden: solo el punto (el texto sigue disponible para lectores de pantalla) */
+  .ok .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

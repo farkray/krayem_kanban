@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T00:00:00Z",
+  "title": "Design System: Kanban",
+  "extensions": {
+    "colorMeta": {
+      "teal-accent": {
+        "role": "primary",
+        "displayName": "Petróleo de acción",
+        "canonical": "#168fa3 (dark: #3fb8cc)",
+        "tonalRamp": ["#04252c", "#08424d", "#0a6275", "#0d7388", "#168fa3", "#3fb8cc", "#8fd5e1", "#dcf0f3"]
+      },
+      "teal-solid": {
+        "role": "primary",
+        "displayName": "Petróleo sólido",
+        "canonical": "#0d7388",
+        "tonalRamp": ["#04252c", "#074050", "#0a5568", "#0d7388", "#168fa3", "#3fb8cc", "#9adbe6", "#cbe8ed"]
+      },
+      "desk-ink": {
+        "role": "neutral",
+        "displayName": "Tinta de escritorio",
+        "canonical": "#17262b (dark text: #e6f0f1)",
+        "tonalRamp": ["#17262b", "#2d3f45", "#4a5c61", "#566a6f", "#8ea2a7", "#b4c4c8", "#d6e0e2", "#e6f0f1"]
+      },
+      "paper-card": {
+        "role": "neutral",
+        "displayName": "Papel de tarjeta",
+        "canonical": "#e7edeb (dark: #1f2d33)",
+        "tonalRamp": ["#131d21", "#1f2d33", "#4a5c61", "#8ea2a7", "#c3cfcc", "#e7edeb", "#f6f9f8", "#ffffff"]
+      },
+      "column-mist": {
+        "role": "neutral",
+        "displayName": "Columna de bruma",
+        "canonical": "#f6f9f8 (dark: #131d21)",
+        "tonalRamp": ["#0b1215", "#131d21", "#172227", "#1f2d33", "#dce8ef", "#e6efec", "#f6f9f8", "#ffffff"]
+      },
+      "coral-danger": {
+        "role": "danger",
+        "displayName": "Coral",
+        "canonical": "#d4574d (text #a52f27, solid #b3261e)",
+        "tonalRamp": ["#3a0f0c", "#6e1c16", "#a52f27", "#b3261e", "#d4574d", "#e5766d", "#f2a199", "#fbdad6"]
+      },
+      "amber-warning": {
+        "role": "warning",
+        "displayName": "Ámbar",
+        "canonical": "#d9922e (text #7f4b12)",
+        "tonalRamp": ["#3a2208", "#5d3610", "#7f4b12", "#b8731d", "#d9922e", "#e8a352", "#f2c284", "#f9e3c4"]
+      },
+      "sage-success": {
+        "role": "success",
+        "displayName": "Salvia",
+        "canonical": "#3aa57f (text #1b6a4b)",
+        "tonalRamp": ["#0c2d20", "#124a35", "#1b6a4b", "#2b8864", "#3aa57f", "#55b891", "#7fd6b3", "#c5ecdb"]
+      }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Título del tablero; 24px en teléfono." },
+      "headline": { "displayName": "Headline", "purpose": "Título de la tarjeta en el detalle." },
+      "subtitle": { "displayName": "Subtitle", "purpose": "Títulos de columna, panel lateral y diálogos." },
+      "body": { "displayName": "Body", "purpose": "Cuerpo y títulos de tarjeta (500); 16px en táctil." },
+      "label": { "displayName": "Label", "purpose": "Botones y texto de apoyo; 14px en táctil." },
+      "meta": { "displayName": "Meta", "purpose": "Contadores, chips, fechas." }
+    },
+    "shadows": [
+      { "name": "card", "value": "0 1px 2px rgba(16,40,48,0.05), 0 2px 8px rgba(16,40,48,0.06)", "purpose": "Reposo de tarjetas y columnas." },
+      { "name": "card-hover", "value": "0 1px 2px rgba(16,40,48,0.07), 0 4px 12px rgba(16,40,48,0.1)", "purpose": "Tarjeta bajo el cursor." },
+      { "name": "lifted", "value": "0 8px 24px rgba(16,40,48,0.18)", "purpose": "Elementos tomados o flotantes: diálogos, panel, buscador, avisos." },
+      { "name": "drop-target", "value": "0 0 0 2px #168fa3, 0 0 0 6px rgba(22,143,163,0.22), var(--shadow-card)", "purpose": "Anillo y halo de la columna destino de un arrastre." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Llegadas: desaceleración exponencial." },
+      { "name": "duration-fast", "value": "120ms", "purpose": "Hover y pulsar." },
+      { "name": "duration-base", "value": "200ms", "purpose": "Cambio de estado, entradas y tomar una tarjeta." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "640px" },
+      { "name": "sidebar-collapse", "value": "900px" },
+      { "name": "coarse-pointer", "value": "(pointer: coarse)" },
+      { "name": "no-hover", "value": "(hover: none)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Agregar tarjeta (botón suave)",
+      "kind": "button",
+      "refersTo": "button-add",
+      "description": "Acción suave al pie de la columna.",
+      "html": "<button class=\"ds-btn-add\">+ Agregar tarjeta</button>",
+      "css": ".ds-btn-add { height: 40px; padding: 0 16px; border: 1px solid var(--color-accent-border, #b4dbe2); border-radius: 10px; background: var(--color-accent-soft, #dcf0f3); color: var(--color-accent-text, #0a6275); font: 600 13px var(--font-sans, system-ui); cursor: pointer; transition: background 120ms; } .ds-btn-add:hover { background: var(--color-accent-soft-hover, #cbe8ed); } .ds-btn-add:focus-visible { outline: 2px solid var(--color-focus, #168fa3); outline-offset: 2px; }"
+    },
+    {
+      "name": "Agregar columna (píldora)",
+      "kind": "button",
+      "refersTo": "button-add-column",
+      "description": "Píldora en el encabezado del tablero con contador de columnas.",
+      "html": "<button class=\"ds-btn-col\">Agregar columna <span class=\"ds-count\">3 de 5</span></button>",
+      "css": ".ds-btn-col { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border: 1px solid var(--color-accent-border, #b4dbe2); border-radius: 999px; background: var(--color-accent-soft, #dcf0f3); color: var(--color-accent-text, #0a6275); font: 600 13px var(--font-sans, system-ui); cursor: pointer; } .ds-btn-col:hover { background: var(--color-accent-soft-hover, #cbe8ed); } .ds-btn-col:focus-visible { outline: 2px solid var(--color-focus, #168fa3); outline-offset: 2px; } .ds-count { font-size: 12px; font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: 999px; background: var(--color-chip, rgba(255,255,255,.78)); }"
+    },
+    {
+      "name": "Botón primario",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Relleno sólido petróleo con texto blanco; pantallas de acceso.",
+      "html": "<button class=\"ds-btn-primary\">Entrar</button>",
+      "css": ".ds-btn-primary { height: 40px; padding: 0 20px; border: 0; border-radius: 10px; background: var(--color-accent-solid, #0d7388); color: var(--color-on-accent, #fff); font: 600 13px var(--font-sans, system-ui); cursor: pointer; transition: transform 120ms; } .ds-btn-primary:active { transform: scale(.97); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-focus, #168fa3); outline-offset: 2px; }"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Campo con borde de 1px y foco con anillo.",
+      "html": "<input class=\"ds-input\" placeholder=\"Título de la tarjeta\">",
+      "css": ".ds-input { height: 36px; padding: 0 12px; border: 1px solid var(--color-border, rgba(23,38,43,.12)); border-radius: 10px; background: var(--color-field, #fff); color: var(--color-text, #17262b); font: 400 13px var(--font-sans, system-ui); } .ds-input::placeholder { color: var(--color-text-muted, #4a5c61); } .ds-input:focus-visible { outline: 2px solid var(--color-focus, #168fa3); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tarjeta",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Papel verde-grisáceo con borde de 1px y chips.",
+      "html": "<article class=\"ds-card\"><p class=\"ds-title\">Preparar presentación</p><span class=\"ds-chip\"><i class=\"ds-dot\"></i>Diseño</span></article>",
+      "css": ".ds-card { min-height: 72px; padding: 12px 16px; border: 1px solid var(--color-card-border, rgba(23,38,43,.18)); border-radius: 14px; background: var(--color-card, #e7edeb); box-shadow: var(--shadow-card, 0 1px 2px rgba(16,40,48,.05), 0 2px 8px rgba(16,40,48,.06)); transition: border-color 120ms, box-shadow 120ms; } .ds-card:hover { border-color: var(--color-card-border-hover, rgba(23,38,43,.34)); box-shadow: var(--shadow-card-hover, 0 4px 12px rgba(16,40,48,.1)); } .ds-title { margin: 0 0 8px; font: 500 15px/1.45 var(--font-sans, system-ui); color: var(--color-text, #17262b); } .ds-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: var(--label-blue-soft, rgba(74,127,208,.16)); color: var(--label-blue-text, #274f98); font: 600 12px var(--font-sans, system-ui); } .ds-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--label-blue, #4a7fd0); }"
+    },
+    {
+      "name": "Columna",
+      "kind": "card",
+      "refersTo": "column",
+      "description": "Hoja casi blanca de 22px de radio con contador y punto de estado.",
+      "html": "<section class=\"ds-col\"><header class=\"ds-col-head\"><h3>En curso</h3><span>4</span></header></section>",
+      "css": ".ds-col { width: 320px; padding: 16px; border-radius: 22px; background: var(--color-column, #f6f9f8); box-shadow: var(--shadow-card, 0 2px 8px rgba(16,40,48,.06)); } .ds-col-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--color-border, rgba(23,38,43,.12)); } .ds-col-head h3 { margin: 0; font: 600 17px/1.25 var(--font-sans, system-ui); color: var(--color-text, #17262b); } .ds-col-head span { font: 500 12px var(--font-sans, system-ui); font-variant-numeric: tabular-nums; color: var(--color-text-faint, #566a6f); }"
+    },
+    {
+      "name": "Aviso con Deshacer",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Píldora de pizarra oscura con acción Deshacer.",
+      "html": "<div class=\"ds-toast\">Tarjeta eliminada <button>Deshacer</button></div>",
+      "css": ".ds-toast { display: inline-flex; align-items: center; gap: 16px; padding: 10px 16px; border-radius: 999px; background: var(--color-toast-bg, rgba(22,38,43,.94)); color: var(--color-toast-text, #fff); font: 600 13px var(--font-sans, system-ui); box-shadow: var(--shadow-lifted, 0 8px 24px rgba(16,40,48,.18)); } .ds-toast button { border: 0; background: none; color: var(--color-toast-accent, #7fd3e1); font: inherit; cursor: pointer; } .ds-toast button:focus-visible { outline: 2px solid #7fd3e1; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El escritorio ordenado (The Tidy Desk)",
+    "overview": "Una mesa de trabajo serena: superficies verde-grisáceas apiladas como papeles. El fondo es un degradado de bruma, la columna es una hoja casi blanca y cada tarjeta es un papel un escalón por encima. El azul-petróleo aparece solo donde hay algo que hacer (agregar, guardar, deshacer, foco). Todo lo demás es neutro, tranquilo y rápido de escanear. La paleta se llama \"Bruma y salvia\" (Mist & Sage).\n\nEs una herramienta de uso diario en modo Operate: escritorio primero, teléfono como apoyo. La voz es serena, profesional y callada: nada grita, los estados usan tonos apagados (coral, ámbar, salvia) en lugar de rojos y verdes saturados. La tipografía es Google Sans (variable), autoalojada, con la fuente del sistema como respaldo.\n\nEl modo oscuro está compuesto, no invertido: una pizarra verde-azulada donde cada superficie conserva su escalón y el acento se aclara (#3fb8cc) para mantener el contraste.",
+    "keyCharacteristics": [
+      "Tonal layering: fondo, columna, tarjeta; la profundidad viene del tono y de un borde de 1px, no de sombras pesadas.",
+      "Un solo acento azul-petróleo, y siempre significa acción.",
+      "Radios consistentes: 6 (detalles), 10 (controles), 14 (tarjetas), 22 (columnas y diálogos).",
+      "Tipografía por rol, no por página; números tabulares en todo el producto.",
+      "Un solo momento animado: tomar una tarjeta.",
+      "Táctil de primera clase: objetivos de 44px y sin controles solo-hover en pantallas sin hover."
+    ],
+    "rules": [
+      { "name": "The Action-Only Teal Rule", "body": "El petróleo aparece únicamente donde hay una acción posible o un foco. Si un elemento no se puede pulsar, no es petróleo.", "section": "colors" },
+      { "name": "The Solid-Accent Pair Rule", "body": "Texto sobre un relleno de acento sólido usa --color-accent-solid con --color-on-accent, nunca --color-accent (#168fa3), que no alcanza AA con blanco.", "section": "colors" },
+      { "name": "The Semantic Tokens Only Rule", "body": "Los componentes usan solo roles semánticos; no hay colores literales fuera de tokens.css.", "section": "colors" },
+      { "name": "The Role Scale Rule", "body": "La escala es por rol (xs 12 / sm 13 / md 15 / lg 17 / xl 20 / title 28): se elige el rol, no un tamaño suelto.", "section": "typography" },
+      { "name": "The Tabular Numbers Rule", "body": "font-variant-numeric: tabular-nums global; contadores y fechas no deben \"bailar\".", "section": "typography" },
+      { "name": "The Flat-Until-Touched Rule", "body": "Una superficie en reposo solo lleva la sombra suave de reposo; la sombra \"levantada\" se reserva a lo que flota o está en la mano.", "section": "elevation" },
+      { "name": "The Authored Moment Rule", "body": "Hay un solo momento de movimiento diseñado: tomar una tarjeta (200ms con cubic-bezier(.16,1,.3,1)). Los demás cambios son transiciones de 120ms. Con prefers-reduced-motion desaparecen el giro y el desplazamiento; queda un fundido corto.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar solo tokens semánticos (--color-*, --space-*, --radius-*, --text-*); ningún color literal en los componentes.",
+      "Do poner el texto sobre un relleno de acento sólido con --color-accent-solid y --color-on-accent.",
+      "Do mantener AA en ambos temas, incluidos los textos de los 8 colores de etiqueta sobre la tarjeta y el texto atenuado sobre la tarjeta y el gris de seleccionado.",
+      "Do reservar el petróleo para acciones y foco.",
+      "Do dar a cada control táctil al menos 44px en pointer: coarse y mostrar siempre los controles que en mouse aparecen al pasar el cursor.",
+      "Do escribir la interfaz en español (es-MX).",
+      "Do ofrecer \"Deshacer\" en toda acción destructiva.",
+      "Do pensar el modo oscuro como remapeo de roles semánticos, con cada superficie en su escalón.",
+      "Do dar una alternativa con prefers-reduced-motion a cualquier movimiento nuevo."
+    ],
+    "donts": [
+      "Don't usar bordes laterales de color de más de 1px como acento.",
+      "Don't hacer que una acción exista solo con hover.",
+      "Don't usar --color-accent (#168fa3) como texto ni como fondo con texto blanco.",
+      "Don't usar rojos o verdes saturados para estados; los estados son coral, ámbar y salvia apagados.",
+      "Don't servir la fuente desde terceros: Google Sans se autoaloja para mantener la promesa offline.",
+      "Don't añadir más momentos de movimiento diseñado; el único es tomar una tarjeta.",
+      "Don't colocar sombras levantadas en superficies en reposo."
+    ]
+  }
+}

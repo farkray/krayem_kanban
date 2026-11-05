@@ -1,0 +1,340 @@
+import { useMemo, useState } from 'react'
+import {
+  closestCenter,
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type UniqueIdentifier,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  horizontalListSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable'
+import { announcements, screenReaderInstructions } from '../lib/dndA11y'
+import { pluralize } from '../lib/format'
+import { LIMITS, type Board as BoardModel } from '../lib/types'
+import { useMediaQuery } from '../lib/useMediaQuery'
+import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
+import { useStore } from '../store/store'
+import { AddColumn } from './AddColumn'
+import { CardOverlay } from './Card'
+import { Column, ColumnOverlay } from './Column'
+import { ConfirmDialog } from './ConfirmDialog'
+import { TrashIcon } from './Icons'
+import { InlineInput } from './InlineInput'
+import { LabelChip } from './LabelChip'
+import styles from './Board.module.css'
+
+interface Props {
+  board: BoardModel
+  onOpenCard: (id: string) => void
+  onDeleted: () => void
+}
+
+type Active = { type: 'card' | 'column'; id: string } | null
+
+export function Board({ board, onOpenCard, onDeleted }: Props) {
+  const columns = useColumns(board.id)
+  const cards = useBoardCards(board.id)
+  const stats = useCardStats()
+  const labelIndex = useLabelIndex()
+  const labelFilter = useStore((s) => s.labelFilter)
+  const setLabelFilter = useStore((s) => s.setLabelFilter)
+  const filtering = labelFilter.length > 0
+  const renameBoard = useStore((s) => s.renameBoard)
+  const deleteBoard = useStore((s) => s.deleteBoard)
+  const addColumn = useStore((s) => s.addColumn)
+  const moveColumn = useStore((s) => s.moveColumn)
+  const moveCard = useStore((s) => s.moveCard)
+
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const [renaming, setRenaming] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [active, setActive] = useState<Active>(null)
+  const [overColumn, setOverColumn] = useState<string | null>(null) // columna bajo el puntero al arrastrar una tarjeta
+
+  // Con filtro por etiqueta solo se listan las tarjetas que tengan alguna de las elegidas.
+  const matches = (c: (typeof cards)[number]) =>
+    !filtering || (c.labelIds ?? []).some((id) => labelFilter.includes(id))
+
+  const cardsByColumn = useMemo(() => {
+    const map = new Map<string, typeof cards>()
+    for (const col of columns) map.set(col.id, [])
+    for (const c of cards) if (matches(c)) map.get(c.columnId)?.push(c)
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, cards, labelFilter])
+
+  const totalByColumn = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of cards) map.set(c.columnId, (map.get(c.columnId) ?? 0) + 1)
+    return map
+  }, [cards])
+
+  const sensors = useSensors(
+    // Mouse: arranca al mover 6 px (un clic sigue abriendo la tarjeta).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // Táctil: mantener pulsado ~0,2 s; si no, el dedo desplaza el tablero como siempre.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
+    }),
+  )
+
+  // Qué se considera "destino":
+  //  · columnas arrastradas → solo contra columnas (por cercanía de centros);
+  //  · tarjetas con mouse/dedo → lo que esté BAJO el puntero: primero una tarjeta, si no la zona de
+  //    la columna (incluye el espacio vacío, aunque la columna sea muy alta), si no su encabezado;
+  //  · tarjetas con teclado (sin puntero) → la más cercana.
+  // (La cercanía de esquinas fallaba en columnas altas: soltar en su zona vacía caía en otra columna.)
+  const collision: CollisionDetection = (args) => {
+    const kind = (id: UniqueIdentifier) =>
+      args.droppableContainers.find((d) => d.id === id)?.data.current?.type as string | undefined
+    const isColumnShell = (id: UniqueIdentifier) => String(id).startsWith('col:')
+
+    if (args.active.data.current?.type === 'column') {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((d) => isColumnShell(d.id)),
+      })
+    }
+
+    const hits = pointerWithin(args)
+    if (hits.length > 0) {
+      const pick =
+        hits.find((h) => kind(h.id) === 'card') ??
+        hits.find((h) => String(h.id).startsWith('drop:')) ??
+        hits.find((h) => isColumnShell(h.id))
+      if (pick) return [pick]
+    }
+    return closestCorners({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((d) => !isColumnShell(d.id)),
+    })
+  }
+
+  const onDragStart = (e: DragStartEvent) => {
+    const t = e.active.data.current?.type as 'card' | 'column'
+    const id = t === 'column' ? (e.active.data.current?.columnId as string) : String(e.active.id)
+    setActive({ type: t, id })
+  }
+
+  const onDragOver = (e: DragOverEvent) => {
+    const col = e.over?.data.current?.columnId as string | undefined
+    setOverColumn(e.active.data.current?.type === 'card' ? (col ?? null) : null)
+  }
+
+  const onDragEnd = (e: DragEndEvent) => {
+    setActive(null)
+    setOverColumn(null)
+    const { active: a, over } = e
+    if (!over || over.id === a.id) return // fuera de todo, o sobre sí misma: no cambia nada
+    const ad = a.data.current as { type: string; columnId: string }
+    const od = over.data.current as { type: string; columnId: string }
+
+    if (ad.type === 'column') {
+      if (od.columnId === ad.columnId) return
+      const to = columns.findIndex((c) => c.id === od.columnId)
+      if (to >= 0) moveColumn(ad.columnId, to)
+      return
+    }
+
+    // Tarjeta: al final de la columna (zona vacía o encabezado) o junto a la tarjeta bajo el puntero,
+    // antes o después según la mitad de ella sobre la que quedó la tarjeta arrastrada.
+    const cardId = String(a.id)
+    const fromList = cardsByColumn.get(ad.columnId) ?? []
+    const targetList = (cardsByColumn.get(od.columnId) ?? []).filter((c) => c.id !== cardId)
+    let index = targetList.length
+    if (od.type === 'card') {
+      const overIdx = targetList.findIndex((c) => c.id === String(over.id))
+      const sameColumn = od.columnId === ad.columnId
+      let below: boolean
+      if (sameColumn) {
+        // Misma columna: se intercambian lugares (hacia abajo cae después; hacia arriba, antes).
+        // Vale igual para mouse, dedo y teclado (que no tiene puntero).
+        const fromIdx = fromList.findIndex((c) => c.id === cardId)
+        const overFull = fromList.findIndex((c) => c.id === String(over.id))
+        below = fromIdx < overFull
+      } else {
+        // Otra columna: antes o después según la mitad de la tarjeta destino sobre la que quedó.
+        const moved = a.rect.current.translated
+        below = !!moved && moved.top + moved.height / 2 > over.rect.top + over.rect.height / 2
+      }
+      index = below ? overIdx + 1 : overIdx
+    }
+    if (od.columnId === ad.columnId && index === fromList.findIndex((c) => c.id === cardId)) return
+    moveCard(cardId, od.columnId, index)
+  }
+
+  // Nombres legibles para los anuncios del lector de pantalla.
+  const nameOf = (id: UniqueIdentifier) => {
+    const key = String(id)
+    if (key.startsWith('col:') || key.startsWith('drop:')) {
+      const colId = key.slice(key.indexOf(':') + 1)
+      return `columna ${columns.find((c) => c.id === colId)?.title ?? ''}`.trim()
+    }
+    return cards.find((c) => c.id === key)?.title ?? key
+  }
+  const announce = {
+    ...announcements(nameOf, 'el elemento'),
+  }
+
+  const activeCard = active?.type === 'card' ? cards.find((c) => c.id === active.id) : undefined
+  const activeColumn =
+    active?.type === 'column' ? columns.find((c) => c.id === active.id) : undefined
+  const lastColumnId = columns[columns.length - 1]?.id
+
+  return (
+    <div className={styles.board}>
+      <div className={styles.head}>
+        {renaming ? (
+          <InlineInput
+            className={styles.titleInput}
+            initial={board.title}
+            label="Nombre del tablero"
+            maxLength={LIMITS.board}
+            submitOnBlur
+            onSubmit={(t) => {
+              renameBoard(board.id, t)
+              setRenaming(false)
+            }}
+            onCancel={() => setRenaming(false)}
+          />
+        ) : (
+          <h1 className={styles.title}>
+            <button
+              type="button"
+              className={styles.titleBtn}
+              onClick={() => setRenaming(true)}
+              title="Renombrar tablero"
+            >
+              {board.title}
+            </button>
+          </h1>
+        )}
+        <button
+          type="button"
+          className={styles.delete}
+          aria-label="Eliminar tablero"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <TrashIcon width={16} height={16} />
+        </button>
+        <div className={styles.headAction}>
+          <AddColumn count={columns.length} onAdd={(t) => addColumn(board.id, t)} />
+        </div>
+      </div>
+
+      {filtering && (
+        <div className={styles.filterBar} role="status">
+          <span className={styles.filterLabel}>Filtrando por:</span>
+          {labelFilter
+            .flatMap((id) => labelIndex.get(id) ?? [])
+            .map((l) => (
+              <LabelChip
+                key={l.id}
+                label={l}
+                onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
+              />
+            ))}
+          <button type="button" className={styles.clearFilter} onClick={() => setLabelFilter([])}>
+            Limpiar filtro
+          </button>
+        </div>
+      )}
+
+      <DndContext
+        accessibility={{ announcements: announce, screenReaderInstructions }}
+        sensors={sensors}
+        collisionDetection={collision}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          setActive(null)
+          setOverColumn(null)
+        }}
+      >
+        <div className={`${styles.columns} ${active ? styles.dragging : ''}`}>
+          <SortableContext
+            items={columns.map((c) => `col:${c.id}`)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {columns.map((col, idx) => (
+              <Column
+                key={col.id}
+                column={col}
+                siblings={columns}
+                cards={cardsByColumn.get(col.id) ?? []}
+                total={totalByColumn.get(col.id) ?? 0}
+                stats={stats}
+                isLast={col.id === lastColumnId}
+                dropTarget={active?.type === 'card' && overColumn === col.id}
+                tone={
+                  columns.length > 1
+                    ? idx === 0
+                      ? 'start'
+                      : col.id === lastColumnId
+                        ? 'done'
+                        : 'progress'
+                    : 'start'
+                }
+                onOpenCard={onOpenCard}
+              />
+            ))}
+          </SortableContext>
+        </div>
+        <DragOverlay
+          dropAnimation={
+            reducedMotion ? null : { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+          }
+        >
+          {activeCard && (
+            <CardOverlay
+              card={activeCard}
+              stats={stats.get(activeCard.id)}
+              finished={activeCard.columnId === lastColumnId}
+            />
+          )}
+          {activeColumn && (
+            <ColumnOverlay
+              column={activeColumn}
+              count={cardsByColumn.get(activeColumn.id)?.length ?? 0}
+            />
+          )}
+        </DragOverlay>
+      </DndContext>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Eliminar “${board.title}”`}
+          confirmLabel="Eliminar tablero"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            deleteBoard(board.id)
+            setConfirmDelete(false)
+            onDeleted()
+          }}
+        >
+          <p>
+            Se eliminarán {pluralize(columns.length, 'columna', 'columnas')} y{' '}
+            {pluralize(cards.length, 'tarjeta', 'tarjetas')}. Podrás deshacerlo durante unos
+            segundos.
+          </p>
+        </ConfirmDialog>
+      )}
+    </div>
+  )
+}

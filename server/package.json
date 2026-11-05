@@ -1,0 +1,16 @@
+{
+  "name": "kanban-api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "cli": "node src/cli.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0"
+  }
+}

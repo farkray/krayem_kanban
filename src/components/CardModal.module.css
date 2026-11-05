@@ -1,0 +1,197 @@
+/* Detalle de la tarjeta: cabecera y pie fijos; solo el cuerpo se desplaza */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+}
+
+.title:hover,
+.title:focus {
+  border-color: var(--color-border);
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--color-fill-2);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--space-5) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Columna + fechas en una sola fila */
+.details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.field select,
+.field input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.section {
+  margin-top: var(--space-5);
+}
+
+.section h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  text-wrap: pretty;
+  resize: vertical;
+}
+
+.error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) var(--space-5);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+}
+
+.danger {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-danger-text);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-danger-text);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.danger:hover {
+  background: var(--color-danger-soft);
+}
+
+@media (max-width: 640px) {
+  .head {
+    padding: var(--space-4) var(--space-4) var(--space-2);
+  }
+
+  .body {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+
+  .footer {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  /* Columna ocupa toda la fila; Inicio y Final, una al lado de la otra */
+  .details {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .details > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  .head {
+    padding-top: var(--space-3);
+  }
+
+  .section {
+    margin-top: var(--space-4);
+  }
+}
+
+@media (pointer: coarse) {
+  .close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .field select,
+  .field input {
+    height: 44px;
+  }
+
+  .link,
+  .danger {
+    min-height: 44px;
+  }
+}

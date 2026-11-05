@@ -1,0 +1,30 @@
+# Pruebas locales de todo el stack (app + API) en http://localhost:8080
+#   ADMIN_PASSWORD=una-contraseña-larga docker compose up --build
+# Usuario inicial: admin@local.test
+services:
+  web:
+    build: .
+    image: kanban-app:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '8080:80'
+    environment:
+      API_URL: /api
+
+  api:
+    build: ./server
+    image: kanban-api:latest
+    restart: unless-stopped
+    environment:
+      ADMIN_EMAIL: admin@local.test
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-cambia-esta-contraseña}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      COOKIE_SECURE: 'false' # solo porque aquí se usa http://localhost
+    volumes:
+      - data:/data
+
+volumes:
+  data:

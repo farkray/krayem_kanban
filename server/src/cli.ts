@@ -1,0 +1,104 @@
+// Administración de usuarios y copias de seguridad. En el contenedor:
+//   docker compose exec api node src/cli.ts create-user ana@correo.com --generate
+import { randomBytes } from 'node:crypto'
+import { join } from 'node:path'
+import {
+  createUser,
+  findUserByEmail,
+  hashPassword,
+  MIN_PASSWORD,
+  normalizeEmail,
+  validEmail,
+} from './auth.ts'
+import { openDb } from './db.ts'
+
+const [cmd, ...args] = process.argv.slice(2)
+const dataDir = process.env.DATA_DIR ?? './data'
+const db = openDb(join(dataDir, 'kanban.db'))
+
+const usage = () => {
+  console.error(`Uso:
+  create-user <email> [--generate | <contraseña>]   Crea un usuario (con --generate muestra una contraseña aleatoria)
+  set-password <email> [--generate | <contraseña>]  Cambia la contraseña y cierra sus sesiones
+  delete-user <email>                               Elimina el usuario y TODOS sus datos
+  list-users                                        Lista usuarios y cuántas filas tiene cada uno
+  backup <carpeta>                                  Copia consistente de la base (VACUUM INTO)`)
+  process.exit(2)
+}
+
+async function passwordFrom(arg: string | undefined): Promise<{ hash: string; shown?: string }> {
+  if (arg === '--generate') {
+    const pw = randomBytes(12).toString('base64url')
+    return { hash: await hashPassword(pw), shown: pw }
+  }
+  if (!arg || arg.length < MIN_PASSWORD) {
+    console.error(`Indica --generate o una contraseña de al menos ${MIN_PASSWORD} caracteres.`)
+    process.exit(2)
+  }
+  return { hash: await hashPassword(arg) }
+}
+
+switch (cmd) {
+  case 'create-user': {
+    const email = normalizeEmail(args[0] ?? '')
+    if (!validEmail(email)) usage()
+    if (findUserByEmail(db, email)) {
+      console.error('Ya existe ese usuario.')
+      process.exit(1)
+    }
+    const { hash, shown } = await passwordFrom(args[1])
+    createUser(db, email, hash)
+    console.log(`Usuario creado: ${email}`)
+    if (shown) console.log(`Contraseña: ${shown}`)
+    break
+  }
+  case 'set-password': {
+    const user = findUserByEmail(db, args[0] ?? '')
+    if (!user) {
+      console.error('No existe ese usuario.')
+      process.exit(1)
+    }
+    const { hash, shown } = await passwordFrom(args[1])
+    db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hash, user.id)
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id)
+    console.log(`Contraseña actualizada para ${user.email} (sesiones cerradas).`)
+    if (shown) console.log(`Contraseña: ${shown}`)
+    break
+  }
+  case 'delete-user': {
+    const user = findUserByEmail(db, args[0] ?? '')
+    if (!user) {
+      console.error('No existe ese usuario.')
+      process.exit(1)
+    }
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id) // en cascada: sesiones y filas
+    console.log(
+      `Eliminado ${user.email}. Sus imágenes siguen en ${join(dataDir, 'blobs', user.id)} (bórralas a mano si quieres).`,
+    )
+    break
+  }
+  case 'list-users': {
+    const rows = db
+      .prepare(
+        `SELECT u.email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
+         FROM users u ORDER BY u.created_at`,
+      )
+      .all() as { email: string; created_at: string; filas: number }[]
+    for (const r of rows) console.log(`${r.email}\t${r.created_at}\t${r.filas} filas`)
+    if (rows.length === 0) console.log('(sin usuarios)')
+    break
+  }
+  case 'backup': {
+    const dir = args[0]
+    if (!dir || !/^[\w./-]+$/.test(dir)) usage()
+    const { mkdirSync } = await import('node:fs')
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `kanban-${new Date().toISOString().replace(/[:.]/g, '-')}.db`)
+    db.exec(`VACUUM INTO '${file}'`)
+    console.log(file)
+    break
+  }
+  default:
+    usage()
+}
+db.close()

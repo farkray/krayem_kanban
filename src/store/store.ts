@@ -1,0 +1,595 @@
+import { create } from 'zustand'
+import type { Table } from 'dexie'
+import { db, type OutboxEntry } from '../db/db'
+import { isConfigured } from '../lib/config'
+import { byPosition, positionAt, positionsFor } from '../lib/position'
+import {
+  DEFAULT_COLUMNS,
+  LIMITS,
+  MAX_COLUMNS,
+  TABLE_KEYS,
+  type Board,
+  LABEL_COLORS,
+  type Attachment,
+  type Card,
+  type ChecklistItem,
+  type Column,
+  type Comment,
+  type Data,
+  type Label,
+  type LabelColor,
+  type TableKey,
+} from '../lib/types'
+
+/* ---------- utilidades ---------- */
+
+const uid = () => crypto.randomUUID()
+const stamp = () => new Date().toISOString()
+const live = <T extends { deletedAt?: string }>(rows: T[]): T[] => rows.filter((r) => !r.deletedAt)
+
+const clean = (text: string, max: number): string | null => {
+  const t = text.trim()
+  return t.length >= 1 && t.length <= max ? t : null
+}
+
+// Cola de escrituras a IndexedDB (Fase 3 la reutiliza para el outbox de sync).
+let writes: Promise<unknown> = Promise.resolve()
+const enqueue = (fn: () => Promise<unknown>) => {
+  writes = writes.then(fn).catch((e) => console.error('[db]', e))
+}
+/** Espera a que terminen las escrituras pendientes. */
+export const flush = () => writes
+
+// El motor de sync se entera de cada escritura local para programar el envío.
+let writeListener: (() => void) | null = null
+export const setWriteListener = (fn: (() => void) | null) => {
+  writeListener = fn
+}
+
+type Snapshot = Partial<Data>
+
+export interface Toast {
+  id: number
+  message: string
+  undo?: () => void
+}
+
+interface Actions {
+  init: () => Promise<void>
+  /** Crea el tablero inicial si nunca se sembró en este dispositivo. */
+  seedIfEmpty: () => Promise<void>
+  /** Aplica filas llegadas de la nube (no se vuelven a enviar). */
+  applyRemote: <K extends TableKey>(key: K, rows: Data[K]) => void
+  // tableros
+  createBoard: (title: string) => string | null
+  renameBoard: (id: string, title: string) => boolean
+  deleteBoard: (id: string) => void
+  // columnas
+  addColumn: (boardId: string, title: string) => string | null
+  renameColumn: (id: string, title: string) => boolean
+  deleteColumn: (id: string, moveToId?: string) => boolean
+  moveColumn: (id: string, index: number) => void
+  // tarjetas
+  addCard: (columnId: string, title: string) => string | null
+  updateCard: (
+    id: string,
+    patch: Partial<
+      Pick<
+        Card,
+        'title' | 'description' | 'startDate' | 'endDate' | 'coverAttachmentId' | 'labelIds'
+      >
+    >,
+  ) => boolean
+  moveCard: (id: string, toColumnId: string, index: number) => void
+  deleteCard: (id: string) => void
+  // etiquetas
+  createLabel: (name: string, color: LabelColor) => string | null
+  updateLabel: (id: string, patch: Partial<Pick<Label, 'name' | 'color'>>) => boolean
+  deleteLabel: (id: string) => void
+  /** Pone o quita una etiqueta de una tarjeta. `false` si se excede el máximo por tarjeta. */
+  toggleCardLabel: (cardId: string, labelId: string) => boolean
+  /** Etiquetas por las que se filtra el tablero (vacío = sin filtro). No se guarda: es de la sesión. */
+  labelFilter: string[]
+  setLabelFilter: (ids: string[]) => void
+  // imágenes
+  addAttachment: (
+    cardId: string,
+    meta: Pick<
+      Attachment,
+      'name' | 'mime' | 'sizeOriginal' | 'sizeCompressed' | 'width' | 'height'
+    >,
+    blob: Blob,
+  ) => string | null
+  deleteAttachment: (id: string) => void
+  // checklist
+  addItem: (cardId: string, text: string) => string | null
+  toggleItem: (id: string) => void
+  updateItem: (id: string, text: string) => boolean
+  deleteItem: (id: string) => void
+  moveItem: (id: string, index: number) => void
+  removeChecklist: (cardId: string) => void
+  // comentarios
+  addComment: (cardId: string, bodyMd: string) => string | null
+  editComment: (id: string, bodyMd: string) => boolean
+  deleteComment: (id: string) => void
+  // toast
+  dismissToast: () => void
+}
+
+export type Store = Data & Actions & { ready: boolean; toast: Toast | null }
+
+const emptyData = (): Data => ({
+  boards: [],
+  labels: [],
+  columns: [],
+  cards: [],
+  attachments: [],
+  items: [],
+  comments: [],
+})
+
+let toastSeq = 0
+let initPromise: Promise<void> | null = null
+
+export const useStore = create<Store>((set, get) => {
+  /**
+   * Inserta/actualiza filas en memoria y las persiste en IndexedDB.
+   * Con `track` (por defecto) también las encola en el outbox para enviarlas a la nube.
+   */
+  function put<K extends TableKey>(key: K, rows: Data[K], track = true): void {
+    if (rows.length === 0) return
+    set((s) => {
+      const incoming = new Map<string, Data[K][number]>(rows.map((r) => [r.id, r]))
+      const current = s[key] as Data[K]
+      const next = current.map((r) => incoming.get(r.id) ?? r)
+      const known = new Set(current.map((r) => r.id))
+      for (const r of rows) if (!known.has(r.id)) next.push(r)
+      return { [key]: next } as unknown as Pick<Data, K>
+    })
+    const table = db[key] as unknown as Table<{ id: string }, string>
+    enqueue(async () => {
+      await db.transaction('rw', table, db.outbox, async () => {
+        await table.bulkPut(rows as { id: string }[])
+        if (track) {
+          const entries: OutboxEntry[] = rows.map((r) => ({
+            key: `${key}:${r.id}`,
+            table: key,
+            id: r.id,
+            v: uid(),
+          }))
+          await db.outbox.bulkPut(entries)
+        }
+      })
+      if (track) writeListener?.()
+    })
+  }
+
+  const notify = (message: string, undo?: () => void) =>
+    set({ toast: { id: ++toastSeq, message, undo } })
+
+  const markDeleted = (snap: Snapshot) => {
+    const ts = stamp()
+    for (const k of TABLE_KEYS) {
+      const rows = snap[k]
+      if (rows) put(k, rows.map((r) => ({ ...r, deletedAt: ts, updatedAt: ts })) as never)
+    }
+  }
+
+  const restore = (snap: Snapshot) => {
+    const ts = stamp()
+    for (const k of TABLE_KEYS) {
+      const rows = snap[k]
+      if (rows) put(k, rows.map((r) => ({ ...r, deletedAt: undefined, updatedAt: ts })) as never)
+    }
+  }
+
+  const cardSnapshot = (cardIds: string[]): Snapshot => {
+    const ids = new Set(cardIds)
+    const s = get()
+    return {
+      cards: live(s.cards).filter((c) => ids.has(c.id)),
+      attachments: live(s.attachments).filter((a) => ids.has(a.cardId)),
+      items: live(s.items).filter((i) => ids.has(i.cardId)),
+      comments: live(s.comments).filter((c) => ids.has(c.cardId)),
+    }
+  }
+
+  const colsOf = (boardId: string) =>
+    live(get().columns)
+      .filter((c) => c.boardId === boardId)
+      .sort(byPosition)
+  const cardsOf = (columnId: string) =>
+    live(get().cards)
+      .filter((c) => c.columnId === columnId)
+      .sort(byPosition)
+  const itemsOf = (cardId: string) =>
+    live(get().items)
+      .filter((i) => i.cardId === cardId)
+      .sort(byPosition)
+
+  const base = () => {
+    const ts = stamp()
+    return { id: uid(), createdAt: ts, updatedAt: ts }
+  }
+
+  async function load(): Promise<void> {
+    const [boards, labels, columns, cards, attachments, items, comments] = await Promise.all([
+      db.boards.toArray(),
+      db.labels.toArray(),
+      db.columns.toArray(),
+      db.cards.toArray(),
+      db.attachments.toArray(),
+      db.items.toArray(),
+      db.comments.toArray(),
+    ])
+    set({ boards, labels, columns, cards, attachments, items, comments, ready: true })
+    // Con nube configurada, el tablero inicial se crea tras la primera descarga (ver sync/engine).
+    if (!isConfigured()) await get().seedIfEmpty()
+  }
+
+  return {
+    ...emptyData(),
+    ready: false,
+    toast: null,
+    labelFilter: [],
+
+    // Idempotente: StrictMode (y dobles montajes) no deben sembrar dos veces.
+    init: () => (initPromise ??= load()),
+
+    seedIfEmpty: async () => {
+      await flush() // asegura que lo ya descargado esté en memoria
+      if (await db.meta.get('seeded')) return
+      // Se cuentan también los borrados lógicos: si hubo tableros alguna vez, no se resiembra.
+      if (get().boards.length === 0) get().createBoard('Mi tablero')
+      enqueue(() => db.meta.put({ key: 'seeded', value: true }))
+    },
+
+    applyRemote: (key, rows) => put(key, rows, false),
+
+    /* ---------- tableros ---------- */
+
+    createBoard: (title) => {
+      const t = clean(title, LIMITS.board)
+      if (!t) return null
+      const boards = live(get().boards).sort(byPosition)
+      const board: Board = { ...base(), title: t, position: positionAt(boards, boards.length) }
+      const keys = positionsFor(DEFAULT_COLUMNS.length)
+      const columns: Column[] = DEFAULT_COLUMNS.map((name, i) => ({
+        ...base(),
+        boardId: board.id,
+        title: name,
+        position: keys[i],
+      }))
+      put('boards', [board])
+      put('columns', columns)
+      return board.id
+    },
+
+    renameBoard: (id, title) => {
+      const t = clean(title, LIMITS.board)
+      const b = get().boards.find((x) => x.id === id)
+      if (!t || !b) return false
+      put('boards', [{ ...b, title: t, updatedAt: stamp() }])
+      return true
+    },
+
+    deleteBoard: (id) => {
+      const s = get()
+      const board = live(s.boards).find((b) => b.id === id)
+      if (!board) return
+      const cardIds = live(s.cards)
+        .filter((c) => c.boardId === id)
+        .map((c) => c.id)
+      const snap: Snapshot = {
+        boards: [board],
+        columns: live(s.columns).filter((c) => c.boardId === id),
+        ...cardSnapshot(cardIds),
+      }
+      markDeleted(snap)
+      notify(`Tablero “${board.title}” eliminado`, () => restore(snap))
+    },
+
+    /* ---------- columnas ---------- */
+
+    addColumn: (boardId, title) => {
+      const t = clean(title, LIMITS.column)
+      const cols = colsOf(boardId)
+      if (!t || cols.length >= MAX_COLUMNS) return null
+      const col: Column = { ...base(), boardId, title: t, position: positionAt(cols, cols.length) }
+      put('columns', [col])
+      return col.id
+    },
+
+    renameColumn: (id, title) => {
+      const t = clean(title, LIMITS.column)
+      const c = get().columns.find((x) => x.id === id)
+      if (!t || !c) return false
+      put('columns', [{ ...c, title: t, updatedAt: stamp() }])
+      return true
+    },
+
+    deleteColumn: (id, moveToId) => {
+      const col = live(get().columns).find((c) => c.id === id)
+      if (!col) return false
+      if (colsOf(col.boardId).length <= 1) return false // mínimo 1 columna
+      const cards = cardsOf(id)
+
+      if (moveToId && cards.length > 0) {
+        // al final de la columna destino, conservando el orden
+        const ts = stamp()
+        const placed: Card[] = cardsOf(moveToId)
+        const moved: Card[] = []
+        for (const c of cards) {
+          const m = {
+            ...c,
+            columnId: moveToId,
+            position: positionAt(placed, placed.length),
+            updatedAt: ts,
+          }
+          placed.push(m)
+          moved.push(m)
+        }
+        put('cards', moved)
+        markDeleted({ columns: [col] })
+        notify(`Columna “${col.title}” eliminada`, () => {
+          restore({ columns: [col] })
+          put(
+            'cards',
+            cards.map((c) => ({ ...c, updatedAt: stamp() })),
+          )
+        })
+        return true
+      }
+
+      const snap: Snapshot = { columns: [col], ...cardSnapshot(cards.map((c) => c.id)) }
+      markDeleted(snap)
+      notify(`Columna “${col.title}” eliminada`, () => restore(snap))
+      return true
+    },
+
+    moveColumn: (id, index) => {
+      const col = get().columns.find((c) => c.id === id)
+      if (!col) return
+      const siblings = colsOf(col.boardId).filter((c) => c.id !== id)
+      put('columns', [{ ...col, position: positionAt(siblings, index), updatedAt: stamp() }])
+    },
+
+    /* ---------- tarjetas ---------- */
+
+    addCard: (columnId, title) => {
+      const t = clean(title, LIMITS.card)
+      const col = live(get().columns).find((c) => c.id === columnId)
+      if (!t || !col) return null
+      const cards = cardsOf(columnId)
+      const card: Card = {
+        ...base(),
+        boardId: col.boardId,
+        columnId,
+        title: t,
+        position: positionAt(cards, cards.length),
+      }
+      put('cards', [card])
+      return card.id
+    },
+
+    updateCard: (id, patch) => {
+      const c = get().cards.find((x) => x.id === id)
+      if (!c) return false
+      const next = { ...c, ...patch }
+      if (patch.title !== undefined) {
+        const t = clean(patch.title, LIMITS.card)
+        if (!t) return false
+        next.title = t
+      }
+      if (patch.description !== undefined) {
+        if (patch.description.length > LIMITS.description) return false
+        next.description = patch.description || undefined
+      }
+      if (next.startDate && next.endDate && next.endDate < next.startDate) return false
+      put('cards', [{ ...next, updatedAt: stamp() }])
+      return true
+    },
+
+    moveCard: (id, toColumnId, index) => {
+      const card = get().cards.find((c) => c.id === id)
+      const col = live(get().columns).find((c) => c.id === toColumnId)
+      if (!card || !col) return
+      const siblings = cardsOf(toColumnId).filter((c) => c.id !== id)
+      put('cards', [
+        {
+          ...card,
+          columnId: toColumnId,
+          boardId: col.boardId,
+          position: positionAt(siblings, index),
+          updatedAt: stamp(),
+        },
+      ])
+    },
+
+    deleteCard: (id) => {
+      const card = live(get().cards).find((c) => c.id === id)
+      if (!card) return
+      const snap = cardSnapshot([id])
+      markDeleted(snap)
+      notify(`Tarjeta “${card.title}” eliminada`, () => restore(snap))
+    },
+
+    /* ---------- etiquetas ---------- */
+
+    createLabel: (name, color) => {
+      const n = clean(name, LIMITS.label)
+      const labels = live(get().labels)
+      if (!n || !LABEL_COLORS.includes(color) || labels.length >= LIMITS.labels) return null
+      // Un nombre = una etiqueta (sin distinguir mayúsculas): evita "Coppel" y "coppel" a la vez.
+      if (labels.some((l) => l.name.toLowerCase() === n.toLowerCase())) return null
+      const label: Label = { ...base(), name: n, color }
+      put('labels', [label])
+      return label.id
+    },
+
+    updateLabel: (id, patch) => {
+      const l = live(get().labels).find((x) => x.id === id)
+      if (!l) return false
+      const next = { ...l }
+      if (patch.name !== undefined) {
+        const n = clean(patch.name, LIMITS.label)
+        if (!n) return false
+        const dup = live(get().labels).some(
+          (x) => x.id !== id && x.name.toLowerCase() === n.toLowerCase(),
+        )
+        if (dup) return false
+        next.name = n
+      }
+      if (patch.color !== undefined) {
+        if (!LABEL_COLORS.includes(patch.color)) return false
+        next.color = patch.color
+      }
+      put('labels', [{ ...next, updatedAt: stamp() }])
+      return true
+    },
+
+    deleteLabel: (id) => {
+      const l = live(get().labels).find((x) => x.id === id)
+      if (!l) return
+      // Las tarjetas conservan el id; al mostrarse se ignoran las etiquetas eliminadas (y "Deshacer" las recupera).
+      markDeleted({ labels: [l] })
+      set((s) => ({ labelFilter: s.labelFilter.filter((f) => f !== id) }))
+      notify(`Etiqueta “${l.name}” eliminada`, () => restore({ labels: [l] }))
+    },
+
+    toggleCardLabel: (cardId, labelId) => {
+      const c = live(get().cards).find((x) => x.id === cardId)
+      const l = live(get().labels).find((x) => x.id === labelId)
+      if (!c || !l) return false
+      const current = (c.labelIds ?? []).filter((id) => live(get().labels).some((x) => x.id === id))
+      const has = current.includes(labelId)
+      if (!has && current.length >= LIMITS.cardLabels) return false
+      const next = has ? current.filter((id) => id !== labelId) : [...current, labelId]
+      put('cards', [{ ...c, labelIds: next.length ? next : undefined, updatedAt: stamp() }])
+      return true
+    },
+
+    setLabelFilter: (ids) => set({ labelFilter: ids }),
+
+    /* ---------- imágenes ---------- */
+
+    addAttachment: (cardId, meta, blob) => {
+      const card = live(get().cards).find((c) => c.id === cardId)
+      const count = live(get().attachments).filter((a) => a.cardId === cardId).length
+      if (!card || count >= LIMITS.attachments) return null
+      const ext = meta.mime.split('/')[1]?.replace('jpeg', 'jpg') || 'bin'
+      const att: Attachment = { ...base(), ...meta, cardId, path: '' }
+      att.path = `${att.id}.${ext}`
+      // El archivo se guarda antes que la fila para que el motor de sync siempre lo encuentre.
+      enqueue(() => db.blobs.put({ id: att.id, blob, uploaded: false }))
+      put('attachments', [att])
+      return att.id
+    },
+
+    deleteAttachment: (id) => {
+      const a = live(get().attachments).find((x) => x.id === id)
+      if (!a) return
+      markDeleted({ attachments: [a] })
+      notify('Imagen eliminada', () => restore({ attachments: [a] }))
+    },
+
+    /* ---------- checklist ---------- */
+
+    addItem: (cardId, text) => {
+      const t = clean(text, LIMITS.item)
+      const items = itemsOf(cardId)
+      if (!t || items.length >= LIMITS.items) return null
+      const item: ChecklistItem = {
+        ...base(),
+        cardId,
+        text: t,
+        done: false,
+        position: positionAt(items, items.length),
+      }
+      put('items', [item])
+      return item.id
+    },
+
+    toggleItem: (id) => {
+      const i = get().items.find((x) => x.id === id)
+      if (i) put('items', [{ ...i, done: !i.done, updatedAt: stamp() }])
+    },
+
+    updateItem: (id, text) => {
+      const t = clean(text, LIMITS.item)
+      const i = get().items.find((x) => x.id === id)
+      if (!t || !i) return false
+      put('items', [{ ...i, text: t, updatedAt: stamp() }])
+      return true
+    },
+
+    deleteItem: (id) => {
+      const i = live(get().items).find((x) => x.id === id)
+      if (!i) return
+      markDeleted({ items: [i] })
+      notify('Ítem eliminado', () => restore({ items: [i] }))
+    },
+
+    moveItem: (id, index) => {
+      const item = get().items.find((x) => x.id === id)
+      if (!item) return
+      const siblings = itemsOf(item.cardId).filter((x) => x.id !== id)
+      put('items', [{ ...item, position: positionAt(siblings, index), updatedAt: stamp() }])
+    },
+
+    removeChecklist: (cardId) => {
+      const items = itemsOf(cardId)
+      if (items.length === 0) return
+      markDeleted({ items })
+      notify('Lista de tareas eliminada', () => restore({ items }))
+    },
+
+    /* ---------- comentarios ---------- */
+
+    addComment: (cardId, bodyMd) => {
+      const body = clean(bodyMd, LIMITS.comment)
+      if (!body) return null
+      const comment: Comment = { ...base(), cardId, bodyMd: body }
+      put('comments', [comment])
+      return comment.id
+    },
+
+    editComment: (id, bodyMd) => {
+      const body = clean(bodyMd, LIMITS.comment)
+      const c = get().comments.find((x) => x.id === id)
+      if (!body || !c) return false
+      const ts = stamp()
+      put('comments', [{ ...c, bodyMd: body, editedAt: ts, updatedAt: ts }])
+      return true
+    },
+
+    deleteComment: (id) => {
+      const c = live(get().comments).find((x) => x.id === id)
+      if (!c) return
+      markDeleted({ comments: [c] })
+      notify('Comentario eliminado', () => restore({ comments: [c] }))
+    },
+
+    dismissToast: () => set({ toast: null }),
+  }
+})
+
+/** Borra todos los datos locales (cambio de cuenta / cerrar sesión). */
+export async function wipeLocal(): Promise<void> {
+  await flush()
+  await Promise.all(db.tables.map((t) => t.clear()))
+  useStore.setState({ ...emptyData(), toast: null, labelFilter: [] })
+}
+
+/** Solo para tests: fuerza que el próximo init() vuelva a leer de IndexedDB. */
+export const resetInit = () => {
+  initPromise = null
+}
+
+/** Solo para tests: vacía memoria y base local. */
+export async function resetStore(): Promise<void> {
+  await flush()
+  resetInit()
+  await Promise.all(db.tables.map((t) => t.clear()))
+  useStore.setState({ ...emptyData(), ready: false, toast: null, labelFilter: [] })
+}

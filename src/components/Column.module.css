@@ -1,0 +1,221 @@
+.column {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: min(var(--column-width), 86vw); /* en teléfonos se asoma la siguiente columna */
+  background: var(--color-column);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.dragging {
+  opacity: 0.4;
+}
+
+.lifted {
+  box-shadow: var(--shadow-lifted);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.headText {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+}
+
+.titleBtn {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.grip,
+.delete {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.column:hover .grip,
+.column:hover .delete,
+.grip:focus-visible,
+.delete:focus-visible {
+  opacity: 1;
+}
+
+.grip:hover,
+.delete:hover:not(:disabled) {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+
+.delete:disabled {
+  cursor: not-allowed;
+  opacity: 0;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 80px;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 40px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add:hover {
+  background: var(--color-accent-soft-hover);
+}
+
+/* Destino del arrastre: contorno azul suave alrededor de la columna */
+.dropTarget {
+  box-shadow:
+    0 0 0 2px var(--color-accent),
+    0 0 0 6px var(--color-accent-glow),
+    var(--shadow-card);
+  transition: box-shadow var(--duration-fast) ease;
+}
+
+/* Sin hover (táctil) los controles de la columna deben verse siempre */
+@media (hover: none) {
+  .grip,
+  .delete {
+    opacity: 1;
+    color: var(--color-text-muted);
+  }
+
+  .delete:disabled {
+    opacity: 0.3;
+  }
+}
+
+@media (pointer: coarse) {
+  .grip,
+  .delete {
+    width: 44px;
+    height: 44px;
+  }
+
+  .titleBtn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .add {
+    height: 48px;
+  }
+}
+
+/* El agarre vive en el margen izquierdo: el título queda alineado con las tarjetas */
+.grip {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 32px;
+  transform: translateY(-50%);
+  border-radius: var(--radius-xs);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--weight-medium);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+}
+
+.progress {
+  background: var(--color-accent);
+}
+
+.done {
+  background: var(--color-success);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .grip {
+    position: static;
+    transform: none;
+    width: 44px;
+    height: 44px;
+    margin-left: calc(-1 * var(--space-3));
+  }
+}
+
+@media (pointer: coarse) {
+  .header {
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+}

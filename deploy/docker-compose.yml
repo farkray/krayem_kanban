@@ -1,0 +1,60 @@
+# Stack del VPS: Caddy (HTTPS automático) → nginx (app estática + proxy /api) → API (SQLite).
+# Se ejecuta desde /opt/kanban en el servidor, junto a .env, Caddyfile y este archivo.
+services:
+  api:
+    image: kanban-api:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Usuario inicial (solo se crea si aún no existe). Más usuarios: ver deploy/README.md.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?define ADMIN_EMAIL en .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?define ADMIN_PASSWORD en .env}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      COOKIE_SECURE: 'true' # la app solo se sirve por HTTPS (Caddy)
+    volumes:
+      - kanban_data:/data # base SQLite + imágenes: LO ÚNICO que hay que respaldar
+    expose:
+      - '3000'
+    logging: &logs
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
+  web:
+    image: kanban-app:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: /api
+    expose:
+      - '80'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1/healthz']
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging: *logs
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:443'
+      - '${HTTPS_PORT:-443}:443/udp' # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?define DOMAIN en .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificados: no borrar (límite de emisión de Let's Encrypt)
+      - caddy_config:/config
+    logging: *logs
+
+volumes:
+  kanban_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,46 @@
+# Variante para un VPS que YA tiene Traefik (docker provider, entrypoint websecure y resolver
+# "letsencrypt"): Traefik pone el HTTPS y enruta por etiquetas; aquí no hay Caddy ni puertos publicados.
+# Va en /docker/kanban junto a .env (ver deploy.sh con STACK=traefik).
+name: kanban
+
+services:
+  api:
+    image: kanban-api:${TAG:-latest}
+    restart: unless-stopped
+    environment:
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?define ADMIN_EMAIL en .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?define ADMIN_PASSWORD en .env}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      COOKIE_SECURE: 'true' # se sirve solo por HTTPS (Traefik)
+    volumes:
+      - kanban_data:/data # base SQLite + imágenes: LO ÚNICO que hay que respaldar
+    logging: &logs
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
+  web:
+    image: kanban-app:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: /api
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1/healthz']
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.kanban.rule=Host(`${DOMAIN:?define DOMAIN en .env}`)
+      - traefik.http.routers.kanban.entrypoints=websecure
+      - traefik.http.routers.kanban.tls.certresolver=letsencrypt
+      - traefik.http.routers.kanban.middlewares=kanban-hsts
+      - traefik.http.middlewares.kanban-hsts.headers.stsSeconds=31536000
+      - traefik.http.services.kanban.loadbalancer.server.port=80
+    logging: *logs
+
+volumes:
+  kanban_data:

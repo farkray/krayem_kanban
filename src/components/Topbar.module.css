@@ -1,0 +1,77 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: var(--topbar-height);
+  padding: 0 var(--space-4);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.left,
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-control);
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: var(--color-control-hover);
+}
+
+.topbar {
+  position: relative;
+  z-index: 30;
+  height: calc(var(--topbar-height) + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  padding-right: max(var(--space-4), env(safe-area-inset-right));
+  padding-left: max(var(--space-4), env(safe-area-inset-left));
+}
+
+.install {
+  display: contents; /* el botón se ve en la barra en pantalla ancha y en el panel en la angosta */
+}
+
+@media (max-width: 899px) {
+  .install {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    gap: var(--space-2);
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+  }
+
+  .right {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Ayuda y filtros aún no tienen función: no gastan espacio en el teléfono */
+  .extra {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .iconBtn {
+    width: 44px;
+    height: 44px;
+  }
+}
