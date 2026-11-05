@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepara un VPS Ubuntu/Debian recién creado (Hostinger u otro). Ejecutar UNA vez, como root:
+# Prepara un VPS Ubuntu/Debian recién creado (cualquier proveedor). Ejecutar UNA vez, como root:
 #   scp deploy/setup-vps.sh root@IP:/root/ && ssh root@IP 'bash /root/setup-vps.sh'
 # Hace: instala Docker (repositorio oficial), abre solo SSH/80/443, crea el usuario `deploy`
 # (con tu misma llave SSH), el directorio /opt/kanban y un cron de copias de seguridad diarias.

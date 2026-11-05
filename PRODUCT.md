@@ -31,7 +31,7 @@ datos ni esa independencia.
 ## Operating Context
 
 - Uso personal diario en computadora; consulta y captura rápida en el teléfono, a veces sin red.
-- Se despliega en un VPS propio (Hostinger) con HTTPS vía Traefik o Caddy; ver `deploy/README.md`.
+- Se despliega en un VPS propio con HTTPS vía Traefik o Caddy; ver `deploy/README.md`.
 - Idioma de la interfaz: español (México). Textos en `src/` (sin i18n todavía).
 
 ## Capabilities and Constraints

@@ -1,6 +1,6 @@
-# Despliegue en un VPS (Hostinger)
+# Despliegue en un VPS
 
-Hay dos variantes de `deploy.sh`, según el VPS:
+Hay dos variantes de `deploy.sh`, según el servidor:
 
 | | `STACK=caddy` (por defecto) | `STACK=traefik` |
 |---|---|---|
@@ -18,7 +18,7 @@ Hay dos variantes de `deploy.sh`, según el VPS:
 STACK=traefik BUILD=remote ./deploy/deploy.sh root@IP
 ```
 
-Con el dominio temporal de Hostinger (`*.<id-del-vps>.hstgr.cloud` ya resuelve a la IP) basta `DOMAIN=kanban.midominio.com`. Para un dominio propio: registro A hacia la IP y cambia `DOMAIN` en el `.env`.
+Basta con que `DOMAIN` (p. ej. `kanban.midominio.com`) tenga un registro A hacia la IP del servidor.
 Los contenedores no publican puertos: Traefik llega a ellos por la red de compose. El volumen se llama `kanban_kanban_data`.
 Respaldo manual: `ssh root@IP 'cd /docker/kanban && REMOTE_DIR=/docker/kanban ./backup.sh'` (no hay cron instalado en esta variante; añádelo tú si lo quieres).
 
@@ -38,10 +38,10 @@ No hace falta un registry: las imágenes se construyen en tu computadora y viaja
 
 ## Antes de empezar
 
-1. **VPS** con Ubuntu 22.04/24.04 (o Debian 12). Sirve la plantilla "Ubuntu + Docker" de Hostinger: el script detecta que Docker ya está.
-2. **Dominio** (o subdominio) con un registro **A** hacia la IP del VPS (hPanel → Dominios → DNS). Comprueba: `dig +short kanban.midominio.com`.
-3. **Llave SSH** añadida al VPS (hPanel → VPS → Configuración → SSH keys) para entrar como `root`.
-4. Si activaste el **firewall de Hostinger** (hPanel → VPS → Seguridad): permite TCP 22, TCP 80, TCP 443 y UDP 443.
+1. **VPS** con Ubuntu 22.04/24.04 (o Debian 12). Sirve una imagen "Ubuntu + Docker": el script detecta que Docker ya está.
+2. **Dominio** (o subdominio) con un registro **A** hacia la IP del VPS (en el panel DNS de tu proveedor). Comprueba: `dig +short kanban.midominio.com`.
+3. **Llave SSH** añadida al VPS (en el panel de tu proveedor o con `ssh-copy-id`) para entrar como `root`.
+4. Si tu proveedor tiene un **firewall externo**: permite TCP 22, TCP 80, TCP 443 y UDP 443.
 5. En tu computadora: Docker con `buildx` (viene con Docker Desktop).
 
 ## 1. Preparar el servidor (una sola vez)
@@ -126,7 +126,7 @@ Cambiar la config: edita `.env` y `ssh deploy@IP 'cd /opt/kanban && docker compo
 
 | Síntoma | Causa probable |
 |---|---|
-| Caddy no obtiene certificado | El DNS aún no apunta al VPS, o 80/443 bloqueados (ufw o firewall de Hostinger). Mira `docker compose logs caddy`. |
+| Caddy no obtiene certificado | El DNS aún no apunta al VPS, o 80/443 bloqueados (ufw o el firewall del proveedor). Mira `docker compose logs caddy`. |
 | "Correo o contraseña incorrectos" con los datos buenos | `ADMIN_PASSWORD` cambió después del primer arranque (no actualiza el usuario existente): usa `set-password`. |
 | "Demasiados intentos" | 5 fallos seguidos bloquean 15 minutos ese correo (reinicia `api` para limpiarlo). |
 | Entra pero no sincroniza | `docker compose logs api`. Las peticiones deben llegar por el mismo dominio (la API comprueba el origen). |

@@ -158,7 +158,7 @@ Attachment { id, cardId, path, mime, sizeOriginal, sizeCompressed, createdAt }
 3. **Idiomas**: ¿solo español o i18n?
 4. **Tema**: ¿modo oscuro?
 5. **Funciones extra de tarjeta**: etiquetas, fechas, checklist, adjuntos (la imagen de referencia solo muestra título y fecha).
-6. **Dónde corre el contenedor** (VPS, Hostinger, Cloud Run, etc.) y quién pone HTTPS (reverse proxy: Caddy/Traefik/Nginx del host). Requisito PWA: HTTPS.
+6. **Dónde corre el contenedor** (VPS, Cloud Run, etc.) y quién pone HTTPS (reverse proxy: Caddy/Traefik/Nginx del host). Requisito PWA: HTTPS.
 7. ~~**Backend con Docker**~~ → decidido: contenedor `api` en el mismo compose.
 
 ## 11. Estructura de carpetas propuesta
@@ -224,6 +224,6 @@ Backend propio (decisión posterior a las fases 1–6: se descartó Supabase). S
 Implementado en `deploy/` (ver `deploy/README.md`): Caddy (HTTPS) + app, `setup-vps.sh`, `deploy.sh` con rollback automático.
 Verificado en local (HTTPS, HSTS, CSP, web no expuesta). **Sin ejecutar** contra un VPS real.
 
-**Desplegado** (2026-11-03) en un VPS de Hostinger detrás del Traefik existente: https://kanban.midominio.com (`STACK=traefik BUILD=remote`, carpeta `/docker/kanban`). Verificado: HTTPS (Let's Encrypt), HSTS, login/sesión/CSRF, SSE a través de Traefik y respaldo manual. Cron de respaldo no instalado.
+**Desplegado** (2026-11-03) en un VPS detrás del Traefik existente: https://kanban.midominio.com (`STACK=traefik BUILD=remote`, carpeta `/docker/kanban`). Verificado: HTTPS (Let's Encrypt), HSTS, login/sesión/CSRF, SSE a través de Traefik y respaldo manual. Cron de respaldo no instalado.
 
 **Etiquetas** (2026-11): tabla `labels` (nombre + color) y `labelIds` en la tarjeta; sincronizadas; filtro y búsqueda por etiqueta. Ver `tool.md` §13.

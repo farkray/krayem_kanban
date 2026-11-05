@@ -3,7 +3,8 @@
 Tablero Kanban en español, instalable (PWA), con guardado automático en tu propio servidor y funcionamiento sin conexión.
 
 - **Tableros, columnas (máx. 5) y tarjetas** con arrastrar y soltar (mouse, touch y teclado).
-- **Tarjeta:** descripción, fechas de inicio/final opcionales, lista de tareas opcional, comentarios en feed con Markdown e imágenes (comprimidas en el navegador con WebAssembly).
+- **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, lista de tareas opcional, feed de actualizaciones con editor de formato (Markdown) e imágenes (comprimidas en el navegador con WebAssembly).
+- **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - **Búsqueda global** (`/` o `Cmd/Ctrl+K`), deshacer en todos los borrados.
 - **Offline-first:** todo se guarda primero en IndexedDB y se sincroniza con tu propio servidor en segundo plano.
 
@@ -32,7 +33,7 @@ E2E_SYNC=1 E2E_BASE_URL=http://localhost:8080 npx playwright test sync
 
 ## Servidor de sincronización (propio, sin servicios externos)
 
-La carpeta [server/](server/) es una API pequeña (Node 22 + Fastify + SQLite, sin Postgres ni Supabase) que corre en tu VPS:
+La carpeta [server/](server/) es una API pequeña (Node 22 + Fastify + SQLite, sin base de datos externa) que corre en cualquier servidor con Docker:
 
 - **Cuentas:** correo + contraseña (scrypt), sesión en cookie HttpOnly de 30 días, límite de intentos de acceso y registro **desactivado** por defecto.
 - **Sincronización:** la app envía sus cambios (`POST /api/sync/:tabla`) y descarga por cursor; los demás dispositivos reciben los cambios en vivo por SSE (`/api/events`).
@@ -60,16 +61,16 @@ Administrar usuarios (dentro del contenedor): `docker compose exec api node src/
 - **`Dockerfile`** (raíz): la SPA con nginx. Config en runtime (`/config.js`): `API_URL` (vacío = solo local). Nginx hace de proxy de `/api` hacia el contenedor `api`.
 - **`server/Dockerfile`**: la API (usuario sin privilegios, volumen `/data`, healthcheck).
 - `GET /healthz` (web) y `GET /api/health` (API).
-- Chrome exige **HTTPS** para instalar la PWA: en el VPS lo da Caddy (ver abajo).
+- Los navegadores exigen **HTTPS** para instalar la PWA: el stack de despliegue incluye Caddy (o etiquetas para Traefik).
 
-### VPS (Hostinger u otro)
+### Despliegue en un VPS
 
-Guía completa, con HTTPS automático (Caddy), despliegue por SSH, copias de seguridad y rollback: [deploy/README.md](deploy/README.md).
+Guía completa, con HTTPS automático (Caddy) o detrás de un Traefik existente, despliegue por SSH, copias de seguridad y rollback: [deploy/README.md](deploy/README.md).
 
 ## CI/CD
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml): lint, formato, tipos + build, pruebas unitarias y E2E en cada PR; en `main` y tags `v*`
-construye y publica las imágenes `kanban-app` y `kanban-api` en GHCR con tags `latest`, `sha-…` y de versión. El despliegue al VPS lo hace `deploy/deploy.sh` (sin registry).
+construye y publica las imágenes `kanban-app` y `kanban-api` en GHCR con tags `latest`, `sha-…` y de versión. El despliegue a un servidor propio lo hace `deploy/deploy.sh` (sin registry).
 
 ## Límites conocidos
 
