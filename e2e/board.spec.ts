@@ -81,8 +81,9 @@ test.describe('tablero', () => {
     await dialog.getByRole('checkbox', { name: 'Completar: uno' }).check()
     await expect(dialog.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
 
-    await dialog.getByLabel('Comentario', { exact: true }).fill('Hablar con **diseño**')
-    await dialog.getByRole('button', { name: 'Comentar' }).click()
+    await dialog.getByLabel('Nueva actualización').fill('Hablar con **diseño**')
+    await dialog.getByRole('button', { name: 'Actualizar', exact: true }).click()
+    await dialog.getByRole('tab', { name: /^Actualizaciones/ }).click()
     await expect(dialog.locator('strong', { hasText: 'diseño' })).toBeVisible()
 
     await page.keyboard.press('Escape')

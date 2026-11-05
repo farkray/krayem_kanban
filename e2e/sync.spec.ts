@@ -70,10 +70,14 @@ test('dos dispositivos: lo creado en uno llega al otro, en vivo', async ({ brows
   // Y al revés: B comenta, A lo ve en el detalle.
   await card(b.page, 'Desde A').click()
   const dlgB = b.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
-  await dlgB.getByLabel('Comentario', { exact: true }).fill('Hola desde **B**')
-  await dlgB.getByRole('button', { name: 'Comentar' }).click()
+  await dlgB.getByLabel('Nueva actualización').fill('Hola desde **B**')
+  await dlgB.getByRole('button', { name: 'Actualizar', exact: true }).click()
   await saved(b.page)
   await card(a.page, 'Desde A').click()
+  await a.page
+    .getByRole('dialog')
+    .getByRole('tab', { name: /^Actualizaciones/ })
+    .click()
   await expect(a.page.getByRole('dialog').locator('strong', { hasText: 'B' })).toBeVisible({
     timeout: 15_000,
   })

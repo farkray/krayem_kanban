@@ -12,14 +12,13 @@ test.describe('detalle de tarjeta: acción principal y eliminar', () => {
     const d = detail(page)
     // Se escribe sin salir del campo: "Listo" debe guardar igualmente.
     await d.getByLabel('Título de la tarjeta').fill('Título nuevo')
-    await d.getByLabel('Descripción').fill('Descripción escrita justo antes de cerrar')
     await d.getByRole('button', { name: 'Listo' }).click()
     await expect(d).toHaveCount(0)
     await expect(card(column(page, 'Por hacer'), 'Título nuevo')).toBeVisible()
     await waitForStored(page, 'cards', 'Título nuevo')
     await page.reload()
     await card(page, 'Título nuevo').click()
-    await expect(detail(page)).toContainText('Descripción escrita justo antes de cerrar')
+    await expect(detail(page).getByLabel('Título de la tarjeta')).toHaveValue('Título nuevo')
   })
 
   test('el pie solo tiene "Listo" y el aviso de autoguardado; Eliminar vive dentro del scroll', async ({
@@ -53,17 +52,6 @@ test.describe('detalle de tarjeta: acción principal y eliminar', () => {
     await expect(card(page, 'A eliminar')).toHaveCount(0)
     await page.getByRole('button', { name: 'Deshacer' }).click()
     await expect(card(page, 'A eliminar')).toBeVisible()
-  })
-
-  test('Escape sigue cerrando y conservando lo escrito', async ({ page }) => {
-    await openFirstBoard(page)
-    await addCard(page, 'Por hacer', 'Con Escape')
-    await card(page, 'Con Escape').click()
-    await detail(page).getByLabel('Descripción').fill('Se guarda al salir')
-    await page.keyboard.press('Escape')
-    await expect(detail(page)).toHaveCount(0)
-    await card(page, 'Con Escape').click()
-    await expect(detail(page)).toContainText('Se guarda al salir')
   })
 })
 

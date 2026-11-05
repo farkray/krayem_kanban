@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { resetStore } from './store/store'
+import { resetStore, useStore } from './store/store'
 
 async function setup() {
   window.history.replaceState(null, '', '/')
@@ -120,8 +120,9 @@ describe('modal de tarjeta', () => {
   it('comentarios con Markdown, editar y eliminar', async () => {
     const user = await setup()
     const dialog = await withCard(user)
-    await user.type(within(dialog).getByLabelText('Comentario'), 'Hola **mundo**')
-    await user.click(within(dialog).getByRole('button', { name: 'Comentar' }))
+    await user.type(within(dialog).getByLabelText('Nueva actualización'), 'Hola **mundo**')
+    await user.click(within(dialog).getByRole('button', { name: 'Actualizar' }))
+    await user.click(within(dialog).getByRole('tab', { name: /^Actualizaciones/ }))
     const strong = within(dialog).getByText('mundo')
     expect(strong.tagName).toBe('STRONG')
 
@@ -140,14 +141,29 @@ describe('modal de tarjeta', () => {
     const user = await setup()
     const dialog = await withCard(user)
     await user.type(
-      within(dialog).getByLabelText('Comentario'),
+      within(dialog).getByLabelText('Nueva actualización'),
       '<img src=x onerror=alert(1)> hola',
       {
         skipAutoClose: true,
       },
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Comentar' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Actualizar' }))
+    await user.click(within(dialog).getByRole('tab', { name: /^Actualizaciones/ }))
+    expect(within(dialog).getByText(/hola/)).toBeInTheDocument()
     expect(dialog.querySelector('img')).toBeNull()
+  })
+
+  it('una descripción antigua pasa a ser la primera actualización', async () => {
+    const user = await setup()
+    const dialog0 = await withCard(user)
+    const id = useStore.getState().cards[0].id
+    await user.click(within(dialog0).getByRole('button', { name: 'Listo' }))
+    useStore.getState().updateCard(id, { description: 'Cotización **enviada**' })
+    await user.click(screen.getByText('Tarea'))
+    const dialog = await screen.findByRole('dialog', { name: 'Detalle de la tarjeta' })
+    await user.click(await within(dialog).findByRole('tab', { name: /^Actualizaciones/ }))
+    expect(within(dialog).getByText('enviada').tagName).toBe('STRONG')
+    expect(useStore.getState().cards[0].description).toBeUndefined()
   })
 
   it('lista de tareas opcional con progreso', async () => {

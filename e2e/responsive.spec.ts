@@ -127,9 +127,9 @@ test.describe('teléfono (390×844, táctil)', () => {
     const d = await sizeOf(del)
     expect(d.y + d.height).toBeLessThanOrEqual(844) // visible sin desplazar
     expect(d.height).toBeGreaterThanOrEqual(44)
-    expect(await dlg.getByLabel('Descripción').evaluate((e) => getComputedStyle(e).fontSize)).toBe(
-      '16px',
-    )
+    expect(
+      await dlg.getByLabel('Nueva actualización').evaluate((e) => getComputedStyle(e).fontSize),
+    ).toBe('16px')
     expect(await violations(page)).toEqual([])
   })
 

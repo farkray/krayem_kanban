@@ -115,48 +115,54 @@ function Item({ comment }: { comment: Comment }) {
 
 interface CommentsProps {
   cardId: string
-  /** "comments": lista y cuadro al final. "updates": cuadro arriba y lo más nuevo primero. */
-  variant?: 'comments' | 'updates'
+  /** "composer": solo el cuadro (Detalles). "updates": cuadro arriba y feed, lo más nuevo primero. */
+  variant?: 'composer' | 'updates'
 }
 
-export function Comments({ cardId, variant = 'comments' }: CommentsProps) {
+export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
   const comments = useComments(cardId)
   const addComment = useStore((s) => s.addComment)
   const updates = variant === 'updates'
-  const shown = updates ? [...comments].reverse() : comments
+  const [sent, setSent] = useState(false)
 
-  const feed =
-    shown.length > 0 ? (
-      <ul className={styles.feed} aria-label={updates ? 'Actualizaciones' : 'Comentarios'}>
-        {shown.map((c) => (
-          <Item key={c.id} comment={c} />
-        ))}
-      </ul>
-    ) : updates ? (
-      <p className={styles.empty}>Aún no hay actualizaciones. Escribe la primera arriba.</p>
-    ) : null
-
-  const editor = updates ? (
+  const editor = (
     <CommentEditor
       label="Nueva actualización"
-      placeholder="Escribe una actualización…"
+      placeholder="Escribe una actualización… (admite Markdown)"
       rows={5}
       submitLabel="Actualizar"
-      onSubmit={(t) => addComment(cardId, t) !== null}
+      onSubmit={(t) => {
+        const ok = addComment(cardId, t) !== null
+        if (ok) setSent(true)
+        return ok
+      }}
     />
-  ) : (
-    <CommentEditor submitLabel="Comentar" onSubmit={(t) => addComment(cardId, t) !== null} />
   )
 
-  return updates ? (
+  if (!updates) {
+    return (
+      <div className={styles.updates}>
+        {editor}
+        <p className={styles.sent} role="status">
+          {sent ? 'Enviada a la pestaña Actualizaciones.' : ''}
+        </p>
+      </div>
+    )
+  }
+
+  const shown = [...comments].reverse()
+  return (
     <div className={styles.updates}>
       {editor}
-      {feed}
-    </div>
-  ) : (
-    <div>
-      {feed}
-      {editor}
+      {shown.length > 0 ? (
+        <ul className={styles.feed} aria-label="Actualizaciones">
+          {shown.map((c) => (
+            <Item key={c.id} comment={c} />
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.empty}>Aún no hay actualizaciones. Escribe la primera arriba.</p>
+      )}
     </div>
   )
 }

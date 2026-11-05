@@ -7,8 +7,6 @@ import { Attachments } from './Attachments'
 import { Checklist } from './Checklist'
 import { LabelPicker } from './LabelPicker'
 import { Comments } from './Comments'
-import { FormatEditor } from './FormatEditor'
-import { Markdown } from './Markdown'
 import { Modal } from './Modal'
 import styles from './CardModal.module.css'
 
@@ -25,26 +23,19 @@ export function CardModal({ cardId, onClose }: Props) {
   const columns = useColumns(card?.boardId ?? null)
 
   const [title, setTitle] = useState(card?.title ?? '')
-  const [description, setDescription] = useState(card?.description ?? '')
   const [showDates, setShowDates] = useState(false)
   const [tab, setTab] = useState<'details' | 'updates'>('details')
-  const [editingDesc, setEditingDesc] = useState(false)
   const updatesCount = useComments(cardId).length
   const [dateError, setDateError] = useState<string | null>(null)
 
-  // Guarda la descripción pendiente al cerrar (Esc, clic fuera, etc.).
-  const draft = useRef(description)
+  // La descripción ya no existe como campo aparte: lo que había pasa a ser la primera actualización.
+  const migrated = useRef(false)
   useEffect(() => {
-    draft.current = description
-  }, [description])
-  const saved = useRef(card?.description ?? '')
-  useEffect(
-    () => () => {
-      if (draft.current !== saved.current)
-        useStore.getState().updateCard(cardId, { description: draft.current })
-    },
-    [cardId],
-  )
+    if (migrated.current || !card?.description?.trim()) return
+    migrated.current = true
+    const st = useStore.getState()
+    if (st.addComment(cardId, card.description) !== null) st.updateCard(cardId, { description: '' })
+  }, [cardId, card?.description])
 
   useEffect(() => {
     if (!card || card.deletedAt) onClose()
@@ -59,15 +50,9 @@ export function CardModal({ cardId, onClose }: Props) {
     if (!updateCard(card.id, { title: t })) setTitle(card.title)
   }
 
-  const commitDescription = () => {
-    if (description === (card.description ?? '')) return
-    if (updateCard(card.id, { description })) saved.current = description
-  }
-
-  /** "Listo": guarda lo pendiente (título y descripción) y cierra. */
+  /** "Listo": guarda el título pendiente y cierra. */
   const finish = () => {
     commitTitle()
-    commitDescription()
     onClose()
   }
 
@@ -192,41 +177,6 @@ export function CardModal({ cardId, onClose }: Props) {
           </section>
 
           <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h3>Descripción</h3>
-              {!editingDesc && description.trim() !== '' && (
-                <button type="button" className={styles.link} onClick={() => setEditingDesc(true)}>
-                  Editar
-                </button>
-              )}
-            </div>
-            {editingDesc || description.trim() === '' ? (
-              <div
-                onBlur={(e) => {
-                  // El foco sigue dentro del editor (barra de formato): no se cierra
-                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-                  commitDescription()
-                  if (description.trim() !== '') setEditingDesc(false)
-                }}
-              >
-                <FormatEditor
-                  value={description}
-                  onChange={setDescription}
-                  label="Descripción"
-                  placeholder="Agrega una descripción… (admite Markdown)"
-                  rows={5}
-                  maxLength={LIMITS.description}
-                  autoFocus={editingDesc}
-                />
-              </div>
-            ) : (
-              <div className={styles.rendered}>
-                <Markdown source={description} />
-              </div>
-            )}
-          </section>
-
-          <section className={styles.section}>
             <h3>Lista de tareas</h3>
             <Checklist cardId={card.id} />
           </section>
@@ -237,8 +187,8 @@ export function CardModal({ cardId, onClose }: Props) {
           </section>
 
           <section className={styles.section}>
-            <h3>Comentarios</h3>
-            <Comments cardId={card.id} />
+            <h3>Actualización</h3>
+            <Comments cardId={card.id} variant="composer" />
           </section>
 
           <section className={styles.dangerZone} aria-label="Eliminar">

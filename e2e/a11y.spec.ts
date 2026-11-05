@@ -37,8 +37,8 @@ test.describe('accesibilidad (axe, WCAG 2.1 AA)', () => {
     await dialog.getByRole('button', { name: /Agregar lista de tareas/ }).click()
     await dialog.getByLabel('Nuevo ítem de la lista').fill('ítem')
     await page.keyboard.press('Enter')
-    await dialog.getByLabel('Comentario', { exact: true }).fill('hola')
-    await dialog.getByRole('button', { name: 'Comentar' }).click()
+    await dialog.getByLabel('Nueva actualización').fill('hola')
+    await dialog.getByRole('button', { name: 'Actualizar', exact: true }).click()
     expect(summary(await scan(page))).toEqual([])
   })
 
@@ -83,8 +83,8 @@ test.describe('accesibilidad en modo oscuro (axe, WCAG 2.1 AA)', () => {
     await dialog.getByRole('button', { name: /Agregar lista de tareas/ }).click()
     await dialog.getByLabel('Nuevo ítem de la lista').fill('ítem')
     await page.keyboard.press('Enter')
-    await dialog.getByLabel('Comentario', { exact: true }).fill('hola **mundo**')
-    await dialog.getByRole('button', { name: 'Comentar' }).click()
+    await dialog.getByLabel('Nueva actualización').fill('hola **mundo**')
+    await dialog.getByRole('button', { name: 'Actualizar', exact: true }).click()
     expect(summary(await scan(page))).toEqual([])
   })
 

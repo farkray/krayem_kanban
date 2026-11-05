@@ -33,30 +33,29 @@ test.describe('actualizaciones y editor con formato', () => {
     await expect(feed.locator('strong', { hasText: 'importante' })).toBeVisible()
     await expect(feed.locator('li li', { hasText: 'uno' })).toBeVisible()
     await expect(d.getByRole('tab', { name: 'Actualizaciones / 1' })).toBeVisible()
-
-    // el mismo dato aparece como comentario en la pestaña principal
-    await d.getByRole('tab', { name: 'Detalles' }).click()
-    await expect(d.locator('strong', { hasText: 'importante' })).toBeVisible()
   })
 
-  test('la descripción se ve renderizada y se edita con "Editar"', async ({ page }) => {
+  test('desde Detalles se envía una actualización que aparece renderizada en el feed', async ({
+    page,
+  }) => {
     await openFirstBoard(page)
-    await addCard(page, 'Por hacer', 'Con descripción')
-    await card(page, 'Con descripción').click()
+    await addCard(page, 'Por hacer', 'Desde detalles')
+    await card(page, 'Desde detalles').click()
     const d = detail(page)
     await d
-      .getByLabel('Descripción')
+      .getByLabel('Nueva actualización')
       .fill('## Cotización enviada\n\nVer [hoja](https://example.com)')
-    await d.getByLabel('Título de la tarjeta').click() // sale del campo: se guarda y se renderiza
+    await d.getByRole('button', { name: 'Actualizar', exact: true }).click()
+    await expect(d.getByRole('status')).toContainText('Actualizaciones')
+    await expect(d.getByLabel('Nueva actualización')).toHaveValue('') // el cuadro queda limpio
+    await expect(d.getByRole('heading', { name: 'Cotización enviada' })).toHaveCount(0) // el feed no está aquí
+
+    await d.getByRole('tab', { name: 'Actualizaciones / 1' }).click()
     await expect(d.getByRole('heading', { name: 'Cotización enviada' })).toBeVisible()
     await expect(d.getByRole('link', { name: 'hoja' })).toHaveAttribute(
       'href',
       'https://example.com',
     )
-    await d.getByRole('button', { name: 'Editar' }).click()
-    await expect(d.getByLabel('Descripción')).toBeFocused()
-    await d.getByRole('button', { name: 'Cita' }).first().click() // la barra no cierra el editor
-    await expect(d.getByLabel('Descripción')).toBeVisible()
   })
 
   test('accesibilidad de la pestaña Actualizaciones (AA)', async ({ page }) => {
