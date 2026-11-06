@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import {
   adminCreateUser,
   adminDeleteUser,
@@ -9,6 +17,7 @@ import {
 } from '../sync/admin'
 import { Avatar } from './Avatar'
 import { ConfirmDialog } from './ConfirmDialog'
+import { MoreIcon } from './Icons'
 import styles from './AdminPanel.module.css'
 
 const MIN = 10
@@ -28,6 +37,55 @@ const message = (code: string) => MESSAGES[code] ?? 'No se pudo completar la acc
 interface Shown {
   email: string
   password: string
+}
+
+/** Menú "⋯" de una fila: acciones secundarias (restablecer contraseña, eliminar). */
+function RowMenu({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        trigger.current?.focus()
+      }
+    }
+    const onDown = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={wrap} className={styles.menuWrap}>
+      <button
+        ref={trigger}
+        type="button"
+        className={styles.iconBtn}
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <MoreIcon width={18} height={18} />
+      </button>
+      {open && (
+        // Un clic en una opción cierra el menú
+        <div className={styles.menu} role="menu" onClick={() => setOpen(false)}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface Props {
@@ -149,34 +207,12 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
       <header className={styles.head}>
         {back}
         <h1 className={styles.title}>Panel de control</h1>
-        <p className={styles.lead}>Administra las cuentas que pueden entrar a la aplicación.</p>
+        <p className={styles.lead}>
+          {users
+            ? `${total === 1 ? '1 usuario' : `${total} usuarios`} · ${admins === 1 ? '1 administrador' : `${admins} administradores`}`
+            : 'Cargando…'}
+        </p>
       </header>
-
-      <dl className={styles.stats}>
-        <div className={styles.stat}>
-          <dt>Usuarios</dt>
-          <dd>{users ? total : '—'}</dd>
-        </div>
-        <div className={styles.stat}>
-          <dt>Administradores</dt>
-          <dd>{users ? admins : '—'}</dd>
-        </div>
-      </dl>
-
-      {shown && (
-        <div className={styles.secret} role="status">
-          <p>
-            Contraseña temporal de <strong>{shown.email}</strong>. Cópiala ahora: no se vuelve a
-            mostrar.
-          </p>
-          <div className={styles.secretRow}>
-            <code className={styles.code}>{shown.password}</code>
-            <button type="button" className={styles.secondary} onClick={copy}>
-              {copied ? 'Copiada' : 'Copiar'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {error && (
         <p className={styles.error} role="alert">
@@ -205,7 +241,6 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
               <tr>
                 <th scope="col">Usuario</th>
                 <th scope="col">Rol</th>
-                <th scope="col">Registros</th>
                 <th scope="col">
                   <span className={styles.sr}>Acciones</span>
                 </th>
@@ -214,7 +249,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
             <tbody>
               {visible.map((u) => (
                 <tr key={u.id}>
-                  <td data-label="Usuario">
+                  <td className={styles.userCell}>
                     {editing?.id === u.id ? (
                       <form
                         className={styles.aliasForm}
@@ -256,11 +291,16 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                       </div>
                     )}
                   </td>
-                  <td data-label="Rol">{u.isAdmin ? 'Administrador' : 'Usuario'}</td>
-                  <td data-label="Registros">{u.rows}</td>
+                  <td>
+                    {u.isAdmin ? (
+                      <span className={styles.badge}>Administrador</span>
+                    ) : (
+                      <span className={styles.plain}>Usuario</span>
+                    )}
+                  </td>
                   <td className={styles.actions}>
                     {editing?.id !== u.id && (
-                      <>
+                      <div className={styles.actionsRow}>
                         <button
                           type="button"
                           className={styles.secondary}
@@ -269,25 +309,29 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                         >
                           {u.alias ? 'Editar alias' : 'Poner alias'}
                         </button>
-                        <button
-                          type="button"
-                          className={styles.secondary}
-                          aria-label={`Restablecer contraseña de ${u.email}`}
-                          onClick={() => reset(u)}
-                        >
-                          Restablecer contraseña
-                        </button>
-                        {u.email !== me && (
+                        <RowMenu label={`Más acciones de ${u.email}`}>
                           <button
                             type="button"
-                            className={styles.danger}
-                            aria-label={`Eliminar a ${u.email}`}
-                            onClick={() => setToDelete(u)}
+                            role="menuitem"
+                            className={styles.menuItem}
+                            aria-label={`Restablecer contraseña de ${u.email}`}
+                            onClick={() => reset(u)}
                           >
-                            Eliminar
+                            Restablecer contraseña
                           </button>
-                        )}
-                      </>
+                          {u.email !== me && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className={`${styles.menuItem} ${styles.menuDanger}`}
+                              aria-label={`Eliminar a ${u.email}`}
+                              onClick={() => setToDelete(u)}
+                            >
+                              Eliminar usuario
+                            </button>
+                          )}
+                        </RowMenu>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -300,54 +344,73 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
           )}
         </section>
 
-        <section className={styles.card} aria-labelledby="new-title">
-          <h2 id="new-title" className={styles.sub}>
-            Nuevo usuario
-          </h2>
-          <form onSubmit={create}>
-            <label className={styles.label}>
-              Correo
-              <input
-                type="email"
-                className={styles.input}
-                value={email}
-                required
-                autoComplete="off"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label className={styles.label}>
-              Alias (opcional)
-              <input
-                type="text"
-                className={styles.input}
-                value={alias}
-                maxLength={60}
-                autoComplete="off"
-                placeholder="Nombre para mostrar, p. ej. Jorge Menéndez"
-                onChange={(e) => setAlias(e.target.value)}
-              />
-            </label>
-            <label className={styles.label}>
-              Contraseña (opcional)
-              <input
-                type="text"
-                className={styles.input}
-                value={password}
-                autoComplete="off"
-                placeholder="Vacía = se genera una temporal"
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            <button
-              type="submit"
-              className={styles.primaryWide}
-              disabled={busy || email.trim() === ''}
-            >
-              Crear usuario
-            </button>
-          </form>
-        </section>
+        <div className={styles.side}>
+          {shown && (
+            <section className={styles.secret} role="status" aria-label="Contraseña temporal">
+              <h2 className={styles.secretTitle}>Contraseña temporal</h2>
+              <p>
+                De <strong>{shown.email}</strong>. Cópiala ahora: no se vuelve a mostrar.
+              </p>
+              <div className={styles.secretRow}>
+                <code className={styles.code}>{shown.password}</code>
+                <button type="button" className={styles.secondary} onClick={copy}>
+                  {copied ? 'Copiada' : 'Copiar'}
+                </button>
+              </div>
+            </section>
+          )}
+
+          <section className={styles.card} aria-labelledby="new-title">
+            <div className={styles.cardHead}>
+              <h2 id="new-title" className={styles.sub}>
+                Nuevo usuario
+              </h2>
+            </div>
+            <form onSubmit={create}>
+              <label className={styles.label}>
+                Correo
+                <input
+                  type="email"
+                  className={styles.input}
+                  value={email}
+                  required
+                  autoComplete="off"
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              <label className={styles.label}>
+                Alias (opcional)
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={alias}
+                  maxLength={60}
+                  autoComplete="off"
+                  placeholder="Ej. Jorge Menéndez"
+                  onChange={(e) => setAlias(e.target.value)}
+                />
+              </label>
+              <label className={styles.label}>
+                Contraseña (opcional)
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={password}
+                  autoComplete="off"
+                  placeholder="Vacía = se genera una temporal"
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+              <button
+                type="submit"
+                className={styles.primaryWide}
+                disabled={busy || email.trim() === ''}
+              >
+                Crear usuario
+              </button>
+            </form>
+          </section>
+        </div>
       </div>
 
       {toDelete && (

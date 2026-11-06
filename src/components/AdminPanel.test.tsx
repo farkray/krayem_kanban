@@ -46,9 +46,17 @@ describe('AdminPanel', () => {
     const list = await screen.findByRole('table', { name: 'Usuarios' })
     expect(within(list).getByText('Ana López')).toBeInTheDocument()
     expect(within(list).getByText(/Administrador/)).toBeInTheDocument()
-    expect(within(list).getAllByRole('button', { name: /^Eliminar/ })).toHaveLength(1)
+    const user = userEvent.setup()
+    // la cuenta propia no ofrece "eliminar"; la ajena sí
+    await user.click(within(list).getByRole('button', { name: 'Más acciones de admin@correo.com' }))
+    expect(within(list).queryByRole('menuitem', { name: /^Eliminar/ })).not.toBeInTheDocument()
     expect(
-      within(list).getByRole('button', { name: /Eliminar a ana@correo.com/ }),
+      within(list).getByRole('menuitem', { name: /Restablecer contraseña/ }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.click(within(list).getByRole('button', { name: 'Más acciones de ana@correo.com' }))
+    expect(
+      within(list).getByRole('menuitem', { name: /Eliminar a ana@correo.com/ }),
     ).toBeInTheDocument()
   })
 
@@ -132,7 +140,8 @@ describe('AdminPanel', () => {
     const calls = mockApi()
     const user = userEvent.setup()
     render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
-    await user.click(await screen.findByRole('button', { name: /Eliminar a ana@correo.com/ }))
+    await user.click(await screen.findByRole('button', { name: 'Más acciones de ana@correo.com' }))
+    await user.click(screen.getByRole('menuitem', { name: /Eliminar a ana@correo.com/ }))
     expect(calls).not.toContain('DELETE /admin/users/u2')
     await user.click(screen.getByRole('button', { name: 'Eliminar usuario' }))
     expect(calls).toContain('DELETE /admin/users/u2')
@@ -147,7 +156,7 @@ describe('AdminPanel: pantalla propia', () => {
     render(<AdminPanel me="admin@correo.com" isAdmin onBack={onBack} />)
     expect(screen.getByRole('heading', { level: 1, name: 'Panel de control' })).toBeInTheDocument()
     await screen.findByRole('table', { name: 'Usuarios' })
-    expect(screen.getByText('Administradores').nextSibling).toHaveTextContent('1')
+    expect(screen.getByText('2 usuarios · 1 administrador')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Volver a los tableros/ }))
     expect(onBack).toHaveBeenCalled()
   })

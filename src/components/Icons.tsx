@@ -141,3 +141,9 @@ export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </Svg>
 )
+
+export const MoreIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p} strokeWidth="3">
+    <path d="M5 12h.01M12 12h.01M19 12h.01" />
+  </Svg>
+)

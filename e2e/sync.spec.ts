@@ -357,7 +357,8 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   await expect(user.page.getByRole('button', { name: 'Panel de control' })).toHaveCount(0)
 
   // restablecer: la anterior deja de servir
-  await dlg.getByRole('button', { name: `Restablecer contraseña de ${email}` }).click()
+  await dlg.getByRole('button', { name: `Más acciones de ${email}` }).click()
+  await dlg.getByRole('menuitem', { name: `Restablecer contraseña de ${email}` }).click()
   await expect(dlg.getByRole('status').locator('code')).not.toHaveText(temp) // llegó la nueva
   const temp2 = (await dlg.getByRole('status').locator('code').innerText()).trim()
   const again = await newDevice(browser)
@@ -365,13 +366,16 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   await expect(again.page.getByRole('alert')).toContainText('Correo o contraseña incorrectos.')
 
   // eliminar (con confirmación) y ya no puede entrar
-  await dlg.getByRole('button', { name: `Eliminar a ${email}` }).click()
+  await dlg.getByRole('button', { name: `Más acciones de ${email}` }).click()
+  await dlg.getByRole('menuitem', { name: `Eliminar a ${email}` }).click()
   await admin.page.getByRole('button', { name: 'Eliminar usuario' }).click()
   await expect(list.getByText(email)).toHaveCount(0)
   await signIn(again.page, email, temp2)
   await expect(again.page.getByRole('alert')).toContainText('Correo o contraseña incorrectos.')
   // el admin no se puede eliminar a sí mismo
-  await expect(dlg.getByRole('button', { name: `Eliminar a ${ADMIN_EMAIL}` })).toHaveCount(0)
+  await dlg.getByRole('button', { name: `Más acciones de ${ADMIN_EMAIL}` }).click()
+  await expect(dlg.getByRole('menuitem', { name: `Eliminar a ${ADMIN_EMAIL}` })).toHaveCount(0)
+  await admin.page.keyboard.press('Escape')
 
   // volver a los tableros desde el panel
   await admin.page.getByRole('button', { name: /Volver a los tableros/ }).click()

@@ -352,5 +352,6 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 ## 21. Panel de control (implementado)
 
 - La gestión de usuarios dejó de ser un modal: es una **pantalla propia** en la ruta `/admin` («Panel de control» en la barra lateral, solo para administradores). Arriba tiene **← Volver a los tableros**; la barra lateral y el botón de inicio también regresan.
-- Contenido: resumen (usuarios y administradores), **tabla de usuarios** con búsqueda por nombre o correo (avatar, alias/correo, rol, registros y acciones: poner/editar alias, restablecer contraseña y eliminar con confirmación) y el formulario **Nuevo usuario** (correo, alias y contraseña opcionales). La contraseña temporal sigue mostrándose una sola vez.
-- Responsive: en pantallas medias el formulario baja bajo la tabla; en teléfono cada fila de la tabla se apila como una tarjeta. Quien no es admin ve un aviso y solo puede volver.
+- Composición (tras la auditoría de estética): título con un resumen de una línea («3 usuarios · 1 administrador»); **tabla de anchos fijos** (Usuario · Rol · acciones) donde todas las filas miden lo mismo y los botones no se parten; por fila, **una acción visible** («Poner/Editar alias») y un **menú «⋯»** con «Restablecer contraseña» y «Eliminar usuario» (la propia cuenta no ofrece eliminar); buscador por nombre o correo; y al lado el formulario **Nuevo usuario** (correo, alias y contraseña opcionales) con el mismo encabezado alineado.
+- La **contraseña temporal** aparece en una tarjeta serena junto al formulario (se muestra una sola vez, con «Copiar»).
+- Responsive: en pantallas medias el formulario baja bajo la tabla; en teléfono cada usuario se apila (nombre, rol y acciones). Quien no es admin ve un aviso y solo puede volver.
