@@ -440,6 +440,41 @@ describe('migración de etiquetas con tableros descargados del servidor', () => 
   })
 })
 
+describe('invariante: las etiquetas son del tablero', () => {
+  it('cada etiqueta tiene tablero y cada tarjeta solo usa etiquetas del suyo', async () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const la = S().createLabel(a, 'Coppel', 'blue')!
+    const lb = S().createLabel(b, 'Coppel', 'red')!
+    const ca = S().addCard(liveCols(a)[0].id, 'a')!
+    const cb = S().addCard(liveCols(b)[0].id, 'b')!
+    expect(S().toggleCardLabel(ca, la)).toBe(true)
+    expect(S().toggleCardLabel(cb, la)).toBe(false) // no se puede usar la de otro tablero
+    expect(S().toggleCardLabel(cb, lb)).toBe(true)
+    // una referencia cruzada (datos viejos o de sync) se repara con la etiqueta del mismo nombre
+    useStore.setState({ cards: S().cards.map((c) => (c.id === cb ? { ...c, labelIds: [la] } : c)) })
+    await S().migrateLabels()
+    expect(S().cards.find((c) => c.id === cb)?.labelIds).toEqual([lb])
+    const live = S().labels.filter((l) => !l.deletedAt)
+    expect(live.every((l) => !!l.boardId)).toBe(true)
+    for (const c of S().cards.filter((x) => !x.deletedAt)) {
+      for (const id of c.labelIds ?? []) {
+        expect(live.find((l) => l.id === id)?.boardId).toBe(c.boardId)
+      }
+    }
+  })
+
+  it('una referencia cruzada sin equivalente en el tablero se quita', async () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const la = S().createLabel(a, 'Solo en A', 'blue')!
+    const cb = S().addCard(liveCols(b)[0].id, 'b')!
+    useStore.setState({ cards: S().cards.map((c) => (c.id === cb ? { ...c, labelIds: [la] } : c)) })
+    await S().migrateLabels()
+    expect(S().cards.find((c) => c.id === cb)).not.toHaveProperty('labelIds')
+  })
+})
+
 describe('tableros compartidos (cliente)', () => {
   afterEach(() => setRoleResolver(null))
 

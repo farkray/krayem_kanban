@@ -249,6 +249,41 @@ export const useStore = create<Store>((set, get) => {
     return limit !== null && cardsOf(col.id).length >= limit
   }
 
+  /**
+   * Invariante: una etiqueta es del tablero, y una tarjeta solo usa etiquetas de su propio tablero.
+   * Si una tarjeta apunta a una etiqueta de otro tablero, se cambia por la del mismo nombre en el
+   * suyo (si existe) o se quita la referencia.
+   */
+  const repairLabelRefs = () => {
+    const st = get()
+    const labels = live(st.labels)
+    const byId = new Map(labels.map((l) => [l.id, l]))
+    const fixed: Card[] = []
+    for (const c of live(st.cards)) {
+      if (!c.labelIds?.length) continue
+      let changed = false
+      const next: string[] = []
+      for (const id of c.labelIds) {
+        const l = byId.get(id)
+        if (!l || !l.boardId || l.boardId === c.boardId) {
+          next.push(id)
+          continue
+        }
+        changed = true
+        const same = labels.find(
+          (x) => x.boardId === c.boardId && x.name.toLowerCase() === l.name.toLowerCase(),
+        )
+        if (same && !next.includes(same.id)) next.push(same.id)
+      }
+      if (changed) {
+        const card: Card = { ...c, labelIds: next.length ? next : undefined, updatedAt: stamp() }
+        if (!card.labelIds) delete card.labelIds
+        fixed.push(card)
+      }
+    }
+    if (fixed.length) put('cards', fixed)
+  }
+
   const notifyFull = (col: Column) =>
     notify(
       `“${col.title}” está en su límite: ${limitOf(col)} ${limitOf(col) === 1 ? 'tarjeta' : 'tarjetas'} (${COLUMN_KIND_NAMES[col.kind ?? 'standard']}). Termina o mueve una primero.`,
@@ -352,6 +387,8 @@ export const useStore = create<Store>((set, get) => {
         // Solo los tableros propios (el servidor marca también los míos con ownerId = yo)
         .filter((b) => roleOf(b.id) === 'owner')
         .sort(byPosition)
+      // Siempre se revisa que las tarjetas solo apunten a etiquetas de SU tablero.
+      repairLabelRefs()
       if (legacy.length === 0 || mine.length === 0) return
       const ts = stamp()
       const copies: Label[] = []

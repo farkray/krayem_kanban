@@ -32,6 +32,45 @@ async function createLabel(dialog: Locator, name: string, color: string) {
 const chipOf = (scope: Locator | Page, name: string) =>
   scope.locator('[data-color]', { hasText: name }).first()
 
+test.describe('etiquetas por tablero', () => {
+  test('cada tablero tiene sus etiquetas: las de uno no aparecen en otro', async ({ page }) => {
+    await openFirstBoard(page)
+    await addCard(page, 'Por hacer', 'Tarea del tablero 1')
+    await card(page, 'Tarea del tablero 1').click()
+    await createLabel(detail(page), 'Coppel', 'Azul')
+    await page.keyboard.press('Escape')
+
+    // segundo tablero: no hereda "Coppel"; puede crear su propia "Coppel" (otro color)
+    await page.getByRole('button', { name: 'Nuevo tablero' }).click()
+    await page.getByLabel('Nombre del tablero').fill('Tablero 2')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('heading', { level: 1, name: 'Tablero 2' })).toBeVisible()
+    await addCard(page, 'Por hacer', 'Tarea del tablero 2')
+    await card(page, 'Tarea del tablero 2').click()
+    const d = detail(page)
+    await d.getByRole('button', { name: /Agregar etiqueta/ }).click()
+    await expect(d.getByRole('checkbox', { name: /Coppel/ })).toHaveCount(0)
+    await expect(d.getByText('Crea tu primera etiqueta')).toBeVisible()
+    const form = d.getByRole('form', { name: 'Nueva etiqueta' })
+    await form.getByLabel('Nombre de la etiqueta').fill('Coppel')
+    await form.getByRole('radio', { name: 'Rojo' }).click()
+    await form.getByRole('button', { name: 'Crear etiqueta' }).click()
+    await expect(d.getByRole('button', { name: 'Quitar etiqueta Coppel' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // cada tarjeta conserva la etiqueta de su tablero (azul en el 1, roja en el 2)
+    await expect(chipOf(card(page, 'Tarea del tablero 2'), 'Coppel')).toHaveAttribute(
+      'data-color',
+      'red',
+    )
+    await page.getByRole('button', { name: /Mi tablero/ }).click()
+    await expect(chipOf(card(page, 'Tarea del tablero 1'), 'Coppel')).toHaveAttribute(
+      'data-color',
+      'blue',
+    )
+  })
+})
+
 test.describe('etiquetas', () => {
   test('crear "Coppel" en azul, verla en la tarjeta y que persista', async ({ page }) => {
     await openFirstBoard(page)
