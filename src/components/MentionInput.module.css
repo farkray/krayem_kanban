@@ -1,0 +1,10 @@
+.wrap {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.wrap > input {
+  width: 100%;
+}

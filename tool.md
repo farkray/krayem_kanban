@@ -355,3 +355,10 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - Composición (tras la auditoría de estética): título con un resumen de una línea («3 usuarios · 1 administrador»); **tabla de anchos fijos** (Usuario · Rol · acciones) donde todas las filas miden lo mismo y los botones no se parten; por fila, **una acción visible** («Poner/Editar alias») y un **menú «⋯»** con «Restablecer contraseña» y «Eliminar usuario» (la propia cuenta no ofrece eliminar); buscador por nombre o correo; y al lado el formulario **Nuevo usuario** (correo, alias y contraseña opcionales) con el mismo encabezado alineado.
 - La **contraseña temporal** aparece en una tarjeta serena junto al formulario (se muestra una sola vez, con «Copiar»).
 - Responsive: en pantallas medias el formulario baja bajo la tabla; en teléfono cada usuario se apila (nombre, rol y acciones). Quien no es admin ve un aviso y solo puede volver.
+
+## 22. Menciones con @ (implementado)
+
+- En **tableros compartidos**, al escribir `@` en una **actualización** o en una **tarea** de la lista aparece un menú con las personas del tablero (dueño y miembros, también uno mismo); se filtra al seguir escribiendo (sin acentos ni mayúsculas) y se elige con ↑ ↓ + Enter/Tab o con el mouse; Escape lo cierra. Un correo (`a@b`) no abre el menú.
+- Se guarda como un enlace Markdown, `[@Nombre](mention:<id de usuario>)`, así que sigue a la persona aunque cambie de alias. Se dibuja como un **chip** con su nombre actual, tanto en el feed como en los ítems; el chip de **tus** menciones va relleno.
+- La tarjeta muestra un chip **@** («Te mencionan») cuando alguien te mencionó en sus actualizaciones o en su lista de tareas.
+- Límite conocido: aún no hay notificaciones (push ni correo); la marca en la tarjeta es el aviso. En tableros privados no hay a quién mencionar.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
   Editor,
   EditorContent,
@@ -14,9 +14,18 @@ import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { Markdown as MarkdownExt } from '@tiptap/markdown'
 import { compressImage } from '../lib/image/compress'
+import {
+  decodeMentions,
+  encodeMentions,
+  filterPeople,
+  mentionQuery,
+  type MentionPerson,
+} from '../lib/mentions'
 import { LIMITS } from '../lib/types'
 import { useStore } from '../store/store'
 import { AttachmentImage, attachmentSrc } from './AttachmentImage'
+import { MentionContext } from './Mention'
+import { MentionMenu } from './MentionMenu'
 import {
   CodeIcon,
   LinkIcon,
@@ -73,6 +82,20 @@ export function RichEditor({
   const [working, setWorking] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
+  const { people } = useContext(MentionContext)
+  const menuId = useId()
+  const [menu, setMenu] = useState<{
+    query: string
+    from: number
+    to: number
+    x: number
+    y: number
+  } | null>(null)
+  const [active, setActive] = useState(0)
+  const [dismissed, setDismissed] = useState(false)
+  const options: MentionPerson[] = menu && !dismissed ? filterPeople(people, menu.query) : []
+  // Estado vigente para el manejador de teclado del editor (se crea una sola vez)
+  const mention = useRef({ options, active, pick: (_p: MentionPerson) => {} })
   const [url, setUrl] = useState('https://')
   const editorRef = useRef<Editor | null>(null)
   const submitRef = useRef<() => void>(() => {})
@@ -119,7 +142,7 @@ export function RichEditor({
       InlineImage,
       Placeholder.configure({ placeholder }),
     ],
-    content: initial,
+    content: decodeMentions(initial, people),
     contentType: 'markdown',
     editorProps: {
       attributes: {
@@ -143,6 +166,26 @@ export function RichEditor({
         return true
       },
       handleKeyDown: (_view, e) => {
+        const m = mention.current
+        if (m.options.length > 0) {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActive(
+              (a) => (a + (e.key === 'ArrowDown' ? 1 : m.options.length - 1)) % m.options.length,
+            )
+            return true
+          }
+          if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault()
+            m.pick(m.options[Math.min(m.active, m.options.length - 1)])
+            return true
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            setDismissed(true)
+            return true
+          }
+        }
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
           e.preventDefault()
           submitRef.current()
@@ -176,7 +219,7 @@ export function RichEditor({
 
   const submit = () => {
     if (!editor) return
-    const md = editor.getMarkdown().trim()
+    const md = encodeMentions(editor.getMarkdown().trim(), people)
     if (md === '') return
     if (md.length > LIMITS.comment) {
       setError(`El texto es demasiado largo (máximo ${LIMITS.comment} caracteres).`)
@@ -189,6 +232,60 @@ export function RichEditor({
   }
   useEffect(() => {
     submitRef.current = submit
+  })
+
+  // Menú de menciones: aparece al escribir "@algo" junto al cursor
+  useEffect(() => {
+    if (!editor) return
+    const compute = () => {
+      const { from, empty } = editor.state.selection
+      if (!empty || people.length === 0) return setMenu(null)
+      const $from = editor.state.doc.resolve(from)
+      const before = $from.parent.textBetween(
+        Math.max(0, $from.parentOffset - 40),
+        $from.parentOffset,
+        undefined,
+        '\ufffc',
+      )
+      const q = mentionQuery(before)
+      if (!q) return setMenu(null)
+      const c = editor.view.coordsAtPos(from)
+      setMenu({
+        query: q.query,
+        from: from - (before.length - q.start),
+        to: from,
+        x: c.left,
+        y: c.bottom,
+      })
+    }
+    const onChange = () => {
+      setDismissed(false)
+      setActive(0)
+      compute()
+    }
+    editor.on('update', onChange)
+    editor.on('selectionUpdate', compute)
+    return () => {
+      editor.off('update', onChange)
+      editor.off('selectionUpdate', compute)
+    }
+  }, [editor, people])
+
+  useEffect(() => {
+    mention.current = {
+      options,
+      active,
+      pick: (p) => {
+        if (!editor || !menu) return
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: menu.from, to: menu.to })
+          .insertContent(`@${p.name} `)
+          .run()
+        setMenu(null)
+      },
+    }
   })
 
   if (!editor) return null
@@ -333,6 +430,15 @@ export function RichEditor({
       <div className={`${mdStyles.md} ${styles.surface}`}>
         <EditorContent editor={editor} />
       </div>
+      {menu && options.length > 0 && (
+        <MentionMenu
+          id={menuId}
+          options={options}
+          active={Math.min(active, options.length - 1)}
+          onPick={(p) => mention.current.pick(p)}
+          style={{ position: 'fixed', left: menu.x, top: menu.y + 6 }}
+        />
+      )}
       {working > 0 && (
         <p className={styles.status} role="status">
           Comprimiendo imagen…

@@ -62,21 +62,30 @@ export function useComments(cardId: string) {
 export function useCardStats() {
   const items = useStore((s) => s.items)
   const comments = useStore((s) => s.comments)
+  const me = useAuth((s) => s.userId)
   return useMemo(() => {
-    const stats = new Map<string, { done: number; total: number; comments: number }>()
+    const stats = new Map<
+      string,
+      { done: number; total: number; comments: number; mentioned: boolean }
+    >()
     const get = (id: string) => {
       let s = stats.get(id)
-      if (!s) stats.set(id, (s = { done: 0, total: 0, comments: 0 }))
+      if (!s) stats.set(id, (s = { done: 0, total: 0, comments: 0, mentioned: false }))
       return s
     }
     for (const i of live(items)) {
       const s = get(i.cardId)
       s.total++
       if (i.done) s.done++
+      if (me && i.text.includes(`(mention:${me})`)) s.mentioned = true
     }
-    for (const c of live(comments)) get(c.cardId).comments++
+    for (const c of live(comments)) {
+      const s = get(c.cardId)
+      s.comments++
+      if (me && c.bodyMd.includes(`(mention:${me})`)) s.mentioned = true
+    }
     return stats
-  }, [items, comments])
+  }, [items, comments, me])
 }
 
 export interface BoardSummary {

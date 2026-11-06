@@ -1,4 +1,4 @@
-import { useState, type ClipboardEvent, type KeyboardEvent } from 'react'
+import { useContext, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
 import {
   closestCenter,
   DndContext,
@@ -20,7 +20,9 @@ import { LIMITS, type ChecklistItem } from '../lib/types'
 import { useItems } from '../store/hooks'
 import { useStore } from '../store/store'
 import { GripIcon, TrashIcon } from './Icons'
-import { InlineInput } from './InlineInput'
+import { decodeMentions, encodeMentions } from '../lib/mentions'
+import { MentionContext, MentionText } from './Mention'
+import { MentionInput } from './MentionInput'
 import styles from './Checklist.module.css'
 
 function Row({ item }: { item: ChecklistItem }) {
@@ -28,7 +30,16 @@ function Row({ item }: { item: ChecklistItem }) {
   const updateItem = useStore((s) => s.updateItem)
   const deleteItem = useStore((s) => s.deleteItem)
   const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const { people } = useContext(MentionContext)
+  const plain = decodeMentions(item.text, people)
   const sortable = useSortable({ id: item.id })
+
+  const finishEdit = () => {
+    const t = draft.trim()
+    setEditing(false)
+    if (t && t !== plain) updateItem(item.id, encodeMentions(t, people))
+  }
 
   return (
     <li
@@ -43,7 +54,7 @@ function Row({ item }: { item: ChecklistItem }) {
         type="button"
         ref={sortable.setActivatorNodeRef}
         className={styles.grip}
-        aria-label={`Mover ítem ${item.text}`}
+        aria-label={`Mover ítem ${plain}`}
         title="Arrastra para reordenar"
         {...sortable.attributes}
         {...sortable.listeners}
@@ -54,33 +65,43 @@ function Row({ item }: { item: ChecklistItem }) {
         type="checkbox"
         checked={item.done}
         onChange={() => toggleItem(item.id)}
-        aria-label={`Completar: ${item.text}`}
+        aria-label={`Completar: ${plain}`}
       />
       {editing ? (
-        <InlineInput
-          initial={item.text}
+        <MentionInput
+          value={draft}
+          onChange={setDraft}
+          people={people}
           label="Texto del ítem"
-          maxLength={LIMITS.item}
-          submitOnBlur
-          onSubmit={(t) => {
-            updateItem(item.id, t)
-            setEditing(false)
+          maxLength={LIMITS.itemText}
+          autoFocus
+          onBlur={finishEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              finishEdit()
+            } else if (e.key === 'Escape') {
+              e.stopPropagation()
+              setEditing(false)
+            }
           }}
-          onCancel={() => setEditing(false)}
         />
       ) : (
         <button
           type="button"
           className={`${styles.text} ${item.done ? styles.done : ''}`}
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setDraft(plain)
+            setEditing(true)
+          }}
         >
-          {item.text}
+          <MentionText text={item.text} />
         </button>
       )}
       <button
         type="button"
         className={styles.remove}
-        aria-label={`Eliminar ítem ${item.text}`}
+        aria-label={`Eliminar ítem ${plain}`}
         onClick={() => deleteItem(item.id)}
       >
         <TrashIcon width={14} height={14} />
@@ -92,9 +113,10 @@ function Row({ item }: { item: ChecklistItem }) {
 function AddItem({ cardId }: { cardId: string }) {
   const addItem = useStore((s) => s.addItem)
   const [value, setValue] = useState('')
+  const { people } = useContext(MentionContext)
 
   const submit = () => {
-    if (addItem(cardId, value)) setValue('')
+    if (addItem(cardId, encodeMentions(value, people))) setValue('')
   }
 
   const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
@@ -117,13 +139,14 @@ function AddItem({ cardId }: { cardId: string }) {
   }
 
   return (
-    <input
+    <MentionInput
       className={styles.add}
       value={value}
-      maxLength={LIMITS.item}
-      placeholder="Agregar un ítem…"
-      aria-label="Nuevo ítem de la lista"
-      onChange={(e) => setValue(e.target.value)}
+      people={people}
+      maxLength={LIMITS.itemText}
+      placeholder="Agregar un ítem… (@ para mencionar)"
+      label="Nuevo ítem de la lista"
+      onChange={setValue}
       onKeyDown={onKeyDown}
       onPaste={onPaste}
     />

@@ -146,7 +146,8 @@ export const LIMITS = {
   column: 40,
   card: 200,
   description: 10000,
-  item: 200,
+  item: 400, // texto guardado (las menciones ocupan más que lo que se ve)
+  itemText: 200, // lo que se puede escribir en un ítem
   items: 100,
   comment: 10000,
   attachments: 10,

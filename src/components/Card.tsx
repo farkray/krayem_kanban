@@ -18,6 +18,8 @@ export interface CardStats {
   done: number
   total: number
   comments: number
+  /** Alguien te mencionó (@) en las actualizaciones o en la lista de tareas. */
+  mentioned?: boolean
 }
 
 interface ViewProps {
@@ -41,7 +43,7 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   const canEdit = useCanEdit()
   const people = useParticipants(card.boardId)
   const assignee = card.assigneeId ? people.find((p) => p.userId === card.assigneeId) : undefined
-  const hasMeta = range || (stats && (stats.total > 0 || stats.comments > 0))
+  const hasMeta = range || (stats && (stats.total > 0 || stats.comments > 0 || stats.mentioned))
 
   return (
     <>
@@ -97,6 +99,12 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
             >
               <CheckSquareIcon width={12} height={12} />
               {stats.done}/{stats.total}
+            </span>
+          )}
+          {stats?.mentioned && (
+            <span className={`${styles.chip} ${styles.mention}`} title="Te mencionan">
+              <span aria-hidden="true">@</span>
+              <span className={styles.sr}>Te mencionan</span>
             </span>
           )}
           {stats && stats.comments > 0 && (

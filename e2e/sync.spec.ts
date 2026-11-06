@@ -464,6 +464,44 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   await b.page.screenshot({ path: '/tmp/assigned-b.png' })
   await b.page.getByRole('button', { name: 'Limpiar filtro' }).click()
 
+  // Menciones: A etiqueta a B con @ en una actualización y en una tarea
+  await card(column(a.page, 'Por hacer'), 'Tarea compartida').click()
+  const dm = a.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
+  await dm.getByRole('textbox', { name: 'Nueva actualización' }).click()
+  await a.page.keyboard.type('Revisa esto @')
+  const menuA = a.page.getByRole('listbox', { name: 'Mencionar a' })
+  await expect(menuA).toContainText(emailB)
+  const axeMenu = await new AxeBuilder({ page: a.page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze()
+  expect(axeMenu.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+  await expect(menuA).toContainText(emailA) // participan el dueño y B (también se puede mencionar a uno mismo)
+  await menuA.getByRole('option', { name: new RegExp(emailB) }).click()
+  await dm.getByRole('button', { name: 'Actualizar', exact: true }).click()
+  await dm.getByRole('button', { name: /Agregar lista de tareas/ }).click()
+  await dm.getByLabel('Nuevo ítem de la lista').fill('Llamar a @')
+  await a.page
+    .getByRole('listbox', { name: 'Mencionar a' })
+    .getByRole('option', { name: new RegExp(emailB) })
+    .click()
+  await a.page.keyboard.press('Enter') // ya sin menú: envía el ítem
+  await expect(
+    dm
+      .getByRole('list')
+      .locator('[title]', { hasText: `@${emailB}` })
+      .first(),
+  ).toBeVisible()
+  await dm.getByRole('tab', { name: /^Actualizaciones/ }).click()
+  await expect(dm.getByRole('list', { name: 'Actualizaciones' })).toContainText(`@${emailB}`)
+  await dm.getByRole('button', { name: 'Listo' }).click()
+  // B ve la marca "Te mencionan" en la tarjeta y su chip resaltado dentro
+  const cardB = card(column(b.page, 'Por hacer'), 'Tarea compartida')
+  await expect(cardB.getByTitle('Te mencionan')).toBeVisible({ timeout: 15_000 })
+  await cardB.click()
+  const db = b.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
+  await expect(db.getByTitle('Te mencionan').first()).toBeVisible()
+  await db.getByRole('button', { name: 'Listo' }).click()
+
   // B (editor) agrega una tarjeta y A la ve en vivo; B no puede eliminar ni compartir el tablero
   await addCard(b.page, 'Por hacer', 'Hecha por B')
   await saved(b.page)

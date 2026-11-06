@@ -307,3 +307,19 @@
   vertical-align: -2px;
   color: var(--color-success-text);
 }
+
+/* Te mencionan: chip lleno para que se encuentre de un vistazo */
+.mention {
+  background: var(--color-accent-solid);
+  color: var(--color-on-accent);
+  font-weight: var(--weight-bold);
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
