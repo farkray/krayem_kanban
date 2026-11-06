@@ -16,7 +16,7 @@ rápido). Hay más usuarios solo si el dueño crea cuentas; el registro está ce
 
 ## Product Purpose
 
-Tablero Kanban en español para ordenar trabajo propio sin fricción: tableros con hasta 5 columnas,
+Tablero Kanban en español para ordenar trabajo propio sin fricción: tableros con hasta 10 columnas,
 tarjetas con descripción, fechas de inicio/final opcionales, lista de tareas opcional, comentarios
 en Markdown e imágenes. Éxito = abrirlo, ver el estado del trabajo de un vistazo y mover o agregar
 una tarjeta en segundos, desde cualquier dispositivo y sin conexión.
@@ -36,7 +36,7 @@ datos ni esa independencia.
 
 ## Capabilities and Constraints
 
-- Máximo 5 columnas por tablero; 3 por defecto: "Por hacer", "En curso" (Doing), "Listo".
+- Máximo 10 columnas por tablero; 3 por defecto: "Por hacer", "En curso" (Doing), "Listo".
 - Tipos de columna con límite de tarjetas: Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - Funciones fuera de alcance por ahora: tableros compartidos, menciones, ayuda (botón sin función).
   Los filtros existen solo por etiqueta.

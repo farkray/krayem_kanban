@@ -2,7 +2,7 @@
 
 Tablero Kanban en español, instalable (PWA), con guardado automático en tu propio servidor y funcionamiento sin conexión.
 
-- **Tableros, columnas (máx. 5) y tarjetas** con arrastrar y soltar (mouse, touch y teclado).
+- **Tableros, columnas (máx. 10) y tarjetas** con arrastrar y soltar (mouse, touch y teclado).
 - **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, lista de tareas opcional, feed de actualizaciones con editor de formato (Markdown) e imágenes (comprimidas en el navegador con WebAssembly).
 - **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - **Tableros privados o compartidos:** por defecto cada tablero es privado; el dueño puede compartirlo por correo con otras cuentas como **Editor** o **Solo lectura**.

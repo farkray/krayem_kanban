@@ -2,20 +2,20 @@ import { expect, test } from '@playwright/test'
 import { addCard, card as cardLoc, column, dragTo, openFirstBoard, waitForStored } from './helpers'
 
 test.describe('tablero', () => {
-  test('primer uso: tablero con 3 columnas y límite de 5', async ({ page }) => {
+  test('primer uso: tablero con 3 columnas y límite de 10', async ({ page }) => {
     await openFirstBoard(page)
     for (const name of ['Por hacer', 'En curso', 'Listo']) {
       await expect(column(page, name)).toContainText('0 tarjetas')
     }
     const add = page.getByRole('button', { name: /Agregar columna/ })
-    await expect(add).toContainText('3 de 5 columnas')
-    for (const n of ['Revisión', 'Archivo']) {
+    await expect(add).toContainText('3 de 10 columnas')
+    for (const n of ['C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']) {
       await add.click()
       await page.getByLabel('Nombre de la columna').fill(n)
       await page.keyboard.press('Enter')
     }
     await expect(add).toBeDisabled()
-    await expect(add).toContainText('5 de 5 columnas')
+    await expect(add).toContainText('10 de 10 columnas')
   })
 
   test('crea tarjetas, persisten al recargar y se renombra la columna', async ({ page }) => {

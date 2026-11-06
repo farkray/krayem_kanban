@@ -8,7 +8,7 @@ PWA instalable (Chrome) de tableros Kanban. Guardado automático en la nube. Int
 - Barra lateral colapsable: "Mis Tableros" + botón `+`; cada tablero muestra nombre, nº de columnas y tarjetas.
 - Barra superior: botón inicio, ayuda (`?`), filtros, búsqueda global ("Buscar tableros, columnas y tarjetas").
 - Vista de tablero: título editable, columnas con contador de tarjetas, tarjetas con título y "Creada hoy".
-- Botón "Agregar tarjeta" por columna; botón "Agregar columna" (límite **5 columnas** por tablero, muestra "3 de 5").
+- Botón "Agregar tarjeta" por columna; botón "Agregar columna" (límite **10 columnas** por tablero, muestra "3 de 10").
 - Columnas por defecto: *Por hacer*, *En curso*, *Listo*.
 
 **Funcionalidad**
@@ -63,7 +63,7 @@ Principios:
 
 ```ts
 Board  { id, userId, title, position, createdAt, updatedAt, deletedAt? }
-Column { id, boardId, title, position, createdAt, updatedAt, deletedAt? }   // máx. 5 por tablero
+Column { id, boardId, title, position, createdAt, updatedAt, deletedAt? }   // máx. 10 por tablero
 Card   { id, columnId, boardId, title, description?, position, coverImageUrl?,
          startDate?, endDate?,            // opcionales; endDate >= startDate
          createdAt, updatedAt, deletedAt? }

@@ -43,7 +43,7 @@ Referencia de arquitectura y fases: [project.md](project.md).
 
 | ID | Funcionalidad | Prioridad |
 |---|---|---|
-| CO-01 | Agregar columna (máx. 5 por tablero) | MVP |
+| CO-01 | Agregar columna (máx. 10 por tablero) | MVP |
 | CO-02 | Renombrar columna | MVP |
 | CO-03 | Eliminar columna | MVP |
 | CO-04 | Reordenar columnas (drag & drop) | MVP |
@@ -52,8 +52,8 @@ Referencia de arquitectura y fases: [project.md](project.md).
 | CO-07 | Colapsar columna | Futuro |
 
 **CO-01 Agregar columna**
-- Tarjeta-botón "Agregar columna" al final, con contador "3 de 5 columnas".
-- Al llegar a 5: el botón se deshabilita y muestra "5 de 5 columnas".
+- Tarjeta-botón "Agregar columna" al final, con contador "3 de 10 columnas".
+- Al llegar a 10: el botón se deshabilita y muestra "10 de 10 columnas".
 - Nombre obligatorio, 1–40 caracteres.
 
 **CO-03 Eliminar columna**

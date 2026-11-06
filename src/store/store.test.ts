@@ -59,12 +59,11 @@ describe('tableros y columnas', () => {
     expect(S().renameBoard(id, '')).toBe(false)
   })
 
-  it('límite de 5 columnas', () => {
+  it('límite de 10 columnas', () => {
     const b = S().createBoard('X')!
-    expect(S().addColumn(b, 'Cuarta')).not.toBeNull()
-    expect(S().addColumn(b, 'Quinta')).not.toBeNull()
-    expect(S().addColumn(b, 'Sexta')).toBeNull()
-    expect(liveCols(b)).toHaveLength(5)
+    for (let i = 4; i <= 10; i++) expect(S().addColumn(b, `C${i}`)).not.toBeNull()
+    expect(S().addColumn(b, 'Once')).toBeNull()
+    expect(liveCols(b)).toHaveLength(10)
   })
 
   it('no elimina la última columna', () => {

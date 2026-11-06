@@ -139,7 +139,7 @@ export const TABLE_KEYS: TableKey[] = [
   'comments',
 ]
 
-export const MAX_COLUMNS = 5
+export const MAX_COLUMNS = 10
 export const DEFAULT_COLUMNS = ['Por hacer', 'En curso', 'Listo']
 export const LIMITS = {
   board: 60,

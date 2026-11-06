@@ -26,7 +26,7 @@ describe('tableros', () => {
       expect(screen.getByRole('region', { name })).toHaveTextContent('0 tarjetas')
     }
     expect(screen.getByRole('button', { name: /Agregar columna/ })).toHaveTextContent(
-      '3 de 5 columnas',
+      '3 de 10 columnas',
     )
   })
 
@@ -80,16 +80,16 @@ describe('columnas y tarjetas', () => {
     expect(col).toHaveTextContent('0 tarjetas')
   })
 
-  it('agrega columnas hasta el límite de 5', async () => {
+  it('agrega columnas hasta el límite de 10', async () => {
     const user = await setup()
     await openFirstBoard(user)
-    for (const n of ['Cuarta', 'Quinta']) {
+    for (const n of ['C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']) {
       await user.click(screen.getByRole('button', { name: /Agregar columna/ }))
       await user.type(screen.getByLabelText('Nombre de la columna'), `${n}{Enter}`)
     }
     expect(screen.getByRole('button', { name: /Agregar columna/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Agregar columna/ })).toHaveTextContent(
-      '5 de 5 columnas',
+      '10 de 10 columnas',
     )
   })
 
