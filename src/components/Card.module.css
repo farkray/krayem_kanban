@@ -251,10 +251,12 @@
   }
 }
 
-/* Tipo "Done": más apagada, pero sin bajar la opacidad (eso rompe el contraste del texto).
-   Se aplana (sin sombra ni relieve), se acerca al fondo de la columna y el texto pasa al gris de apoyo;
-   una marca de visto bueno la identifica sin depender del color. Al apuntarla recupera su relieve. */
+/* Tipo "Done": claramente apagada, sin bajar la opacidad (eso rompe el contraste del texto).
+   Pierde el "relieve" de tarjeta: sin sombra, fondo casi igual al de la columna y borde discontinuo;
+   el título pasa al gris de apoyo y queda tachado; etiquetas y chips pierden color. Todo el texto
+   se mantiene en AA. Al apuntarla recupera su aspecto normal para poder leerla bien. */
 .cardDone {
+  border-style: dashed;
   border-color: var(--color-card-done-border);
   background: var(--color-card-done);
   box-shadow: none;
@@ -263,14 +265,40 @@
 .cardDone .title {
   color: var(--color-text-done);
   font-weight: var(--weight-regular);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgb(var(--ink) / 0.45);
+}
+
+.cardDone .labels {
+  filter: grayscale(1);
+}
+
+.cardDone .chip {
+  border: 1px solid var(--color-card-done-border);
+  background: transparent;
+  color: var(--color-text-done);
 }
 
 .cardDone:hover {
+  border-style: solid;
+  border-color: var(--color-card-border);
   background: var(--color-card);
   box-shadow: var(--shadow-card);
 }
 
 .cardDone:hover .title {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.cardDone:hover .labels {
+  filter: none;
+}
+
+.cardDone:hover .chip {
+  border-color: transparent;
+  background: var(--color-chip);
   color: var(--color-text);
 }
 

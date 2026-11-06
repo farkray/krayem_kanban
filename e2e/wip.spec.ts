@@ -26,8 +26,10 @@ test.describe('tipo de columna y límite de tarjetas', () => {
       card(column(page, 'En curso'), 'Uno'),
     )
     await expect(page.getByRole('status').filter({ hasText: /límite/ })).toBeVisible()
-    expect(await titles(page, 'Por hacer')).toEqual(['Extra'])
-    expect(await titles(page, 'En curso')).toEqual(['Uno', 'Dos'])
+    // (el arrastre termina con una animación corta: se espera a que las listas se asienten)
+    await expect.poll(() => titles(page, 'Por hacer')).toEqual(['Extra'])
+    await expect.poll(() => titles(page, 'En curso')).toEqual(['Uno', 'Dos'])
+    await page.waitForTimeout(400)
     // sí se puede sacar una y luego meter la otra
     await dragTo(page, card(column(page, 'En curso'), 'Uno'), column(page, 'Listo'))
     await expect.poll(() => titles(page, 'Listo')).toEqual(['Uno'])

@@ -26,9 +26,9 @@
   --color-card: #e7edeb; /* gris verdoso: destaca sobre la columna */
   --color-card-border: rgb(var(--ink) / 0.18);
   --color-card-border-hover: rgb(var(--ink) / 0.34);
-  --color-card-done: #eef3f1; /* finalizadas: casi el fondo de la columna */
-  --color-card-done-border: rgb(var(--ink) / 0.1);
-  --color-text-done: #4a5c61; /* AA sobre --color-card-done */
+  --color-card-done: #f2f6f5; /* finalizadas: prácticamente el fondo de la columna */
+  --color-card-done-border: rgb(var(--ink) / 0.14);
+  --color-text-done: #566a6f; /* gris de apoyo: AA, sin pasar de ahí */
   --color-field: #ffffff; /* campos de texto, áreas y selectores */
   --color-control: rgba(255, 255, 255, 0.88); /* botones circulares y buscador */
   --color-control-hover: #ffffff;
@@ -166,9 +166,9 @@
     --color-card: #1f2d33; /* un escalón por encima de la columna */
     --color-card-border: rgb(var(--ink) / 0.1);
     --color-card-border-hover: rgb(var(--ink) / 0.22);
-    --color-card-done: #172329;
-    --color-card-done-border: rgb(var(--ink) / 0.07);
-    --color-text-done: #9fb2b7;
+    --color-card-done: #141e22;
+    --color-card-done-border: rgb(var(--ink) / 0.13);
+    --color-text-done: #8ea2a7;
     --color-field: rgb(var(--ink) / 0.06);
     --color-control: rgba(255, 255, 255, 0.08);
     --color-control-hover: rgba(255, 255, 255, 0.14);
