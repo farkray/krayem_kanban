@@ -315,3 +315,9 @@ Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al 
 - Barra: título, negrita, cursiva, tachado, listas (viñetas, numerada, de tareas), cita, código, enlace, línea separadora; Ctrl/Cmd+Enter envía.
 - **Imágenes:** se pegan con Ctrl/Cmd+V (o se sueltan) en el editor; se comprimen en el navegador igual que las de la tarjeta, se guardan como adjuntos "en línea" (no aparecen en la galería de la tarjeta; máx. 100 por tarjeta) y se sincronizan. En el Markdown quedan como `![nombre](attachment:ID)`; no se cargan imágenes externas.
 - Límite conocido: al eliminar una actualización, sus imágenes quedan en el servidor (el borrado es lógico).
+
+## 17. Administración de usuarios (implementado)
+
+- La cuenta de `ADMIN_EMAIL` es **administrador** (se vuelve a asignar en cada arranque del servidor). Cualquier otra cuenta puede ser admin con `set-admin` por CLI.
+- El admin ve el botón **Usuarios** en la barra lateral: lista de cuentas, **crear** (correo + contraseña opcional; vacía = temporal generada, que se muestra una sola vez con botón Copiar), **restablecer contraseña** (nueva temporal; cierra las sesiones de ese usuario) y **eliminar** (con confirmación; borra todos sus datos e imágenes). No puede eliminarse a sí mismo.
+- API `/api/admin/*` (GET/POST `users`, POST `users/:id/password`, DELETE `users/:id`): exige sesión de admin (403 si no) y la misma comprobación de origen que el resto.

@@ -73,7 +73,8 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@jsquash/webp', '@jsquash/resize'] },
   worker: { format: 'es' },
   // Desarrollo con sincronización: `npm run dev:server` y VITE_API_URL=/api
-  server: { proxy: { '/api': 'http://localhost:3000' } },
+  // xfwd: la API compara Origin con X-Forwarded-Host (comprobación CSRF)
+  server: { proxy: { '/api': { target: 'http://localhost:3000', xfwd: true } } },
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],

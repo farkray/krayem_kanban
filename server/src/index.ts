@@ -7,6 +7,7 @@ import {
   MIN_PASSWORD,
   normalizeEmail,
   purgeExpiredSessions,
+  setAdmin,
   validEmail,
 } from './auth.ts'
 import { openDb } from './db.ts'
@@ -27,9 +28,13 @@ if (adminEmail && env.ADMIN_PASSWORD && !findUserByEmail(db, adminEmail)) {
     console.error(`ADMIN_EMAIL inválido o ADMIN_PASSWORD con menos de ${MIN_PASSWORD} caracteres.`)
     process.exit(1)
   }
-  createUser(db, adminEmail, await hashPassword(env.ADMIN_PASSWORD))
+  createUser(db, adminEmail, await hashPassword(env.ADMIN_PASSWORD), true)
   console.log(`Usuario creado: ${adminEmail}`)
 }
+
+// ADMIN_EMAIL siempre tiene el rol de administrador (también si la cuenta ya existía).
+const existingAdmin = adminEmail ? findUserByEmail(db, adminEmail) : undefined
+if (existingAdmin) setAdmin(db, existingAdmin.id, true)
 
 const { app } = buildApp({
   db,

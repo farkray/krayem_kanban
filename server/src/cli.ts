@@ -21,6 +21,7 @@ const usage = () => {
   create-user <email> [--generate | <contraseña>]   Crea un usuario (con --generate muestra una contraseña aleatoria)
   set-password <email> [--generate | <contraseña>]  Cambia la contraseña y cierra sus sesiones
   delete-user <email>                               Elimina el usuario y TODOS sus datos
+  set-admin <email> [--remove]                      Da o quita el rol de administrador
   list-users                                        Lista usuarios y cuántas filas tiene cada uno
   backup <carpeta>                                  Copia consistente de la base (VACUUM INTO)`)
   process.exit(2)
@@ -77,10 +78,21 @@ switch (cmd) {
     )
     break
   }
+  case 'set-admin': {
+    const user = findUserByEmail(db, args[0] ?? '')
+    if (!user) {
+      console.error('No existe ese usuario.')
+      process.exit(1)
+    }
+    const on = args[1] !== '--remove'
+    db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(on ? 1 : 0, user.id)
+    console.log(`${user.email}: ${on ? 'ahora es administrador' : 'ya no es administrador'}.`)
+    break
+  }
   case 'list-users': {
     const rows = db
       .prepare(
-        `SELECT u.email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
+        `SELECT u.email || CASE WHEN u.is_admin = 1 THEN ' (admin)' ELSE '' END AS email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
          FROM users u ORDER BY u.created_at`,
       )
       .all() as { email: string; created_at: string; filas: number }[]

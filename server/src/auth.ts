@@ -46,6 +46,7 @@ const addDays = (d: Date, days: number) => new Date(d.getTime() + days * 86_400_
 export interface User {
   id: string
   email: string
+  isAdmin: boolean
 }
 
 export function createSession(db: DB, userId: string, now = new Date()): string {
@@ -61,12 +62,13 @@ export function sessionUser(db: DB, token: string | undefined, now = new Date())
   if (!token) return null
   const row = db
     .prepare(
-      `SELECT u.id, u.email, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.email, u.is_admin, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`,
     )
-    .get(sha256(token)) as { id: string; email: string; expires_at: string } | undefined
+    .get(sha256(token)) as
+    { id: string; email: string; is_admin: number; expires_at: string } | undefined
   if (!row || Date.parse(row.expires_at) <= now.getTime()) return null
-  return { id: row.id, email: row.email }
+  return { id: row.id, email: row.email, isAdmin: row.is_admin === 1 }
 }
 
 export function renewSession(db: DB, token: string, now = new Date()) {
@@ -102,15 +104,45 @@ export function purgeExpiredSessions(db: DB, now = new Date()) {
   db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now.toISOString())
 }
 
-export function createUser(db: DB, email: string, passHash: string): User {
-  const user = { id: randomUUID(), email: normalizeEmail(email) }
-  db.prepare('INSERT INTO users (id, email, pass_hash, created_at) VALUES (?, ?, ?, ?)').run(
-    user.id,
-    user.email,
-    passHash,
-    new Date().toISOString(),
-  )
+export function createUser(db: DB, email: string, passHash: string, isAdmin = false): User {
+  const user = { id: randomUUID(), email: normalizeEmail(email), isAdmin }
+  db.prepare(
+    'INSERT INTO users (id, email, pass_hash, created_at, is_admin) VALUES (?, ?, ?, ?, ?)',
+  ).run(user.id, user.email, passHash, new Date().toISOString(), isAdmin ? 1 : 0)
   return user
+}
+
+export function setAdmin(db: DB, userId: string, isAdmin: boolean) {
+  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, userId)
+}
+
+export interface UserSummary {
+  id: string
+  email: string
+  createdAt: string
+  isAdmin: boolean
+  rows: number
+}
+
+export function listUsers(db: DB): UserSummary[] {
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.email, u.created_at, u.is_admin,
+              (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS n
+       FROM users u ORDER BY u.created_at`,
+    )
+    .all() as { id: string; email: string; created_at: string; is_admin: number; n: number }[]
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    createdAt: r.created_at,
+    isAdmin: r.is_admin === 1,
+    rows: r.n,
+  }))
+}
+
+export function generatePassword(): string {
+  return randomBytes(12).toString('base64url')
 }
 
 export function findUserByEmail(db: DB, email: string) {

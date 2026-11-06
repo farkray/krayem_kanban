@@ -309,3 +309,58 @@ test('las etiquetas se sincronizan: creadas en un dispositivo aparecen en el otr
   await a.ctx.close()
   await b.ctx.close()
 })
+
+// Administración de usuarios. Necesita una cuenta admin: la de ADMIN_EMAIL/ADMIN_PASSWORD del stack.
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin@local.test'
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD
+test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el panel', async ({
+  browser,
+}) => {
+  test.skip(!ADMIN_PASSWORD, 'Define E2E_ADMIN_PASSWORD (la ADMIN_PASSWORD del stack).')
+  const admin = await newDevice(browser)
+  await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await admin.page.getByRole('button', { name: 'Usuarios' }).click()
+  const dlg = admin.page.getByRole('dialog', { name: 'Usuarios' })
+
+  // crear con contraseña temporal generada
+  const email = unique()
+  await dlg.getByLabel('Correo').fill(email)
+  await dlg.getByRole('button', { name: 'Crear usuario' }).click()
+  const temp = (await dlg.getByRole('status').locator('code').innerText()).trim()
+  expect(temp.length).toBeGreaterThanOrEqual(10)
+  const list = dlg.getByRole('list', { name: 'Usuarios' })
+  await expect(list.getByText(email)).toBeVisible()
+
+  const axe = await new AxeBuilder({ page: admin.page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze()
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+
+  // el nuevo usuario entra con esa contraseña y NO ve el panel
+  const user = await newDevice(browser)
+  await signIn(user.page, email, temp)
+  await expect(user.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await expect(user.page.getByRole('button', { name: 'Usuarios' })).toHaveCount(0)
+
+  // restablecer: la anterior deja de servir
+  await dlg.getByRole('button', { name: `Restablecer contraseña de ${email}` }).click()
+  await expect(dlg.getByRole('status').locator('code')).not.toHaveText(temp) // llegó la nueva
+  const temp2 = (await dlg.getByRole('status').locator('code').innerText()).trim()
+  const again = await newDevice(browser)
+  await signIn(again.page, email, temp)
+  await expect(again.page.getByRole('alert')).toContainText('Correo o contraseña incorrectos.')
+
+  // eliminar (con confirmación) y ya no puede entrar
+  await dlg.getByRole('button', { name: `Eliminar a ${email}` }).click()
+  await admin.page.getByRole('button', { name: 'Eliminar usuario' }).click()
+  await expect(list.getByText(email)).toHaveCount(0)
+  await signIn(again.page, email, temp2)
+  await expect(again.page.getByRole('alert')).toContainText('Correo o contraseña incorrectos.')
+  // el admin no se puede eliminar a sí mismo
+  await expect(dlg.getByRole('button', { name: `Eliminar a ${ADMIN_EMAIL}` })).toHaveCount(0)
+
+  await admin.ctx.close()
+  await user.ctx.close()
+  await again.ctx.close()
+})

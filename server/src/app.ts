@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import {
@@ -12,7 +12,9 @@ import {
   endOtherSessions,
   endSession,
   findUserByEmail,
+  generatePassword,
   hashPassword,
+  listUsers,
   normalizeEmail,
   passwordHashOf,
   renewSession,
@@ -122,6 +124,23 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return u
   }
 
+  const sessionIsAdmin = (userId: string) =>
+    (
+      db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId) as
+        { is_admin: number } | undefined
+    )?.is_admin === 1
+
+  /** Rutas de administración: usuario con rol admin, o 401/403. */
+  const requireAdmin = (req: FastifyRequest, reply: FastifyReply): User | null => {
+    const u = requireUser(req, reply)
+    if (!u) return null
+    if (!u.isAdmin) {
+      void reply.code(403).send({ error: 'forbidden' })
+      return null
+    }
+    return u
+  }
+
   app.addHook('onRequest', async (req, reply) => {
     // CSRF: las peticiones que cambian algo deben venir del mismo origen (el navegador siempre envía Origin).
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
@@ -176,7 +195,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
     }
     byEmail.reset(email)
     setCookie(reply, createSession(db, user.id))
-    return { user: { id: user.id, email: user.email } }
+    return { user: { id: user.id, email: user.email, isAdmin: sessionIsAdmin(user.id) } }
   })
 
   app.post('/api/auth/signup', async (req, reply) => {
@@ -232,6 +251,55 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const token = tokenOf(req)
     if (token) endSession(db, token)
     setCookie(reply, '', 0)
+    return reply.code(204).send()
+  })
+
+  /* ---------- administración de usuarios (solo admin) ---------- */
+
+  app.get('/api/admin/users', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return { users: listUsers(db) }
+  })
+
+  app.post('/api/admin/users', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const body = (req.body ?? {}) as { email?: unknown; password?: unknown }
+    if (!isStr(body.email, 254)) return reply.code(400).send({ error: 'bad_request' })
+    const email = normalizeEmail(body.email)
+    if (!validEmail(email)) return reply.code(400).send({ error: 'invalid_email' })
+    if (body.password !== undefined && body.password !== '') {
+      if (!isStr(body.password, 1024)) return reply.code(400).send({ error: 'bad_request' })
+      if (body.password.length < MIN_PASSWORD)
+        return reply.code(400).send({ error: 'weak_password' })
+    }
+    if (findUserByEmail(db, email)) return reply.code(409).send({ error: 'email_taken' })
+    // Sin contraseña indicada se genera una temporal; solo se muestra en esta respuesta.
+    const generated = !body.password
+    const password = generated ? generatePassword() : String(body.password)
+    const user = createUser(db, email, await hashPassword(password))
+    return reply.code(201).send({ user, ...(generated ? { password } : {}) })
+  })
+
+  app.post('/api/admin/users/:id/password', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!ID_RE.test(id) || !listUsers(db).some((u) => u.id === id))
+      return reply.code(404).send({ error: 'not_found' })
+    const password = generatePassword()
+    setPasswordHash(db, id, await hashPassword(password))
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id) // cierra sus sesiones abiertas
+    return { password }
+  })
+
+  app.delete('/api/admin/users/:id', async (req, reply) => {
+    const admin = requireAdmin(req, reply)
+    if (!admin) return
+    const { id } = req.params as { id: string }
+    if (!ID_RE.test(id) || !listUsers(db).some((u) => u.id === id))
+      return reply.code(404).send({ error: 'not_found' })
+    if (id === admin.id) return reply.code(400).send({ error: 'cannot_delete_self' })
+    db.prepare('DELETE FROM users WHERE id = ?').run(id) // en cascada: sesiones y filas
+    await rm(join(dataDir, 'blobs', id), { recursive: true, force: true })
     return reply.code(204).send()
   })
 

@@ -7,6 +7,8 @@ interface AuthState {
   status: AuthStatus
   userId: string | null
   email: string | null
+  /** Puede administrar usuarios (el servidor lo vuelve a comprobar en cada petición). */
+  isAdmin: boolean
 }
 
 /** `disabled` = sin servidor configurado (modo solo local, sin cuenta). */
@@ -14,11 +16,13 @@ export const useAuth = create<AuthState>(() => ({
   status: isConfigured() ? 'loading' : 'disabled',
   userId: null,
   email: null,
+  isAdmin: false,
 }))
 
 export interface ApiUser {
   id: string
   email: string
+  isAdmin?: boolean
 }
 
 export type AuthResult = { ok: true; user: ApiUser } | { ok: false; error: string }

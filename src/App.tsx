@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Board } from './components/Board'
+import { UsersDialog } from './components/UsersDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { HomeView } from './components/HomeView'
@@ -32,9 +33,11 @@ export default function App() {
   const { boardId, navigate } = useRoute()
   const authStatus = useAuth((s) => s.status)
   const email = useAuth((s) => s.email)
+  const isAdmin = useAuth((s) => s.isAdmin)
   const pending = useSync((s) => s.pending)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [managingUsers, setManagingUsers] = useState(false)
 
   // Pantalla ancha: barra lateral fija (se puede ocultar). Angosta: panel deslizable, cerrado al inicio.
   const wide = useMediaQuery(WIDE_QUERY, true)
@@ -108,6 +111,12 @@ export default function App() {
                 closeDrawer()
                 setChangingPassword(true)
               },
+              onManageUsers: isAdmin
+                ? () => {
+                    closeDrawer()
+                    setManagingUsers(true)
+                  }
+                : undefined,
             }
           : undefined
       }
@@ -155,6 +164,7 @@ export default function App() {
       <Toast />
       <PwaPrompts />
       {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
+      {managingUsers && <UsersDialog me={email} onClose={() => setManagingUsers(false)} />}
       {confirmSignOut && (
         <ConfirmDialog
           title="Cerrar sesión"

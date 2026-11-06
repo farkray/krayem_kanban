@@ -45,6 +45,8 @@ const MIGRATIONS: string[] = [
   ) WITHOUT ROWID;
   CREATE INDEX rows_sync ON rows(user_id, tbl, updated_at);
   `,
+  // 2: rol de administrador (puede crear y eliminar usuarios desde la app)
+  `ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;`,
 ]
 
 export function openDb(file: string): DB {

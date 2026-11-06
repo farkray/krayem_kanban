@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import { buildApp, sniffImage, type BuiltApp } from './app.ts'
-import { LoginLimiter, createUser, hashPassword, verifyPassword } from './auth.ts'
+import { LoginLimiter, createUser, findUserByEmail, hashPassword, verifyPassword } from './auth.ts'
 import { openDb, type DB } from './db.ts'
 
 const HOST = 'kanban.test'
@@ -508,5 +508,120 @@ describe('imágenes', () => {
       headers: headers(cookie),
     })
     expect([400, 404]).toContain(traversal.statusCode)
+  })
+})
+
+describe('administración de usuarios', () => {
+  const asAdmin = async () => {
+    await makeApp()
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    return (await login('admin@correo.com')).cookie
+  }
+  const call = (method: 'GET' | 'POST' | 'DELETE', url: string, cookie: string, payload?: object) =>
+    built.app.inject({ method, url, headers: headers(cookie), payload })
+
+  it('solo el admin entra: sin sesión 401, usuario normal 403', async () => {
+    await makeApp()
+    await addUser('ana@correo.com')
+    expect((await call('GET', '/api/admin/users', '')).statusCode).toBe(401)
+    const { cookie } = await login('ana@correo.com')
+    expect((await call('GET', '/api/admin/users', cookie)).statusCode).toBe(403)
+    expect((await call('POST', '/api/admin/users', cookie, { email: 'x@y.com' })).statusCode).toBe(
+      403,
+    )
+  })
+
+  it('/me y login informan si es admin', async () => {
+    const cookie = await asAdmin()
+    const me = await built.app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: headers(cookie),
+    })
+    expect(me.json().user.isAdmin).toBe(true)
+    await addUser('ana@correo.com')
+    const ana = await login('ana@correo.com')
+    expect(ana.res.json().user.isAdmin).toBe(false)
+  })
+
+  it('crea usuarios: con contraseña propia o generada, y el nuevo puede entrar', async () => {
+    const cookie = await asAdmin()
+    const gen = await call('POST', '/api/admin/users', cookie, { email: 'Nuevo@Correo.com' })
+    expect(gen.statusCode).toBe(201)
+    const pw = gen.json().password as string
+    expect(pw.length).toBeGreaterThanOrEqual(10)
+    expect((await login('nuevo@correo.com', pw)).res.statusCode).toBe(200)
+
+    const own = await call('POST', '/api/admin/users', cookie, {
+      email: 'dos@correo.com',
+      password: 'otra-contraseña-larga',
+    })
+    expect(own.statusCode).toBe(201)
+    expect(own.json().password).toBeUndefined()
+
+    expect(
+      (await call('POST', '/api/admin/users', cookie, { email: 'dos@correo.com' })).statusCode,
+    ).toBe(409)
+    expect(
+      (await call('POST', '/api/admin/users', cookie, { email: 'no-es-correo' })).statusCode,
+    ).toBe(400)
+    expect(
+      (
+        await call('POST', '/api/admin/users', cookie, {
+          email: 'tres@correo.com',
+          password: 'corta',
+        })
+      ).statusCode,
+    ).toBe(400)
+  })
+
+  it('lista usuarios con su rol y filas', async () => {
+    const cookie = await asAdmin()
+    await addUser('ana@correo.com')
+    const res = await call('GET', '/api/admin/users', cookie)
+    const users = res.json().users as { email: string; isAdmin: boolean }[]
+    expect(users.map((u) => [u.email, u.isAdmin])).toEqual([
+      ['admin@correo.com', true],
+      ['ana@correo.com', false],
+    ])
+    expect(JSON.stringify(res.json())).not.toContain('pass_hash')
+  })
+
+  it('restablecer contraseña: nueva temporal, la anterior ya no sirve y cierra sus sesiones', async () => {
+    const cookie = await asAdmin()
+    const ana = await addUser('ana@correo.com')
+    const session = (await login('ana@correo.com')).cookie
+    const res = await call('POST', `/api/admin/users/${ana.id}/password`, cookie)
+    expect(res.statusCode).toBe(200)
+    const pw = res.json().password as string
+    expect((await login('ana@correo.com')).res.statusCode).toBe(401)
+    expect((await login('ana@correo.com', pw)).res.statusCode).toBe(200)
+    const me = await built.app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: headers(session),
+    })
+    expect(me.statusCode).toBe(401)
+  })
+
+  it('elimina usuarios y sus datos, pero no a sí mismo', async () => {
+    const cookie = await asAdmin()
+    const ana = await addUser('ana@correo.com')
+    const admin = findUserByEmail(db, 'admin@correo.com')!
+    expect((await call('DELETE', `/api/admin/users/${admin.id}`, cookie)).statusCode).toBe(400)
+    expect((await call('DELETE', `/api/admin/users/${ana.id}`, cookie)).statusCode).toBe(204)
+    expect(findUserByEmail(db, 'ana@correo.com')).toBeUndefined()
+    expect((await call('DELETE', `/api/admin/users/${ana.id}`, cookie)).statusCode).toBe(404)
+  })
+
+  it('exige el mismo origen (CSRF)', async () => {
+    const cookie = await asAdmin()
+    const res = await built.app.inject({
+      method: 'POST',
+      url: '/api/admin/users',
+      headers: { host: HOST, origin: 'http://otro.sitio', cookie },
+      payload: { email: 'x@y.com' },
+    })
+    expect(res.statusCode).toBe(403)
   })
 })

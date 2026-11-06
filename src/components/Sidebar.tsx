@@ -16,7 +16,13 @@ interface Props {
   /** Panel deslizable sobre el contenido (pantallas angostas). */
   drawer?: boolean
   /** Correo de la sesión y cierre de sesión (solo con nube configurada). */
-  account?: { email: string | null; onSignOut: () => void; onChangePassword: () => void }
+  account?: {
+    email: string | null
+    onSignOut: () => void
+    onChangePassword: () => void
+    /** Solo administradores: abre la gestión de usuarios. */
+    onManageUsers?: () => void
+  }
 }
 
 export function Sidebar({
@@ -107,6 +113,11 @@ export function Sidebar({
           <span className={styles.email} title={account.email ?? undefined}>
             {account.email}
           </span>
+          {account.onManageUsers && (
+            <button type="button" className={styles.signOut} onClick={account.onManageUsers}>
+              Usuarios
+            </button>
+          )}
           <button type="button" className={styles.signOut} onClick={account.onChangePassword}>
             Cambiar contraseña
           </button>
