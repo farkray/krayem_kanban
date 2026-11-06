@@ -103,7 +103,7 @@ interface Actions {
     cardId: string,
     meta: Pick<
       Attachment,
-      'name' | 'mime' | 'sizeOriginal' | 'sizeCompressed' | 'width' | 'height'
+      'name' | 'mime' | 'sizeOriginal' | 'sizeCompressed' | 'width' | 'height' | 'inline'
     >,
     blob: Blob,
   ) => string | null
@@ -530,8 +530,11 @@ export const useStore = create<Store>((set, get) => {
 
     addAttachment: (cardId, meta, blob) => {
       const card = live(get().cards).find((c) => c.id === cardId)
-      const count = live(get().attachments).filter((a) => a.cardId === cardId).length
-      if (!card || count >= LIMITS.attachments) return null
+      const count = live(get().attachments).filter(
+        (a) => a.cardId === cardId && !!a.inline === !!meta.inline,
+      ).length
+      const max = meta.inline ? LIMITS.inlineImages : LIMITS.attachments
+      if (!card || count >= max) return null
       const ext = meta.mime.split('/')[1]?.replace('jpeg', 'jpg') || 'bin'
       const att: Attachment = { ...base(), ...meta, cardId, path: '' }
       att.path = `${att.id}.${ext}`

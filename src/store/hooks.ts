@@ -106,7 +106,7 @@ export function useAttachments(cardId: string) {
   return useMemo(
     () =>
       live(attachments)
-        .filter((a) => a.cardId === cardId)
+        .filter((a) => a.cardId === cardId && !a.inline)
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
     [attachments, cardId],
   )

@@ -1,0 +1,188 @@
+.box {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+}
+
+.box:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tool {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.tool:hover {
+  background: var(--color-fill-2);
+}
+
+.glyph {
+  font-size: var(--text-md);
+  font-style: inherit;
+  line-height: 1;
+}
+
+.toolOn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--color-selected);
+  color: var(--color-accent-text);
+  cursor: pointer;
+}
+
+.surface {
+  max-width: none;
+  padding: 10px 12px;
+}
+
+.content {
+  min-height: 110px;
+  outline: none;
+}
+
+.content:global(.ProseMirror) p.is-editor-empty:first-child::before,
+.content :global(p.is-editor-empty:first-child::before) {
+  float: left;
+  height: 0;
+  color: var(--color-text-muted);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+/* Lista de tareas del editor */
+.content :global(ul[data-type='taskList']) {
+  padding-left: 0;
+  list-style: none;
+}
+
+.content :global(ul[data-type='taskList'] li) {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.content :global(ul[data-type='taskList'] li > label) {
+  flex: none;
+  margin-top: 2px;
+}
+
+.content :global(ul[data-type='taskList'] li > div) {
+  flex: 1;
+}
+
+.content :global(hr) {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.imageNode {
+  margin: var(--space-2) 0;
+}
+
+.status,
+.error {
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.status {
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-danger-text);
+}
+
+.linkBar {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.linkBar input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-field);
+  color: inherit;
+  font: inherit;
+}
+
+.linkBtn,
+.secondary,
+.primary {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-accent-solid);
+  background: var(--color-accent-solid);
+  color: var(--color-on-accent);
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .tool,
+  .toolOn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .linkBtn,
+  .secondary,
+  .primary {
+    height: 44px;
+  }
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+@media (pointer: coarse) {
+  .tool {
+    width: 44px;
+    height: 44px;
+  }
+}

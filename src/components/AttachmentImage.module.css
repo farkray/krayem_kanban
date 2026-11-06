@@ -1,0 +1,26 @@
+.link {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.loading {
+  display: inline-block;
+  width: 160px;
+  height: 100px;
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-2);
+}
+
+.missing {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}

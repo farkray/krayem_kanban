@@ -89,6 +89,8 @@ export interface Attachment extends Base {
   sizeCompressed: number
   width: number
   height: number
+  /** Imagen pegada dentro de una actualización: no aparece en la galería de la tarjeta. */
+  inline?: boolean
 }
 
 export interface ChecklistItem extends Base {
@@ -138,6 +140,7 @@ export const LIMITS = {
   items: 100,
   comment: 10000,
   attachments: 10,
+  inlineImages: 100,
   label: 30,
   labels: 50,
   cardLabels: 8,

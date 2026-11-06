@@ -1,70 +1,11 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState } from 'react'
 import { relativeTime } from '../lib/format'
-import { LIMITS, type Comment } from '../lib/types'
+import type { Comment } from '../lib/types'
 import { useComments } from '../store/hooks'
 import { useStore } from '../store/store'
-import { FormatEditor } from './FormatEditor'
+import { RichEditor } from './RichEditor'
 import { Markdown } from './Markdown'
 import styles from './Comments.module.css'
-
-interface EditorProps {
-  initial?: string
-  submitLabel: string
-  label?: string
-  placeholder?: string
-  rows?: number
-  onSubmit: (text: string) => boolean
-  onCancel?: () => void
-}
-
-function CommentEditor({
-  initial = '',
-  submitLabel,
-  label = 'Comentario',
-  placeholder = 'Escribe un comentario… (admite Markdown)',
-  rows = 3,
-  onSubmit,
-  onCancel,
-}: EditorProps) {
-  const [text, setText] = useState(initial)
-  const empty = text.trim().length === 0
-
-  const submit = () => {
-    if (empty) return
-    if (onSubmit(text)) setText('')
-  }
-
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      submit()
-    }
-  }
-
-  return (
-    <FormatEditor
-      value={text}
-      onChange={setText}
-      label={label}
-      placeholder={placeholder}
-      rows={rows}
-      maxLength={LIMITS.comment}
-      onKeyDown={onKeyDown}
-      footer={
-        <>
-          {onCancel && (
-            <button type="button" className={styles.secondary} onClick={onCancel}>
-              Cancelar
-            </button>
-          )}
-          <button type="button" className={styles.primary} disabled={empty} onClick={submit}>
-            {submitLabel}
-          </button>
-        </>
-      }
-    />
-  )
-}
 
 function Item({ comment }: { comment: Comment }) {
   const editComment = useStore((s) => s.editComment)
@@ -95,7 +36,8 @@ function Item({ comment }: { comment: Comment }) {
         )}
       </div>
       {editing ? (
-        <CommentEditor
+        <RichEditor
+          cardId={comment.cardId}
           initial={comment.bodyMd}
           submitLabel="Guardar"
           label="Editar comentario"
@@ -126,10 +68,10 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
   const [sent, setSent] = useState(false)
 
   const editor = (
-    <CommentEditor
+    <RichEditor
+      cardId={cardId}
       label="Nueva actualización"
-      placeholder="Escribe una actualización… (admite Markdown)"
-      rows={5}
+      placeholder="Escribe una actualización…"
       submitLabel="Actualizar"
       onSubmit={(t) => {
         const ok = addComment(cardId, t) !== null

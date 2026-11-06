@@ -60,7 +60,9 @@ export function Attachments({ cardId, coverId }: { cardId: string; coverId?: str
     for (const file of files) {
       const room =
         LIMITS.attachments -
-        useStore.getState().attachments.filter((a) => a.cardId === cardId && !a.deletedAt).length
+        useStore
+          .getState()
+          .attachments.filter((a) => a.cardId === cardId && !a.deletedAt && !a.inline).length
       if (room <= 0) {
         setErrors((e) => [...e, `Máximo ${LIMITS.attachments} imágenes por tarjeta.`])
         break

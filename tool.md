@@ -311,4 +311,7 @@ Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al 
 - La tarjeta tiene dos pestañas: **Detalles** y **Actualizaciones / n**.
 - Ambas pestañas tienen el mismo cuadro de texto con barra de formato y el botón **Actualizar**. En Detalles solo se envía (queda un aviso "Enviada a la pestaña Actualizaciones"); en Actualizaciones, además, se ve el **feed** (lo más nuevo primero) con el Markdown renderizado, editable y eliminable.
 - Ya no hay campo "Descripción" ni sección "Comentarios": una descripción que existiera pasa sola a ser la primera actualización al abrir la tarjeta.
-- Barra: título, negrita, cursiva, tachado, listas (viñetas, numerada, de tareas), cita, código, enlace, línea separadora; Ctrl/Cmd+B, I, K; Ctrl/Cmd+Enter envía. Guarda Markdown plano.
+- El cuadro es un **editor visual**: el formato se ve ya aplicado mientras escribes (sin asteriscos ni guiones crudos); por debajo se guarda Markdown plano.
+- Barra: título, negrita, cursiva, tachado, listas (viñetas, numerada, de tareas), cita, código, enlace, línea separadora; Ctrl/Cmd+Enter envía.
+- **Imágenes:** se pegan con Ctrl/Cmd+V (o se sueltan) en el editor; se comprimen en el navegador igual que las de la tarjeta, se guardan como adjuntos "en línea" (no aparecen en la galería de la tarjeta; máx. 100 por tarjeta) y se sincronizan. En el Markdown quedan como `![nombre](attachment:ID)`; no se cargan imágenes externas.
+- Límite conocido: al eliminar una actualización, sus imágenes quedan en el servidor (el borrado es lógico).
