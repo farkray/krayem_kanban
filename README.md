@@ -56,7 +56,7 @@ echo 'VITE_API_URL=/api' > .env.local && npm run dev  # app en :5173 (proxy /api
 
 Variables del servidor: `ADMIN_EMAIL` / `ADMIN_PASSWORD` (usuario inicial), `ALLOW_SIGNUP` (`false`), `COOKIE_SECURE` (`true`; solo `false` en pruebas por http), `DATA_DIR` (`./data`), `PORT` (`3000`).
 
-**Administrador:** la cuenta de `ADMIN_EMAIL` tiene el rol de administrador (se asigna en cada arranque) y ve en la barra lateral el botón **Usuarios**, desde donde crea usuarios (con contraseña propia o una temporal generada que se muestra una sola vez), les pone un **alias** (nombre para mostrar, p. ej. «Jorge Menéndez»), restablece contraseñas y elimina usuarios con todos sus datos. Un admin no puede eliminarse a sí mismo. Se puede dar o quitar el rol por CLI con `set-admin <correo> [--remove]`.
+**Administrador:** la cuenta de `ADMIN_EMAIL` tiene el rol de administrador (se asigna en cada arranque) y ve en la barra lateral el **Panel de control** (pantalla `/admin`, con botón para volver a los tableros), desde donde crea usuarios (con contraseña propia o una temporal generada que se muestra una sola vez), les pone un **alias** (nombre para mostrar, p. ej. «Jorge Menéndez»), restablece contraseñas y elimina usuarios con todos sus datos. Un admin no puede eliminarse a sí mismo. Se puede dar o quitar el rol por CLI con `set-admin <correo> [--remove]`.
 
 Administrar usuarios por línea de comandos (dentro del contenedor): `docker compose exec api node src/cli.ts create-user ana@correo.com --generate --alias "Ana López"` (también `set-password`, `set-alias`, `set-admin`, `delete-user`, `list-users`, `backup`).
 

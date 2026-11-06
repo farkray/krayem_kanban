@@ -348,3 +348,9 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - El alias se muestra de forma consistente: iniciales del avatar, lista de miembros, «Asignado a», filtros, «De …» en tableros compartidos, el pie de la barra lateral y el diálogo de compartir. El color del avatar depende del correo, así que no cambia si se edita el alias.
 - **Compartir**: en vez de escribir un correo, se elige a la persona de un **menú desplegable con los usuarios registrados** (`alias · correo`), sin uno mismo ni quienes ya tienen acceso. API: `GET /api/users/directory` (solo con sesión; devuelve id, correo y alias, nada más).
 - Los participantes (`/api/shares`) y las respuestas de login/`me` incluyen el alias.
+
+## 21. Panel de control (implementado)
+
+- La gestión de usuarios dejó de ser un modal: es una **pantalla propia** en la ruta `/admin` («Panel de control» en la barra lateral, solo para administradores). Arriba tiene **← Volver a los tableros**; la barra lateral y el botón de inicio también regresan.
+- Contenido: resumen (usuarios y administradores), **tabla de usuarios** con búsqueda por nombre o correo (avatar, alias/correo, rol, registros y acciones: poner/editar alias, restablecer contraseña y eliminar con confirmación) y el formulario **Nuevo usuario** (correo, alias y contraseña opcionales). La contraseña temporal sigue mostrándose una sola vez.
+- Responsive: en pantallas medias el formulario baja bajo la tabla; en teléfono cada fila de la tabla se apila como una tarjeta. Quien no es admin ve un aviso y solo puede volver.

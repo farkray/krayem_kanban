@@ -22,6 +22,8 @@ interface Props {
     onChangePassword: () => void
     /** Solo administradores: abre la gestión de usuarios. */
     onManageUsers?: () => void
+    /** Estás en el panel de control. */
+    adminActive?: boolean
   }
 }
 
@@ -138,8 +140,13 @@ export function Sidebar({
             {account.email}
           </span>
           {account.onManageUsers && (
-            <button type="button" className={styles.signOut} onClick={account.onManageUsers}>
-              Usuarios
+            <button
+              type="button"
+              className={styles.signOut}
+              aria-current={account.adminActive ? 'page' : undefined}
+              onClick={account.onManageUsers}
+            >
+              Panel de control
             </button>
           )}
           <button type="button" className={styles.signOut} onClick={account.onChangePassword}>

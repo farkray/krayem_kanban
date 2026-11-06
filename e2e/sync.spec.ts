@@ -320,8 +320,14 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   const admin = await newDevice(browser)
   await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
   await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
-  await admin.page.getByRole('button', { name: 'Usuarios' }).click()
-  const dlg = admin.page.getByRole('dialog', { name: 'Usuarios' })
+  await admin.page.getByRole('button', { name: 'Panel de control' }).click()
+  // es una pantalla propia (ruta /admin), no un modal
+  await expect(admin.page).toHaveURL(/\/admin$/)
+  await expect(
+    admin.page.getByRole('heading', { level: 1, name: 'Panel de control' }),
+  ).toBeVisible()
+  await expect(admin.page.getByRole('dialog')).toHaveCount(0)
+  const dlg = admin.page.getByRole('main')
 
   // crear con contraseña temporal generada
   const email = unique()
@@ -330,7 +336,7 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   await dlg.getByRole('button', { name: 'Crear usuario' }).click()
   const temp = (await dlg.getByRole('status').locator('code').innerText()).trim()
   expect(temp.length).toBeGreaterThanOrEqual(10)
-  const list = dlg.getByRole('list', { name: 'Usuarios' })
+  const list = dlg.getByRole('table', { name: 'Usuarios' })
   await expect(list.getByText('Jorge E2E', { exact: true })).toBeVisible() // alias, sin espacios dobles
   await expect(list.getByText(new RegExp(email))).toBeVisible()
   // editar el alias
@@ -348,7 +354,7 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   const user = await newDevice(browser)
   await signIn(user.page, email, temp)
   await expect(user.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
-  await expect(user.page.getByRole('button', { name: 'Usuarios' })).toHaveCount(0)
+  await expect(user.page.getByRole('button', { name: 'Panel de control' })).toHaveCount(0)
 
   // restablecer: la anterior deja de servir
   await dlg.getByRole('button', { name: `Restablecer contraseña de ${email}` }).click()
@@ -366,6 +372,16 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   await expect(again.page.getByRole('alert')).toContainText('Correo o contraseña incorrectos.')
   // el admin no se puede eliminar a sí mismo
   await expect(dlg.getByRole('button', { name: `Eliminar a ${ADMIN_EMAIL}` })).toHaveCount(0)
+
+  // volver a los tableros desde el panel
+  await admin.page.getByRole('button', { name: /Volver a los tableros/ }).click()
+  await expect(admin.page).not.toHaveURL(/\/admin/)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  // y se puede abrir de nuevo por la dirección directa
+  await admin.page.goto('/admin')
+  await expect(
+    admin.page.getByRole('heading', { level: 1, name: 'Panel de control' }),
+  ).toBeVisible()
 
   await admin.ctx.close()
   await user.ctx.close()

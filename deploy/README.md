@@ -82,7 +82,7 @@ ssh deploy@IP 'cd /opt/kanban && docker compose exec api node src/cli.ts create-
 # también: set-alias <email> "Nombre" | set-password <email> | set-admin <email> [--remove] | delete-user <email> | list-users
 ```
 
-El administrador (`ADMIN_EMAIL`) también puede crear y eliminar usuarios desde la app (botón **Usuarios**).
+El administrador (`ADMIN_EMAIL`) también puede crear y eliminar usuarios desde la app (**Panel de control** en la barra lateral).
 
 `--generate` crea una contraseña aleatoria y la muestra una vez. `set-password` cierra las sesiones de ese usuario.
 

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import { UsersDialog } from './UsersDialog'
+import { AdminPanel } from './AdminPanel'
 
 const users = [
   {
@@ -39,11 +39,11 @@ function mockApi(overrides: Record<string, () => Response> = {}) {
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('UsersDialog', () => {
+describe('AdminPanel', () => {
   it('lista usuarios y no deja eliminar la propia cuenta', async () => {
     mockApi()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
-    const list = await screen.findByRole('list', { name: 'Usuarios' })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const list = await screen.findByRole('table', { name: 'Usuarios' })
     expect(within(list).getByText('Ana López')).toBeInTheDocument()
     expect(within(list).getByText(/Administrador/)).toBeInTheDocument()
     expect(within(list).getAllByRole('button', { name: /^Eliminar/ })).toHaveLength(1)
@@ -61,8 +61,8 @@ describe('UsersDialog', () => {
         ),
     })
     const user = userEvent.setup()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
-    await screen.findByRole('list', { name: 'Usuarios' })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Usuarios' })
     await user.type(screen.getByLabelText('Correo'), 'nuevo@correo.com')
     await user.click(screen.getByRole('button', { name: 'Crear usuario' }))
     expect(await screen.findByText('Temporal-123xyz')).toBeInTheDocument()
@@ -81,8 +81,8 @@ describe('UsersDialog', () => {
       }),
     )
     const user = userEvent.setup()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
-    const list = await screen.findByRole('list', { name: 'Usuarios' })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const list = await screen.findByRole('table', { name: 'Usuarios' })
     expect(within(list).getByText('Ana López')).toBeInTheDocument()
     expect(within(list).getByText(/ana@correo.com/)).toBeInTheDocument()
     await user.click(within(list).getByRole('button', { name: 'Editar alias de ana@correo.com' }))
@@ -105,8 +105,8 @@ describe('UsersDialog', () => {
       }),
     )
     const user = userEvent.setup()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
-    await screen.findByRole('list', { name: 'Usuarios' })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Usuarios' })
     await user.type(screen.getByLabelText('Correo'), 'jorge@mercabits.com')
     await user.type(screen.getByLabelText(/Alias/), 'Jorge Menéndez')
     await user.click(screen.getByRole('button', { name: 'Crear usuario' }))
@@ -121,8 +121,8 @@ describe('UsersDialog', () => {
   it('traduce errores del servidor', async () => {
     mockApi({ 'POST /admin/users': () => Response.json({ error: 'email_taken' }, { status: 409 }) })
     const user = userEvent.setup()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
-    await screen.findByRole('list', { name: 'Usuarios' })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Usuarios' })
     await user.type(screen.getByLabelText('Correo'), 'ana@correo.com')
     await user.click(screen.getByRole('button', { name: 'Crear usuario' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Ya existe un usuario')
@@ -131,10 +131,42 @@ describe('UsersDialog', () => {
   it('eliminar pide confirmación y llama al servidor', async () => {
     const calls = mockApi()
     const user = userEvent.setup()
-    render(<UsersDialog me="admin@correo.com" onClose={() => {}} />)
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
     await user.click(await screen.findByRole('button', { name: /Eliminar a ana@correo.com/ }))
     expect(calls).not.toContain('DELETE /admin/users/u2')
     await user.click(screen.getByRole('button', { name: 'Eliminar usuario' }))
     expect(calls).toContain('DELETE /admin/users/u2')
+  })
+})
+
+describe('AdminPanel: pantalla propia', () => {
+  it('tiene botón para volver a los tableros y resumen de cuentas', async () => {
+    mockApi()
+    const onBack = vi.fn()
+    const user = userEvent.setup()
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={onBack} />)
+    expect(screen.getByRole('heading', { level: 1, name: 'Panel de control' })).toBeInTheDocument()
+    await screen.findByRole('table', { name: 'Usuarios' })
+    expect(screen.getByText('Administradores').nextSibling).toHaveTextContent('1')
+    await user.click(screen.getByRole('button', { name: /Volver a los tableros/ }))
+    expect(onBack).toHaveBeenCalled()
+  })
+
+  it('filtra usuarios por nombre o correo', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const table = await screen.findByRole('table', { name: 'Usuarios' })
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar usuario' }), 'lópez')
+    expect(within(table).queryByText('admin@correo.com')).not.toBeInTheDocument()
+    expect(within(table).getByText('Ana López')).toBeInTheDocument()
+  })
+
+  it('sin permisos no carga nada y solo permite volver', () => {
+    const calls = mockApi()
+    render(<AdminPanel me="ana@correo.com" isAdmin={false} onBack={() => {}} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('no tiene permiso')
+    expect(calls).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Volver a los tableros/ })).toBeInTheDocument()
   })
 })

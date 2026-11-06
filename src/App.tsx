@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Board } from './components/Board'
 import { displayName } from './lib/people'
-import { UsersDialog } from './components/UsersDialog'
+import { AdminPanel } from './components/AdminPanel'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { HomeView } from './components/HomeView'
@@ -10,7 +10,7 @@ import { PwaPrompts } from './components/PwaPrompts'
 import { Sidebar } from './components/Sidebar'
 import { Toast } from './components/Toast'
 import { Topbar } from './components/Topbar'
-import { boardPath, useRoute } from './lib/route'
+import { ADMIN_PATH, boardPath, useRoute } from './lib/route'
 import { useMediaQuery, WIDE_QUERY } from './lib/useMediaQuery'
 import type { SearchResult } from './lib/search'
 import { useBoardSummaries, useBoards } from './store/hooks'
@@ -31,7 +31,7 @@ export default function App() {
   const createBoard = useStore((s) => s.createBoard)
   const boards = useBoards()
   const summaries = useBoardSummaries()
-  const { boardId, navigate } = useRoute()
+  const { boardId, isAdminPage, navigate } = useRoute()
   const authStatus = useAuth((s) => s.status)
   const email = useAuth((s) => s.email)
   const alias = useAuth((s) => s.alias)
@@ -39,7 +39,6 @@ export default function App() {
   const pending = useSync((s) => s.pending)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
-  const [managingUsers, setManagingUsers] = useState(false)
 
   // Pantalla ancha: barra lateral fija (se puede ocultar). Angosta: panel deslizable, cerrado al inicio.
   const wide = useMediaQuery(WIDE_QUERY, true)
@@ -96,7 +95,7 @@ export default function App() {
   const sidebar = (
     <Sidebar
       boards={summaries}
-      activeId={active?.id ?? null}
+      activeId={isAdminPage ? null : (active?.id ?? null)}
       drawer={drawer}
       onSelect={openBoard}
       onCreate={create}
@@ -115,10 +114,12 @@ export default function App() {
               },
               onManageUsers: isAdmin
                 ? () => {
+                    setOpenCardId(null)
                     closeDrawer()
-                    setManagingUsers(true)
+                    navigate(ADMIN_PATH)
                   }
                 : undefined,
+              adminActive: isAdminPage,
             }
           : undefined
       }
@@ -144,10 +145,12 @@ export default function App() {
             navigate('/')
           }}
           onPick={onPick}
-          boardId={active?.id ?? null}
+          boardId={isAdminPage ? null : (active?.id ?? null)}
         />
         <main className={styles.content}>
-          {active ? (
+          {isAdminPage ? (
+            <AdminPanel me={email} isAdmin={isAdmin} onBack={() => navigate('/')} />
+          ) : active ? (
             <Board
               key={active.id}
               board={active}
@@ -167,7 +170,6 @@ export default function App() {
       <Toast />
       <PwaPrompts />
       {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
-      {managingUsers && <UsersDialog me={email} onClose={() => setManagingUsers(false)} />}
       {confirmSignOut && (
         <ConfirmDialog
           title="Cerrar sesión"
