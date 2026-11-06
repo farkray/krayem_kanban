@@ -349,7 +349,8 @@ export const useStore = create<Store>((set, get) => {
       const st = get()
       const legacy = live(st.labels).filter((l) => !l.boardId)
       const mine = live(st.boards)
-        .filter((b) => !b.ownerId)
+        // Solo los tableros propios (el servidor marca también los míos con ownerId = yo)
+        .filter((b) => roleOf(b.id) === 'owner')
         .sort(byPosition)
       if (legacy.length === 0 || mine.length === 0) return
       const ts = stamp()

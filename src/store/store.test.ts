@@ -411,6 +411,35 @@ describe('etiquetas por tablero', () => {
   })
 })
 
+describe('migración de etiquetas con tableros descargados del servidor', () => {
+  afterEach(() => setRoleResolver(null))
+
+  const legacy = () => {
+    const ts = new Date().toISOString()
+    return { id: 'legacy-1', name: 'Anáhuac', color: 'red' as const, createdAt: ts, updatedAt: ts }
+  }
+
+  it('migra también mis tableros que traen ownerId (el servidor lo pone en todos)', async () => {
+    const b = S().createBoard('General')!
+    useStore.setState({ boards: S().boards.map((x) => (x.id === b ? { ...x, ownerId: 'yo' } : x)) })
+    const card = S().addCard(liveCols(b)[0].id, 'x')!
+    useStore.setState({ labels: [legacy()] })
+    S().updateCard(card, { labelIds: ['legacy-1'] })
+    await S().migrateLabels()
+    const mine = S().labels.filter((l) => !l.deletedAt && l.boardId === b)
+    expect(mine.map((l) => l.name)).toEqual(['Anáhuac'])
+    expect(S().cards.find((c) => c.id === card)?.labelIds).toEqual([mine[0].id])
+  })
+
+  it('no migra hacia tableros ajenos', async () => {
+    const b = S().createBoard('Ajeno')!
+    setRoleResolver(() => 'editor')
+    useStore.setState({ labels: [legacy()] })
+    await S().migrateLabels()
+    expect(S().labels.filter((l) => l.boardId === b)).toHaveLength(0)
+  })
+})
+
 describe('tableros compartidos (cliente)', () => {
   afterEach(() => setRoleResolver(null))
 
