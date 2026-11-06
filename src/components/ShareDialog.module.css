@@ -134,3 +134,20 @@
     height: 44px;
   }
 }
+
+.who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 160px;
+}
+
+.who .email {
+  min-width: 0;
+}
+
+.sub2 {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}

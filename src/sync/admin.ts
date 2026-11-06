@@ -3,6 +3,7 @@ import { getConfig } from '../lib/config'
 export interface AdminUser {
   id: string
   email: string
+  alias: string
   createdAt: string
   isAdmin: boolean
   rows: number
@@ -31,8 +32,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<Ad
 export const adminListUsers = () => call<{ users: AdminUser[] }>('GET', '/users')
 
 /** Sin `password` el servidor genera una temporal y la devuelve (solo esta vez). */
-export const adminCreateUser = (email: string, password?: string) =>
-  call<{ user: AdminUser; password?: string }>('POST', '/users', { email, password })
+export const adminCreateUser = (email: string, password?: string, alias?: string) =>
+  call<{ user: AdminUser; password?: string }>('POST', '/users', { email, password, alias })
+
+export const adminSetAlias = (id: string, alias: string) =>
+  call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { alias })
 
 export const adminResetPassword = (id: string) =>
   call<{ password: string }>('POST', `/users/${encodeURIComponent(id)}/password`)

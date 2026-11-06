@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Board } from './components/Board'
+import { displayName } from './lib/people'
 import { UsersDialog } from './components/UsersDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -33,6 +34,7 @@ export default function App() {
   const { boardId, navigate } = useRoute()
   const authStatus = useAuth((s) => s.status)
   const email = useAuth((s) => s.email)
+  const alias = useAuth((s) => s.alias)
   const isAdmin = useAuth((s) => s.isAdmin)
   const pending = useSync((s) => s.pending)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
@@ -102,7 +104,7 @@ export default function App() {
       account={
         authStatus === 'signedIn'
           ? {
-              email,
+              email: email ? displayName({ email, alias }) : email,
               onSignOut: () => {
                 closeDrawer()
                 setConfirmSignOut(true)

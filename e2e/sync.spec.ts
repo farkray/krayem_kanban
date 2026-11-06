@@ -326,11 +326,18 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   // crear con contraseña temporal generada
   const email = unique()
   await dlg.getByLabel('Correo').fill(email)
+  await dlg.getByLabel(/Alias/).fill('Jorge  E2E')
   await dlg.getByRole('button', { name: 'Crear usuario' }).click()
   const temp = (await dlg.getByRole('status').locator('code').innerText()).trim()
   expect(temp.length).toBeGreaterThanOrEqual(10)
   const list = dlg.getByRole('list', { name: 'Usuarios' })
-  await expect(list.getByText(email)).toBeVisible()
+  await expect(list.getByText('Jorge E2E', { exact: true })).toBeVisible() // alias, sin espacios dobles
+  await expect(list.getByText(new RegExp(email))).toBeVisible()
+  // editar el alias
+  await list.getByRole('button', { name: `Editar alias de ${email}` }).click()
+  await list.getByLabel(`Alias de ${email}`).fill('Jorge Menéndez')
+  await list.getByRole('button', { name: 'Guardar' }).click()
+  await expect(list.getByText('Jorge Menéndez', { exact: true })).toBeVisible()
 
   const axe = await new AxeBuilder({ page: admin.page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -396,10 +403,10 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze()
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
-  await dlg.getByLabel('Correo de la persona').fill('nadie@prueba.test')
-  await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
-  await expect(dlg.getByRole('alert')).toContainText('no tiene cuenta')
-  await dlg.getByLabel('Correo de la persona').fill(emailB)
+  // menú con los usuarios registrados (sin uno mismo); se elige a B
+  const picker = dlg.getByRole('combobox', { name: 'Persona' })
+  await expect(picker.locator('option', { hasText: emailA })).toHaveCount(0)
+  await picker.selectOption(emailB)
   await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
   await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(emailB)
   await dlg.getByRole('button', { name: 'Cerrar' }).click()
@@ -410,6 +417,32 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   await expect(shared).toContainText('Editor')
   await shared.getByRole('button', { name: /Proyecto A/ }).click()
   await expect(card(column(b.page, 'Por hacer'), 'Tarea compartida')).toBeVisible()
+
+  // Lista de miembros: B (invitado) también ve quién participa
+  await b.page.getByRole('button', { name: /Miembros del tablero: 2 personas/ }).click()
+  const membersB = b.page.getByRole('group', { name: 'Miembros del tablero' })
+  await expect(membersB).toContainText(emailA)
+  await expect(membersB).toContainText('Dueño')
+  await expect(membersB).toContainText(`${emailB} (tú)`)
+  await b.page.keyboard.press('Escape')
+
+  // A asigna la tarjeta a B: el avatar aparece en ambos y B la filtra con "Yo"
+  await card(column(a.page, 'Por hacer'), 'Tarea compartida').click()
+  const detalleA = a.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
+  await detalleA.getByLabel('Asignado a').selectOption({ label: emailB })
+  await detalleA.getByRole('button', { name: 'Listo' }).click()
+  await expect(
+    card(column(b.page, 'Por hacer'), 'Tarea compartida').getByRole('img', {
+      name: `Asignada a ${emailB}`,
+    }),
+  ).toBeVisible({ timeout: 15_000 })
+
+  await b.page.getByRole('button', { name: 'Filtros' }).click()
+  await b.page.getByRole('checkbox', { name: 'Mostrar solo lo asignado a mí' }).check()
+  await expect(card(column(b.page, 'Por hacer'), 'Tarea compartida')).toBeVisible()
+  await b.page.keyboard.press('Escape')
+  await b.page.screenshot({ path: '/tmp/assigned-b.png' })
+  await b.page.getByRole('button', { name: 'Limpiar filtro' }).click()
 
   // B (editor) agrega una tarjeta y A la ve en vivo; B no puede eliminar ni compartir el tablero
   await addCard(b.page, 'Por hacer', 'Hecha por B')

@@ -66,7 +66,20 @@ describe('LoginScreen', () => {
     await user.type(screen.getByLabelText('Correo electrónico'), 'nuevo@correo.com')
     await user.type(screen.getByLabelText('Contraseña'), 'contraseña-larga')
     await user.click(screen.getByRole('button', { name: 'Crear cuenta' }))
-    expect(signUp).toHaveBeenCalledWith('nuevo@correo.com', 'contraseña-larga')
+    expect(signUp).toHaveBeenCalledWith('nuevo@correo.com', 'contraseña-larga', undefined)
+  })
+
+  it('el registro admite un nombre (alias) opcional', async () => {
+    const user = userEvent.setup()
+    authConfig.mockResolvedValue({ allowSignup: true })
+    signUp.mockResolvedValue(null)
+    render(<LoginScreen />)
+    await user.click(await screen.findByRole('button', { name: 'Crear una cuenta' }))
+    await user.type(screen.getByLabelText('Correo electrónico'), 'jorge@mercabits.com')
+    await user.type(screen.getByLabelText(/Nombre/), 'Jorge Menéndez')
+    await user.type(screen.getByLabelText('Contraseña'), 'contraseña-larga')
+    await user.click(screen.getByRole('button', { name: 'Crear cuenta' }))
+    expect(signUp).toHaveBeenCalledWith('jorge@mercabits.com', 'contraseña-larga', 'Jorge Menéndez')
   })
 })
 

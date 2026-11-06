@@ -179,7 +179,7 @@ test.describe('etiquetas en teléfono', () => {
     const filter = page.getByRole('button', { name: 'Filtros' })
     expect((await filter.boundingBox())!.width).toBeGreaterThanOrEqual(44)
     await filter.tap()
-    const panel = (await page.getByRole('group', { name: 'Filtrar por etiqueta' }).boundingBox())!
+    const panel = (await page.getByRole('group', { name: 'Filtros' }).boundingBox())!
     expect(panel.x).toBeGreaterThanOrEqual(0)
     expect(panel.x + panel.width).toBeLessThanOrEqual(390)
     await page.getByRole('checkbox', { name: 'Mostrar solo Coppel' }).check()

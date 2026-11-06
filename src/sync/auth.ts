@@ -7,6 +7,8 @@ interface AuthState {
   status: AuthStatus
   userId: string | null
   email: string | null
+  /** Nombre para mostrar (alias); vacío = se usa el correo. */
+  alias: string
   /** Puede administrar usuarios (el servidor lo vuelve a comprobar en cada petición). */
   isAdmin: boolean
 }
@@ -16,12 +18,14 @@ export const useAuth = create<AuthState>(() => ({
   status: isConfigured() ? 'loading' : 'disabled',
   userId: null,
   email: null,
+  alias: '',
   isAdmin: false,
 }))
 
 export interface ApiUser {
   id: string
   email: string
+  alias?: string
   isAdmin?: boolean
 }
 
@@ -39,9 +43,14 @@ async function post(path: string, body?: unknown): Promise<Response> {
   })
 }
 
-async function credentials(path: string, email: string, password: string): Promise<AuthResult> {
+async function credentials(
+  path: string,
+  email: string,
+  password: string,
+  alias?: string,
+): Promise<AuthResult> {
   try {
-    const res = await post(path, { email, password })
+    const res = await post(path, { email, password, ...(alias ? { alias } : {}) })
     const data = (await res.json().catch(() => ({}))) as { user?: ApiUser; error?: string }
     if (res.ok && data.user) return { ok: true, user: data.user }
     return { ok: false, error: data.error ?? 'error' }
@@ -52,8 +61,8 @@ async function credentials(path: string, email: string, password: string): Promi
 
 export const apiLogin = (email: string, password: string) =>
   credentials('/auth/login', email, password)
-export const apiSignup = (email: string, password: string) =>
-  credentials('/auth/signup', email, password)
+export const apiSignup = (email: string, password: string, alias?: string) =>
+  credentials('/auth/signup', email, password, alias)
 
 /** Cambia la contraseña. Devuelve el código de error del servidor, `offline`, o null si salió bien. */
 export async function apiChangePassword(current: string, next: string): Promise<string | null> {

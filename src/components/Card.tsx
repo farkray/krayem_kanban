@@ -1,14 +1,17 @@
 import { useState, type KeyboardEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useParticipants } from '../sync/access'
+import { Avatar } from './Avatar'
 import { LabelChip } from './LabelChip'
 import { useAttachmentIndex, useLabelIndex } from '../store/hooks'
 import { useAttachmentUrl } from '../store/useAttachmentUrl'
 import { useCanEdit } from '../lib/CanEdit'
+import { displayName } from '../lib/people'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
 import { useStore } from '../store/store'
-import { CalendarIcon, CheckSquareIcon, CommentIcon, GripIcon, TrashIcon } from './Icons'
+import { CalendarIcon, CheckIcon, CheckSquareIcon, CommentIcon, GripIcon, TrashIcon } from './Icons'
 import styles from './Card.module.css'
 
 export interface CardStats {
@@ -22,10 +25,12 @@ interface ViewProps {
   stats?: CardStats
   /** La tarjeta está en la última columna (terminada): no se marca como vencida. */
   finished: boolean
+  /** La tarjeta está en una columna tipo Done: se muestra apagada, con una marca de finalizada. */
+  done?: boolean
   overlay?: boolean
 }
 
-export function CardView({ card, stats, finished, overlay }: ViewProps) {
+export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   const range = dateRangeLabel(card.startDate, card.endDate)
   const due = dueState(card.endDate, finished)
   const labelIndex = useLabelIndex()
@@ -34,6 +39,8 @@ export function CardView({ card, stats, finished, overlay }: ViewProps) {
   const cover = card.coverAttachmentId ? attachments.get(card.coverAttachmentId) : undefined
   const coverUrl = useAttachmentUrl(cover)
   const canEdit = useCanEdit()
+  const people = useParticipants(card.boardId)
+  const assignee = card.assigneeId ? people.find((p) => p.userId === card.assigneeId) : undefined
   const hasMeta = range || (stats && (stats.total > 0 || stats.comments > 0))
 
   return (
@@ -59,7 +66,19 @@ export function CardView({ card, stats, finished, overlay }: ViewProps) {
           {labels.length > 3 && <span className={styles.more}>+{labels.length - 3}</span>}
         </div>
       )}
-      <h4 className={styles.title}>{card.title}</h4>
+      <h4 className={styles.title}>
+        {done && (
+          <CheckIcon
+            className={styles.doneMark}
+            width={14}
+            height={14}
+            aria-hidden={false}
+            aria-label="Finalizada"
+            role="img"
+          />
+        )}
+        {card.title}
+      </h4>
       {hasMeta && (
         <div className={styles.meta}>
           {range && (
@@ -88,13 +107,23 @@ export function CardView({ card, stats, finished, overlay }: ViewProps) {
           )}
         </div>
       )}
-      <time
-        className={styles.date}
-        dateTime={card.createdAt}
-        title={new Date(card.createdAt).toLocaleString('es')}
-      >
-        {overlay ? '' : createdLabel(card.createdAt)}
-      </time>
+      <div className={styles.foot}>
+        {assignee && (
+          <Avatar
+            size="sm"
+            email={assignee.email}
+            alias={assignee.alias}
+            label={`Asignada a ${displayName(assignee)}`}
+          />
+        )}
+        <time
+          className={styles.date}
+          dateTime={card.createdAt}
+          title={new Date(card.createdAt).toLocaleString('es')}
+        >
+          {overlay ? '' : createdLabel(card.createdAt)}
+        </time>
+      </div>
     </>
   )
 }
@@ -103,7 +132,7 @@ interface Props extends ViewProps {
   onOpen: (id: string) => void
 }
 
-export function SortableCard({ card, stats, finished, onOpen }: Props) {
+export function SortableCard({ card, stats, finished, done, onOpen }: Props) {
   const deleteCard = useStore((s) => s.deleteCard)
   const canEdit = useCanEdit()
   // Tarjeta recién creada: entra con un pequeño movimiento (las ya existentes no se animan al cargar)
@@ -126,14 +155,14 @@ export function SortableCard({ card, stats, finished, onOpen }: Props) {
       className={`${styles.item} ${isDragging ? styles.dragging : ''}`}
     >
       <article
-        className={`${styles.card} ${fresh ? styles.fresh : ''}`}
+        className={`${styles.card} ${fresh ? styles.fresh : ''} ${done ? styles.cardDone : ''}`}
         {...attributes}
         aria-roledescription="tarjeta que se puede mover"
         {...listeners}
         onKeyDown={onKeyDown}
         onClick={() => onOpen(card.id)}
       >
-        <CardView card={card} stats={stats} finished={finished} />
+        <CardView card={card} stats={stats} finished={finished} done={done} />
       </article>
       {/* Hermano de la tarjeta (no hijo): un botón dentro de otro control no es accesible */}
       {canEdit && (
@@ -151,10 +180,10 @@ export function SortableCard({ card, stats, finished, onOpen }: Props) {
   )
 }
 
-export function CardOverlay({ card, stats, finished }: ViewProps) {
+export function CardOverlay({ card, stats, finished, done }: ViewProps) {
   return (
     <article className={`${styles.card} ${styles.lifted}`}>
-      <CardView card={card} stats={stats} finished={finished} overlay />
+      <CardView card={card} stats={stats} finished={finished} done={done} overlay />
     </article>
   )
 }

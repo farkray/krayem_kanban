@@ -46,7 +46,18 @@ const addDays = (d: Date, days: number) => new Date(d.getTime() + days * 86_400_
 export interface User {
   id: string
   email: string
+  /** Nombre para mostrar ("Jorge Menéndez"); vacío = se usa el correo. */
+  alias: string
   isAdmin: boolean
+}
+
+export const MAX_ALIAS = 60
+/** Limpia el alias: sin espacios sobrantes ni saltos de línea. Devuelve null si es demasiado largo. */
+export function cleanAlias(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return ''
+  if (typeof raw !== 'string') return null
+  const a = raw.replace(/\s+/g, ' ').trim()
+  return a.length <= MAX_ALIAS ? a : null
 }
 
 export function createSession(db: DB, userId: string, now = new Date()): string {
@@ -62,13 +73,13 @@ export function sessionUser(db: DB, token: string | undefined, now = new Date())
   if (!token) return null
   const row = db
     .prepare(
-      `SELECT u.id, u.email, u.is_admin, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.email, u.alias, u.is_admin, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`,
     )
     .get(sha256(token)) as
-    { id: string; email: string; is_admin: number; expires_at: string } | undefined
+    { id: string; email: string; alias: string; is_admin: number; expires_at: string } | undefined
   if (!row || Date.parse(row.expires_at) <= now.getTime()) return null
-  return { id: row.id, email: row.email, isAdmin: row.is_admin === 1 }
+  return { id: row.id, email: row.email, alias: row.alias, isAdmin: row.is_admin === 1 }
 }
 
 export function renewSession(db: DB, token: string, now = new Date()) {
@@ -104,12 +115,22 @@ export function purgeExpiredSessions(db: DB, now = new Date()) {
   db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now.toISOString())
 }
 
-export function createUser(db: DB, email: string, passHash: string, isAdmin = false): User {
-  const user = { id: randomUUID(), email: normalizeEmail(email), isAdmin }
+export function createUser(
+  db: DB,
+  email: string,
+  passHash: string,
+  isAdmin = false,
+  alias = '',
+): User {
+  const user = { id: randomUUID(), email: normalizeEmail(email), alias, isAdmin }
   db.prepare(
-    'INSERT INTO users (id, email, pass_hash, created_at, is_admin) VALUES (?, ?, ?, ?, ?)',
-  ).run(user.id, user.email, passHash, new Date().toISOString(), isAdmin ? 1 : 0)
+    'INSERT INTO users (id, email, pass_hash, created_at, is_admin, alias) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(user.id, user.email, passHash, new Date().toISOString(), isAdmin ? 1 : 0, alias)
   return user
+}
+
+export function setAlias(db: DB, userId: string, alias: string) {
+  db.prepare('UPDATE users SET alias = ? WHERE id = ?').run(alias, userId)
 }
 
 export function setAdmin(db: DB, userId: string, isAdmin: boolean) {
@@ -119,6 +140,7 @@ export function setAdmin(db: DB, userId: string, isAdmin: boolean) {
 export interface UserSummary {
   id: string
   email: string
+  alias: string
   createdAt: string
   isAdmin: boolean
   rows: number
@@ -127,14 +149,22 @@ export interface UserSummary {
 export function listUsers(db: DB): UserSummary[] {
   const rows = db
     .prepare(
-      `SELECT u.id, u.email, u.created_at, u.is_admin,
+      `SELECT u.id, u.email, u.alias, u.created_at, u.is_admin,
               (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS n
        FROM users u ORDER BY u.created_at`,
     )
-    .all() as { id: string; email: string; created_at: string; is_admin: number; n: number }[]
+    .all() as {
+    id: string
+    email: string
+    alias: string
+    created_at: string
+    is_admin: number
+    n: number
+  }[]
   return rows.map((r) => ({
     id: r.id,
     email: r.email,
+    alias: r.alias,
     createdAt: r.created_at,
     isAdmin: r.is_admin === 1,
     rows: r.n,
@@ -147,8 +177,9 @@ export function generatePassword(): string {
 
 export function findUserByEmail(db: DB, email: string) {
   return db
-    .prepare('SELECT id, email, pass_hash FROM users WHERE email = ?')
-    .get(normalizeEmail(email)) as { id: string; email: string; pass_hash: string } | undefined
+    .prepare('SELECT id, email, alias, pass_hash FROM users WHERE email = ?')
+    .get(normalizeEmail(email)) as
+    { id: string; email: string; alias: string; pass_hash: string } | undefined
 }
 
 /* ---------- límite de intentos de acceso ---------- */

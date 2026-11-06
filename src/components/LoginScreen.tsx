@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   email_taken: 'Ya existe una cuenta con ese correo.',
   weak_password: 'La contraseña debe tener al menos 10 caracteres.',
   invalid_email: 'Escribe un correo válido.',
+  invalid_alias: 'El nombre admite hasta 60 caracteres.',
   signup_disabled: 'El registro está desactivado.',
 }
 
@@ -17,6 +18,7 @@ export function LoginScreen() {
   const [allowSignup, setAllowSignup] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [alias, setAlias] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,7 +30,10 @@ export function LoginScreen() {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const code = await (mode === 'login' ? signIn : signUp)(email.trim(), password)
+    const code =
+      mode === 'login'
+        ? await signIn(email.trim(), password)
+        : await signUp(email.trim(), password, alias.trim() || undefined)
     setBusy(false)
     // Si entra, la app cambia de pantalla sola (el estado de sesión pasa a "signedIn").
     if (code) setError(MESSAGES[code] ?? 'No se pudo completar la acción. Inténtalo de nuevo.')
@@ -54,6 +59,20 @@ export function LoginScreen() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
+        {signup && (
+          <label className={`${styles.label} ${styles.gap}`}>
+            Nombre (opcional)
+            <input
+              type="text"
+              className={styles.input}
+              value={alias}
+              maxLength={60}
+              autoComplete="name"
+              placeholder="Cómo te verán los demás, p. ej. Jorge Menéndez"
+              onChange={(e) => setAlias(e.target.value)}
+            />
+          </label>
+        )}
         <label className={`${styles.label} ${styles.gap}`}>
           Contraseña
           <input

@@ -14,6 +14,7 @@ const HELP: Record<ColumnKind, string> = {
   standard: 'Sin límite de tarjetas.',
   next: 'Lo que sigue: máximo 4 tarjetas a la vez.',
   doing: 'En ejecución: máximo 2 tarjetas a la vez.',
+  done: 'Finalizadas: sus tarjetas se ven más apagadas.',
 }
 
 interface Props {

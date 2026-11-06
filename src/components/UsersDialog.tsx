@@ -3,6 +3,7 @@ import {
   adminCreateUser,
   adminDeleteUser,
   adminListUsers,
+  adminSetAlias,
   adminResetPassword,
   type AdminUser,
 } from '../sync/admin'
@@ -14,6 +15,7 @@ const MIN = 10
 
 const MESSAGES: Record<string, string> = {
   invalid_email: 'Ese correo no es válido.',
+  invalid_alias: 'El alias admite hasta 60 caracteres.',
   email_taken: 'Ya existe un usuario con ese correo.',
   weak_password: `La contraseña debe tener al menos ${MIN} caracteres (o déjala vacía para generar una).`,
   cannot_delete_self: 'No puedes eliminar tu propia cuenta.',
@@ -33,6 +35,8 @@ export function UsersDialog({ me, onClose }: { me: string | null; onClose: () =>
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [alias, setAlias] = useState('')
+  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<Shown | null>(null)
   const [toDelete, setToDelete] = useState<AdminUser | null>(null)
@@ -52,7 +56,11 @@ export function UsersDialog({ me, onClose }: { me: string | null; onClose: () =>
     e.preventDefault()
     setError(null)
     setBusy(true)
-    const res = await adminCreateUser(email.trim(), password || undefined)
+    const res = await adminCreateUser(
+      email.trim(),
+      password || undefined,
+      alias.trim() || undefined,
+    )
     setBusy(false)
     if (!res.ok) return setError(message(res.error))
     setShown({
@@ -62,6 +70,16 @@ export function UsersDialog({ me, onClose }: { me: string | null; onClose: () =>
     setCopied(false)
     setEmail('')
     setPassword('')
+    setAlias('')
+    void load()
+  }
+
+  const saveAlias = async () => {
+    if (!editing) return
+    setError(null)
+    const res = await adminSetAlias(editing.id, editing.value.trim())
+    if (!res.ok) return setError(message(res.error))
+    setEditing(null)
     void load()
   }
 
@@ -119,13 +137,56 @@ export function UsersDialog({ me, onClose }: { me: string | null; onClose: () =>
       <ul className={styles.list} aria-label="Usuarios">
         {(users ?? []).map((u) => (
           <li key={u.id} className={styles.row}>
-            <div className={styles.who}>
-              <span className={styles.email}>{u.email}</span>
-              <span className={styles.meta}>
-                {u.isAdmin ? 'Administrador · ' : ''}
-                {u.rows} registros
-              </span>
-            </div>
+            {editing?.id === u.id ? (
+              <form
+                className={styles.aliasForm}
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void saveAlias()
+                }}
+              >
+                <input
+                  className={styles.input}
+                  value={editing.value}
+                  maxLength={60}
+                  autoFocus
+                  aria-label={`Alias de ${u.email}`}
+                  placeholder="Nombre para mostrar"
+                  onChange={(e) => setEditing({ id: u.id, value: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation()
+                      setEditing(null)
+                    }
+                  }}
+                />
+                <button type="submit" className={styles.primary}>
+                  Guardar
+                </button>
+                <button type="button" className={styles.secondary} onClick={() => setEditing(null)}>
+                  Cancelar
+                </button>
+              </form>
+            ) : (
+              <>
+                <div className={styles.who}>
+                  <span className={styles.email}>{u.alias || u.email}</span>
+                  <span className={styles.meta}>
+                    {u.alias ? `${u.email} · ` : ''}
+                    {u.isAdmin ? 'Administrador · ' : ''}
+                    {u.rows} registros
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  aria-label={`Editar alias de ${u.email}`}
+                  onClick={() => setEditing({ id: u.id, value: u.alias })}
+                >
+                  {u.alias ? 'Editar alias' : 'Poner alias'}
+                </button>
+              </>
+            )}
             <button
               type="button"
               className={styles.secondary}
@@ -160,6 +221,18 @@ export function UsersDialog({ me, onClose }: { me: string | null; onClose: () =>
             required
             autoComplete="off"
             onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+        <label className={styles.label}>
+          Alias (opcional)
+          <input
+            type="text"
+            className={styles.input}
+            value={alias}
+            maxLength={60}
+            autoComplete="off"
+            placeholder="Nombre para mostrar, p. ej. Jorge Menéndez"
+            onChange={(e) => setAlias(e.target.value)}
           />
         </label>
         <label className={styles.label}>

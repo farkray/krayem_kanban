@@ -57,7 +57,7 @@ export function Sidebar({
           </span>
           {b.sharedBy && (
             <span className={styles.itemMeta}>
-              De {b.sharedBy.email} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
+              De {b.sharedBy.name} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
             </span>
           )}
           {b.memberCount > 0 && (

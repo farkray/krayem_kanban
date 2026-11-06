@@ -97,3 +97,37 @@ test.describe('papelera en la tarjeta', () => {
     await expect(card(column(page, 'Por hacer'), 'Solo')).toHaveCount(0)
   })
 })
+
+test.describe('tipo Done', () => {
+  test('las tarjetas de una columna Done se ven apagadas, con marca y sin romper el contraste', async ({
+    page,
+  }) => {
+    await openFirstBoard(page)
+    await addCard(page, 'Listo', 'Entregada')
+    await addCard(page, 'Por hacer', 'Pendiente')
+    const done = column(page, 'Listo')
+    await expect(done.getByText('Done', { exact: true })).toBeVisible() // etiqueta del tipo
+    await expect(card(done, 'Entregada').getByRole('img', { name: 'Finalizada' })).toBeVisible()
+    await expect(
+      card(column(page, 'Por hacer'), 'Pendiente').getByRole('img', { name: 'Finalizada' }),
+    ).toHaveCount(0)
+    // más apagada pero legible: el título no baja la opacidad (eso rompe el contraste AA)
+    const title = card(done, 'Entregada').locator('h4')
+    expect(await title.evaluate((e) => getComputedStyle(e).opacity)).toBe('1')
+    const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+    expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+  })
+
+  test('cualquier columna puede pasar a Done y volver a Estándar', async ({ page }) => {
+    await openFirstBoard(page)
+    await addCard(page, 'Por hacer', 'Una')
+    await setKind(page, 'Por hacer', 'Done')
+    await expect(
+      card(column(page, 'Por hacer'), 'Una').getByRole('img', { name: 'Finalizada' }),
+    ).toBeVisible()
+    await setKind(page, 'Por hacer', 'Estándar')
+    await expect(
+      card(column(page, 'Por hacer'), 'Una').getByRole('img', { name: 'Finalizada' }),
+    ).toHaveCount(0)
+  })
+})

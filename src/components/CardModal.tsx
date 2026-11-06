@@ -3,8 +3,10 @@ import { byPosition } from '../lib/position'
 import { LIMITS } from '../lib/types'
 import { useColumns, useComments } from '../store/hooks'
 import { CanEditContext } from '../lib/CanEdit'
+import { displayName } from '../lib/people'
 import { useStore } from '../store/store'
-import { useBoardAccess } from '../sync/access'
+import { useBoardAccess, useParticipants } from '../sync/access'
+import { useAuth } from '../sync/auth'
 import { Attachments } from './Attachments'
 import { Checklist } from './Checklist'
 import { LabelPicker } from './LabelPicker'
@@ -24,6 +26,8 @@ export function CardModal({ cardId, onClose }: Props) {
   const deleteCard = useStore((s) => s.deleteCard)
   const columns = useColumns(card?.boardId ?? null)
   const { canEdit } = useBoardAccess(card?.boardId)
+  const people = useParticipants(card?.boardId)
+  const me = useAuth((s) => s.userId)
 
   const [title, setTitle] = useState(card?.title ?? '')
   const [showDates, setShowDates] = useState(false)
@@ -178,6 +182,32 @@ export function CardModal({ cardId, onClose }: Props) {
                   </p>
                 )}
               </section>
+
+              {people.length > 1 && (
+                <section className={styles.section}>
+                  <label className={styles.field}>
+                    <span>Asignado a</span>
+                    <select
+                      value={card.assigneeId ?? ''}
+                      onChange={(e) =>
+                        updateCard(card.id, { assigneeId: e.target.value || undefined })
+                      }
+                    >
+                      <option value="">Sin asignar</option>
+                      {card.assigneeId && !people.some((p) => p.userId === card.assigneeId) && (
+                        <option value={card.assigneeId}>Ya no participa en el tablero</option>
+                      )}
+                      {people.map((p) => (
+                        <option key={p.userId} value={p.userId}>
+                          {displayName(p)}
+                          {p.alias ? ` · ${p.email}` : ''}
+                          {p.userId === me ? ' (tú)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </section>
+              )}
 
               <section className={styles.section}>
                 <h3>Etiquetas</h3>

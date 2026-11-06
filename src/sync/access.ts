@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import { db } from '../db/db'
 import { setRoleResolver, type Role } from '../lib/access'
+import { displayName } from '../lib/people'
 import { getConfig } from '../lib/config'
 import { useStore } from '../store/store'
 import { useAuth } from './auth'
@@ -13,6 +15,16 @@ export interface SharedBoard {
   role: ShareRole
   ownerId: string
   ownerEmail: string
+  ownerAlias?: string
+}
+
+/** Quien participa en un tablero que veo (dueño incluido). */
+export interface Participant {
+  boardId: string
+  userId: string
+  email: string
+  alias?: string
+  role: 'owner' | ShareRole
 }
 
 /** Una persona con acceso a uno de MIS tableros. */
@@ -20,16 +32,23 @@ export interface Member {
   boardId: string
   userId: string
   email: string
+  alias?: string
   role: ShareRole
 }
 
 interface AccessState {
   shared: SharedBoard[]
   members: Member[]
+  participants: Participant[]
   loaded: boolean
 }
 
-export const useAccess = create<AccessState>(() => ({ shared: [], members: [], loaded: false }))
+export const useAccess = create<AccessState>(() => ({
+  shared: [],
+  members: [],
+  participants: [],
+  loaded: false,
+}))
 
 /** Rol en un tablero: dueño (propio o sin cuentas), editor o solo lectura. */
 function resolve(boardId: string): Role {
@@ -61,12 +80,13 @@ async function send(method: string, path: string, body?: unknown) {
 /** Al abrir sin red se usa lo último que se supo. */
 export async function loadCachedAccess() {
   const cached = (await db.meta.get('access'))?.value as
-    Pick<AccessState, 'shared' | 'members'> | undefined
-  if (cached) useAccess.setState({ ...cached, loaded: true })
+    Pick<AccessState, 'shared' | 'members' | 'participants'> | undefined
+  if (cached)
+    useAccess.setState({ ...cached, participants: cached.participants ?? [], loaded: true })
 }
 
 export function resetAccess() {
-  useAccess.setState({ shared: [], members: [], loaded: false })
+  useAccess.setState({ shared: [], members: [], participants: [], loaded: false })
 }
 
 /**
@@ -74,7 +94,7 @@ export function resetAccess() {
  * un tablero ajeno (me sacaron o lo dejaron de compartir), se borra del dispositivo.
  */
 export async function refreshAccess(): Promise<void> {
-  let data: Pick<AccessState, 'shared' | 'members'>
+  let data: Pick<AccessState, 'shared' | 'members' | 'participants'>
   try {
     const res = await fetch(api('/shares'), { credentials: 'same-origin' })
     if (!res.ok) return
@@ -82,7 +102,7 @@ export async function refreshAccess(): Promise<void> {
   } catch {
     return // sin red: se queda con lo último que se supo
   }
-  useAccess.setState({ ...data, loaded: true })
+  useAccess.setState({ ...data, participants: data.participants ?? [], loaded: true })
   await db.meta.put({ key: 'access', value: data })
 
   const me = useAuth.getState().userId
@@ -120,6 +140,8 @@ export interface BoardAccess {
   isOwner: boolean
   /** Solo en tableros ajenos: quién los comparte. */
   ownerEmail: string | null
+  /** Nombre a mostrar del dueño (alias o correo). */
+  ownerName: string | null
   /** Solo en tableros propios: con quién se comparten. */
   members: Member[]
 }
@@ -138,6 +160,21 @@ export function useBoardAccess(boardId: string | null | undefined): BoardAccess 
     canEdit: role !== 'viewer',
     isOwner: role === 'owner',
     ownerEmail: foreign ? (mine?.ownerEmail ?? null) : null,
+    ownerName:
+      foreign && mine ? displayName({ email: mine.ownerEmail, alias: mine.ownerAlias }) : null,
     members: foreign ? [] : members.filter((m) => m.boardId === boardId),
   }
+}
+
+/** Personas de un tablero (dueño primero). Vacío si es privado o no hay cuentas. */
+export function useParticipants(boardId: string | null | undefined): Participant[] {
+  const all = useAccess((s) => s.participants)
+  return useMemo(() => {
+    const rank = { owner: 0, editor: 1, viewer: 2 }
+    return all
+      .filter((p) => p.boardId === boardId)
+      .sort(
+        (a, b) => rank[a.role] - rank[b.role] || displayName(a).localeCompare(displayName(b), 'es'),
+      )
+  }, [all, boardId])
 }

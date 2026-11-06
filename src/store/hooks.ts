@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { byPosition } from '../lib/position'
+import { displayName } from '../lib/people'
 import { useAccess } from '../sync/access'
 import { useAuth } from '../sync/auth'
 import { useStore } from './store'
@@ -84,7 +85,7 @@ export interface BoardSummary {
   columnCount: number
   cardCount: number
   /** Tablero que otra persona comparte conmigo (rol y dueño). */
-  sharedBy?: { email: string; role: 'editor' | 'viewer' }
+  sharedBy?: { name: string; role: 'editor' | 'viewer' }
   /** Mi tablero, compartido con otras personas. */
   memberCount: number
 }
@@ -109,7 +110,12 @@ export function useBoardSummaries(): BoardSummary[] {
         title: b.title,
         columnCount: colCount.get(b.id) ?? 0,
         cardCount: cardCount.get(b.id) ?? 0,
-        sharedBy: foreign ? { email: s?.ownerEmail ?? '', role: s?.role ?? 'viewer' } : undefined,
+        sharedBy: foreign
+          ? {
+              name: s ? displayName({ email: s.ownerEmail, alias: s.ownerAlias }) : '',
+              role: s?.role ?? 'viewer',
+            }
+          : undefined,
         memberCount: foreign ? 0 : members.filter((m) => m.boardId === b.id).length,
       }
     })

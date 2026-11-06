@@ -72,6 +72,8 @@ const MIGRATIONS: string[] = [
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
   );
   `,
+  // 4: alias (nombre para mostrar) de cada usuario; vacío = se muestra el correo
+  `ALTER TABLE users ADD COLUMN alias TEXT NOT NULL DEFAULT '';`,
 ]
 
 export function openDb(file: string): DB {

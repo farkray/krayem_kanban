@@ -785,6 +785,27 @@ describe('tableros compartidos', () => {
     ])
   })
 
+  it('los invitados también ven quién participa (dueño y demás miembros)', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await share(c.owner, 'b1', 'beto@correo.com', 'viewer')
+    const get = async (cookie: string) =>
+      (
+        await built.app.inject({ method: 'GET', url: '/api/shares', headers: headers(cookie) })
+      ).json()
+    for (const cookie of [c.ana, c.owner]) {
+      const { participants } = await get(cookie)
+      expect(
+        participants.map((p: { email: string; role: string }) => `${p.email}:${p.role}`).sort(),
+      ).toEqual(['ana@correo.com:editor', 'beto@correo.com:viewer', 'dueno@correo.com:owner'])
+    }
+    // quien no participa no ve nada
+    await addUser('ceci@correo.com')
+    const ceci = (await login('ceci@correo.com')).cookie
+    expect((await get(ceci)).participants).toEqual([])
+  })
+
   it('imágenes: los miembros las ven; quien no tiene acceso, no', async () => {
     const { c } = await setup()
     await push(c.owner, 'boards', [board('b1')])
@@ -856,5 +877,110 @@ describe('tableros compartidos', () => {
       board_id: string
     }
     expect(row.board_id).toBe('b1')
+  })
+})
+
+describe('alias de usuarios y directorio', () => {
+  const asAdmin = async () => {
+    await makeApp()
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    return (await login('admin@correo.com')).cookie
+  }
+  const call = (method: 'GET' | 'POST' | 'PATCH', url: string, cookie: string, payload?: object) =>
+    built.app.inject({ method, url, headers: headers(cookie), payload })
+
+  it('el admin crea usuarios con alias (limpio de espacios) y se ve en /me y en la lista', async () => {
+    const cookie = await asAdmin()
+    const res = await call('POST', '/api/admin/users', cookie, {
+      email: 'jorge@mercabits.com',
+      alias: '  Jorge   Menéndez ',
+      password: 'una-contraseña-larga',
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().user.alias).toBe('Jorge Menéndez')
+    const jorge = await login('jorge@mercabits.com', 'una-contraseña-larga')
+    expect(jorge.res.json().user.alias).toBe('Jorge Menéndez')
+    const me = await call('GET', '/api/auth/me', jorge.cookie)
+    expect(me.json().user.alias).toBe('Jorge Menéndez')
+    const list = (await call('GET', '/api/admin/users', cookie)).json().users as {
+      email: string
+      alias: string
+    }[]
+    expect(list.find((u) => u.email === 'jorge@mercabits.com')?.alias).toBe('Jorge Menéndez')
+  })
+
+  it('alias demasiado largo se rechaza; sin alias queda vacío', async () => {
+    const cookie = await asAdmin()
+    const bad = await call('POST', '/api/admin/users', cookie, {
+      email: 'a@b.co',
+      alias: 'x'.repeat(61),
+    })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error).toBe('invalid_alias')
+    const ok = await call('POST', '/api/admin/users', cookie, { email: 'c@d.co' })
+    expect(ok.json().user.alias).toBe('')
+  })
+
+  it('el admin cambia o quita el alias; un usuario normal no puede', async () => {
+    const cookie = await asAdmin()
+    const ana = await addUser('ana@correo.com')
+    const set = await call('PATCH', `/api/admin/users/${ana.id}`, cookie, { alias: 'Ana López' })
+    expect(set.json().user.alias).toBe('Ana López')
+    const clear = await call('PATCH', `/api/admin/users/${ana.id}`, cookie, { alias: '' })
+    expect(clear.json().user.alias).toBe('')
+    expect((await call('PATCH', '/api/admin/users/nope', cookie, { alias: 'x' })).statusCode).toBe(
+      404,
+    )
+    const normal = (await login('ana@correo.com')).cookie
+    expect(
+      (await call('PATCH', `/api/admin/users/${ana.id}`, normal, { alias: 'Yo' })).statusCode,
+    ).toBe(403)
+  })
+
+  it('el registro abierto también guarda el alias', async () => {
+    await makeApp({ allowSignup: true })
+    const res = await built.app.inject({
+      method: 'POST',
+      url: '/api/auth/signup',
+      headers: headers(),
+      payload: { email: 'nuevo@correo.com', password: PASSWORD, alias: 'Nuevo Usuario' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().user.alias).toBe('Nuevo Usuario')
+  })
+
+  it('directorio: usuarios registrados (sin uno mismo ni datos privados), solo con sesión', async () => {
+    const cookie = await asAdmin()
+    await call('POST', '/api/admin/users', cookie, {
+      email: 'jorge@mercabits.com',
+      alias: 'Jorge Menéndez',
+    })
+    await addUser('ana@correo.com')
+    expect((await call('GET', '/api/users/directory', '')).statusCode).toBe(401)
+    const ana = (await login('ana@correo.com')).cookie
+    const dir = (await call('GET', '/api/users/directory', ana)).json().users as {
+      email: string
+      alias: string
+    }[]
+    expect(dir.map((u) => u.email)).toEqual(['admin@correo.com', 'jorge@mercabits.com'])
+    expect(dir[1].alias).toBe('Jorge Menéndez')
+    expect(JSON.stringify(dir)).not.toMatch(/pass|hash|admin":/)
+  })
+
+  it('los participantes de un tablero llevan alias', async () => {
+    const cookie = await asAdmin()
+    await call('POST', '/api/admin/users', cookie, {
+      email: 'jorge@mercabits.com',
+      alias: 'Jorge Menéndez',
+    })
+    await call('POST', '/api/sync/boards', cookie, { rows: [board('b1')] })
+    const share = await call('POST', '/api/boards/b1/members', cookie, {
+      email: 'jorge@mercabits.com',
+      role: 'editor',
+    })
+    expect(share.json().member.alias).toBe('Jorge Menéndez')
+    const { participants, members } = (await call('GET', '/api/shares', cookie)).json()
+    expect(members[0].alias).toBe('Jorge Menéndez')
+    expect(participants.map((p: { alias: string }) => p.alias)).toContain('Jorge Menéndez')
   })
 })

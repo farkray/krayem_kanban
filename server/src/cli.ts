@@ -3,9 +3,11 @@
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import {
+  cleanAlias,
   createUser,
   findUserByEmail,
   hashPassword,
+  MAX_ALIAS,
   MIN_PASSWORD,
   normalizeEmail,
   validEmail,
@@ -18,9 +20,10 @@ const db = openDb(join(dataDir, 'kanban.db'))
 
 const usage = () => {
   console.error(`Uso:
-  create-user <email> [--generate | <contraseña>]   Crea un usuario (con --generate muestra una contraseña aleatoria)
+  create-user <email> [--generate | <contraseña>] [--alias "Nombre"]   Crea un usuario (con --generate muestra una contraseña aleatoria)
   set-password <email> [--generate | <contraseña>]  Cambia la contraseña y cierra sus sesiones
   delete-user <email>                               Elimina el usuario y TODOS sus datos
+  set-alias <email> "Nombre Apellido"              Cambia el alias (nombre para mostrar; vacío lo quita)
   set-admin <email> [--remove]                      Da o quita el rol de administrador
   list-users                                        Lista usuarios y cuántas filas tiene cada uno
   backup <carpeta>                                  Copia consistente de la base (VACUUM INTO)`)
@@ -47,9 +50,15 @@ switch (cmd) {
       console.error('Ya existe ese usuario.')
       process.exit(1)
     }
-    const { hash, shown } = await passwordFrom(args[1])
-    createUser(db, email, hash)
-    console.log(`Usuario creado: ${email}`)
+    const ai = args.indexOf('--alias')
+    const alias = ai >= 0 ? cleanAlias(args[ai + 1]) : ''
+    if (alias === null) {
+      console.error(`El alias admite hasta ${MAX_ALIAS} caracteres.`)
+      process.exit(2)
+    }
+    const { hash, shown } = await passwordFrom(args[1] === '--alias' ? '--generate' : args[1])
+    createUser(db, email, hash, false, alias)
+    console.log(`Usuario creado: ${email}${alias ? ` (${alias})` : ''}`)
     if (shown) console.log(`Contraseña: ${shown}`)
     break
   }
@@ -78,6 +87,21 @@ switch (cmd) {
     )
     break
   }
+  case 'set-alias': {
+    const user = findUserByEmail(db, args[0] ?? '')
+    if (!user) {
+      console.error('No existe ese usuario.')
+      process.exit(1)
+    }
+    const alias = cleanAlias(args[1] ?? '')
+    if (alias === null) {
+      console.error(`El alias admite hasta ${MAX_ALIAS} caracteres.`)
+      process.exit(2)
+    }
+    db.prepare('UPDATE users SET alias = ? WHERE id = ?').run(alias, user.id)
+    console.log(`${user.email}: alias ${alias ? `“${alias}”` : 'quitado (se muestra el correo)'}.`)
+    break
+  }
   case 'set-admin': {
     const user = findUserByEmail(db, args[0] ?? '')
     if (!user) {
@@ -92,7 +116,7 @@ switch (cmd) {
   case 'list-users': {
     const rows = db
       .prepare(
-        `SELECT u.email || CASE WHEN u.is_admin = 1 THEN ' (admin)' ELSE '' END AS email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
+        `SELECT u.email || CASE WHEN u.alias <> '' THEN ' [' || u.alias || ']' ELSE '' END || CASE WHEN u.is_admin = 1 THEN ' (admin)' ELSE '' END AS email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
          FROM users u ORDER BY u.created_at`,
       )
       .all() as { email: string; created_at: string; filas: number }[]

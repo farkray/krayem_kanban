@@ -453,3 +453,23 @@ describe('tableros compartidos (cliente)', () => {
     expect(await db.outbox.get(`cards:${cardA}`)).toBeUndefined()
   })
 })
+
+describe('tipo Done y asignación', () => {
+  it('"Listo" nace como Done, sin límite de tarjetas; se puede cambiar el tipo a Done', () => {
+    const b = S().createBoard('X')!
+    const [todo, , done] = liveCols(b)
+    expect(done.kind).toBe('done')
+    for (let i = 0; i < 6; i++) expect(S().addCard(done.id, `d${i}`)).toBeTruthy()
+    expect(S().setColumnKind(todo.id, 'done')).toBe(true)
+    expect(liveCols(b)[0].kind).toBe('done')
+  })
+
+  it('asigna y quita a una persona de la tarjeta', () => {
+    const b = S().createBoard('X')!
+    const card = S().addCard(liveCols(b)[0].id, 'A')!
+    expect(S().updateCard(card, { assigneeId: 'user-1' })).toBe(true)
+    expect(S().cards.find((c) => c.id === card)?.assigneeId).toBe('user-1')
+    S().updateCard(card, { assigneeId: undefined })
+    expect(S().cards.find((c) => c.id === card)).not.toHaveProperty('assigneeId')
+  })
+})

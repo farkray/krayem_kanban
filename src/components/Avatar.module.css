@@ -1,0 +1,21 @@
+.avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.sm {
+  width: 22px;
+  height: 22px;
+  border-width: 1.5px;
+  font-size: 10px;
+}

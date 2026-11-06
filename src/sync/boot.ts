@@ -30,6 +30,7 @@ const PENDING_LOGOUT = 'kanban_pending_logout'
 interface Identity {
   userId: string
   email: string
+  alias?: string
   isAdmin?: boolean
 }
 
@@ -45,7 +46,7 @@ function stopEngine() {
 /** La sesión dejó de ser válida: se detiene la sincronización y se pide iniciar sesión. */
 function handleSignedOut() {
   stopEngine()
-  useAuth.setState({ status: 'signedOut', userId: null, email: null, isAdmin: false })
+  useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
 }
 
 /** Entra un usuario: si es distinto del que dejó datos en este navegador, se descartan; luego sincroniza. */
@@ -57,6 +58,7 @@ async function handleUser(user: Identity): Promise<void> {
     status: 'signedIn',
     userId: user.userId,
     email: user.email,
+    alias: user.alias ?? '',
     isAdmin: !!user.isAdmin,
   })
 
@@ -87,18 +89,29 @@ export function bootSync(): Promise<void> {
     }
     if (localStorage.getItem(PENDING_LOGOUT)) {
       if (await apiLogout()) localStorage.removeItem(PENDING_LOGOUT)
-      useAuth.setState({ status: 'signedOut', userId: null, email: null, isAdmin: false })
+      useAuth.setState({
+        status: 'signedOut',
+        userId: null,
+        email: null,
+        alias: '',
+        isAdmin: false,
+      })
       return
     }
     const me = await apiMe()
     if (me.kind === 'user')
-      return handleUser({ userId: me.user.id, email: me.user.email, isAdmin: me.user.isAdmin })
+      return handleUser({
+        userId: me.user.id,
+        email: me.user.email,
+        alias: me.user.alias,
+        isAdmin: me.user.isAdmin,
+      })
     if (me.kind === 'offline') {
       // PWA: sin conexión se sigue con la identidad del último inicio de sesión.
       const cached = await loadIdentity()
       if (cached) return handleUser(cached)
     }
-    useAuth.setState({ status: 'signedOut', userId: null, email: null, isAdmin: false })
+    useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
   })()
   return booted
 }
@@ -106,15 +119,20 @@ export function bootSync(): Promise<void> {
 async function finish(res: AuthResult): Promise<string | null> {
   if (!res.ok) return res.error
   localStorage.removeItem(PENDING_LOGOUT)
-  await handleUser({ userId: res.user.id, email: res.user.email, isAdmin: res.user.isAdmin })
+  await handleUser({
+    userId: res.user.id,
+    email: res.user.email,
+    alias: res.user.alias,
+    isAdmin: res.user.isAdmin,
+  })
   return null
 }
 
 /** Devuelve el código de error del servidor (`invalid_credentials`, `offline`…) o null si entró. */
 export const signIn = async (email: string, password: string) =>
   finish(await apiLogin(email, password))
-export const signUp = async (email: string, password: string) =>
-  finish(await apiSignup(email, password))
+export const signUp = async (email: string, password: string, alias?: string) =>
+  finish(await apiSignup(email, password, alias))
 export const authConfig = apiAuthConfig
 export const changePassword = apiChangePassword
 
@@ -124,7 +142,7 @@ export async function signOut(): Promise<void> {
   stopEngine()
   if (!(await apiLogout())) localStorage.setItem(PENDING_LOGOUT, '1')
   await wipeLocal()
-  useAuth.setState({ status: 'signedOut', userId: null, email: null, isAdmin: false })
+  useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
 }
 
 export type { ApiUser }

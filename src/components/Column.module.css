@@ -304,3 +304,11 @@
     0 0 0 6px var(--color-warning-soft),
     var(--shadow-card);
 }
+
+.doneTag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+  font-weight: var(--weight-semibold);
+}

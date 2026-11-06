@@ -130,6 +130,7 @@ export function Column({
             {total === cards.length
               ? pluralize(cards.length, 'tarjeta', 'tarjetas')
               : `${cards.length} de ${pluralize(total, 'tarjeta', 'tarjetas')}`}
+            {kind === 'done' && <span className={styles.doneTag}>Done</span>}
             {limit !== null && (
               <span
                 className={`${styles.wip} ${full ? styles.wipFull : ''}`}
@@ -164,7 +165,8 @@ export function Column({
               key={c.id}
               card={c}
               stats={stats.get(c.id)}
-              finished={isLast}
+              finished={isLast || kind === 'done'}
+              done={kind === 'done'}
               onOpen={onOpenCard}
             />
           ))}

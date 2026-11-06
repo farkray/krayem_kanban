@@ -45,13 +45,14 @@ export interface Board extends Base {
 }
 
 /** Tipo de columna: define el límite de tarjetas simultáneas (regla WIP). */
-export const COLUMN_KINDS = ['standard', 'next', 'doing'] as const
+export const COLUMN_KINDS = ['standard', 'next', 'doing', 'done'] as const
 export type ColumnKind = (typeof COLUMN_KINDS)[number]
 
 export const COLUMN_KIND_NAMES: Record<ColumnKind, string> = {
   standard: 'Estándar',
   next: 'Next',
   doing: 'Doing',
+  done: 'Done',
 }
 
 /** Máximo de tarjetas por tipo de columna; `standard` no tiene límite. */
@@ -59,6 +60,7 @@ export const WIP_LIMITS: Record<ColumnKind, number | null> = {
   standard: null,
   next: 4,
   doing: 2,
+  done: null, // finalizados: sin límite
 }
 
 export const kindOf = (c: { kind?: ColumnKind }): ColumnKind => c.kind ?? 'standard'
@@ -81,6 +83,7 @@ export interface Card extends Base {
   endDate?: string // YYYY-MM-DD, >= startDate
   coverAttachmentId?: string // imagen de portada (un Attachment de esta tarjeta)
   labelIds?: string[] // etiquetas asignadas (ids de Label)
+  assigneeId?: string // persona asignada (id de usuario; debe participar en el tablero)
 }
 
 export interface Attachment extends Base {
@@ -155,3 +158,6 @@ export const LIMITS = {
 
 /** Imagen de entrada máxima (antes de comprimir). */
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+
+/** Valor del filtro por persona que significa "sin asignar". */
+export const ASSIGNEE_NONE = '__none__'

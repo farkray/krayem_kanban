@@ -97,7 +97,13 @@ interface Actions {
     patch: Partial<
       Pick<
         Card,
-        'title' | 'description' | 'startDate' | 'endDate' | 'coverAttachmentId' | 'labelIds'
+        | 'title'
+        | 'description'
+        | 'startDate'
+        | 'endDate'
+        | 'coverAttachmentId'
+        | 'labelIds'
+        | 'assigneeId'
       >
     >,
   ) => boolean
@@ -112,7 +118,10 @@ interface Actions {
   toggleCardLabel: (cardId: string, labelId: string) => boolean
   /** Etiquetas por las que se filtra el tablero (vacío = sin filtro). No se guarda: es de la sesión. */
   labelFilter: string[]
+  /** Filtro por persona: ids de usuario, o ASSIGNEE_NONE para "sin asignar". */
+  assigneeFilter: string[]
   setLabelFilter: (ids: string[]) => void
+  setAssigneeFilter: (ids: string[]) => void
   // imágenes
   addAttachment: (
     cardId: string,
@@ -284,6 +293,7 @@ export const useStore = create<Store>((set, get) => {
     ready: false,
     toast: null,
     labelFilter: [],
+    assigneeFilter: [],
 
     // Idempotente: StrictMode (y dobles montajes) no deben sembrar dos veces.
     init: () => (initPromise ??= load()),
@@ -382,6 +392,7 @@ export const useStore = create<Store>((set, get) => {
         title: name,
         position: keys[i],
         ...(name === 'En curso' ? { kind: 'doing' as const } : {}),
+        ...(name === 'Listo' ? { kind: 'done' as const } : {}),
       }))
       put('boards', [board])
       put('columns', columns)
@@ -533,6 +544,7 @@ export const useStore = create<Store>((set, get) => {
         next.description = patch.description || undefined
       }
       if (next.startDate && next.endDate && next.endDate < next.startDate) return false
+      if (!next.assigneeId) delete next.assigneeId
       put('cards', [{ ...next, updatedAt: stamp() }])
       return true
     },
@@ -631,6 +643,7 @@ export const useStore = create<Store>((set, get) => {
     },
 
     setLabelFilter: (ids) => set({ labelFilter: ids }),
+    setAssigneeFilter: (ids) => set({ assigneeFilter: ids }),
 
     /* ---------- imágenes ---------- */
 
@@ -742,7 +755,7 @@ export const useStore = create<Store>((set, get) => {
 export async function wipeLocal(): Promise<void> {
   await flush()
   await Promise.all(db.tables.map((t) => t.clear()))
-  useStore.setState({ ...emptyData(), toast: null, labelFilter: [] })
+  useStore.setState({ ...emptyData(), toast: null, labelFilter: [], assigneeFilter: [] })
 }
 
 /** Solo para tests: fuerza que el próximo init() vuelva a leer de IndexedDB. */
@@ -755,5 +768,11 @@ export async function resetStore(): Promise<void> {
   await flush()
   resetInit()
   await Promise.all(db.tables.map((t) => t.clear()))
-  useStore.setState({ ...emptyData(), ready: false, toast: null, labelFilter: [] })
+  useStore.setState({
+    ...emptyData(),
+    ready: false,
+    toast: null,
+    labelFilter: [],
+    assigneeFilter: [],
+  })
 }

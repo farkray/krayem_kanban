@@ -78,8 +78,8 @@ La primera vez Caddy tarda unos segundos en obtener el certificado. Abre `https:
 ## Usuarios
 
 ```bash
-ssh deploy@IP 'cd /opt/kanban && docker compose exec api node src/cli.ts create-user ana@correo.com --generate'
-# también: set-password <email> | set-admin <email> [--remove] | delete-user <email> | list-users
+ssh deploy@IP 'cd /opt/kanban && docker compose exec api node src/cli.ts create-user ana@correo.com --generate --alias "Ana López"'
+# también: set-alias <email> "Nombre" | set-password <email> | set-admin <email> [--remove] | delete-user <email> | list-users
 ```
 
 El administrador (`ADMIN_EMAIL`) también puede crear y eliminar usuarios desde la app (botón **Usuarios**).

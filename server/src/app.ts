@@ -11,6 +11,7 @@ import {
   dummyHash,
   endOtherSessions,
   endSession,
+  cleanAlias,
   findUserByEmail,
   generatePassword,
   hashPassword,
@@ -19,6 +20,7 @@ import {
   passwordHashOf,
   renewSession,
   sessionUser,
+  setAlias,
   setPasswordHash,
   validEmail,
   verifyPassword,
@@ -195,19 +197,23 @@ export function buildApp(opts: AppOptions): BuiltApp {
     }
     byEmail.reset(email)
     setCookie(reply, createSession(db, user.id))
-    return { user: { id: user.id, email: user.email, isAdmin: sessionIsAdmin(user.id) } }
+    return {
+      user: { id: user.id, email: user.email, alias: user.alias, isAdmin: sessionIsAdmin(user.id) },
+    }
   })
 
   app.post('/api/auth/signup', async (req, reply) => {
     if (!opts.allowSignup) return reply.code(403).send({ error: 'signup_disabled' })
-    const body = (req.body ?? {}) as { email?: unknown; password?: unknown }
+    const body = (req.body ?? {}) as { email?: unknown; password?: unknown; alias?: unknown }
     if (!isStr(body.email, 254) || !isStr(body.password, 1024))
       return reply.code(400).send({ error: 'bad_request' })
     const email = normalizeEmail(body.email)
     if (!validEmail(email)) return reply.code(400).send({ error: 'invalid_email' })
+    const alias = cleanAlias(body.alias)
+    if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
     if (body.password.length < MIN_PASSWORD) return reply.code(400).send({ error: 'weak_password' })
     if (findUserByEmail(db, email)) return reply.code(409).send({ error: 'email_taken' })
-    const user = createUser(db, email, await hashPassword(body.password))
+    const user = createUser(db, email, await hashPassword(body.password), false, alias)
     setCookie(reply, createSession(db, user.id))
     return reply.code(201).send({ user })
   })
@@ -263,10 +269,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   app.post('/api/admin/users', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
-    const body = (req.body ?? {}) as { email?: unknown; password?: unknown }
+    const body = (req.body ?? {}) as { email?: unknown; password?: unknown; alias?: unknown }
     if (!isStr(body.email, 254)) return reply.code(400).send({ error: 'bad_request' })
     const email = normalizeEmail(body.email)
     if (!validEmail(email)) return reply.code(400).send({ error: 'invalid_email' })
+    const alias = cleanAlias(body.alias)
+    if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
     if (body.password !== undefined && body.password !== '') {
       if (!isStr(body.password, 1024)) return reply.code(400).send({ error: 'bad_request' })
       if (body.password.length < MIN_PASSWORD)
@@ -276,8 +284,19 @@ export function buildApp(opts: AppOptions): BuiltApp {
     // Sin contraseña indicada se genera una temporal; solo se muestra en esta respuesta.
     const generated = !body.password
     const password = generated ? generatePassword() : String(body.password)
-    const user = createUser(db, email, await hashPassword(password))
+    const user = createUser(db, email, await hashPassword(password), false, alias)
     return reply.code(201).send({ user, ...(generated ? { password } : {}) })
+  })
+
+  app.patch('/api/admin/users/:id', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!ID_RE.test(id) || !listUsers(db).some((u) => u.id === id))
+      return reply.code(404).send({ error: 'not_found' })
+    const alias = cleanAlias((req.body as { alias?: unknown } | null)?.alias)
+    if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
+    setAlias(db, id, alias)
+    return { user: listUsers(db).find((u) => u.id === id) }
   })
 
   app.post('/api/admin/users/:id/password', async (req, reply) => {
@@ -440,6 +459,18 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   /* ---------- tableros compartidos ---------- */
 
+  /** Usuarios registrados (para elegir con quién compartir un tablero). Sin contraseñas ni datos privados. */
+  app.get('/api/users/directory', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    return {
+      users: listUsers(db)
+        .filter((u) => u.id !== user.id)
+        .map((u) => ({ id: u.id, email: u.email, alias: u.alias }))
+        .sort((a, b) => (a.alias || a.email).localeCompare(b.alias || b.email, 'es')),
+    }
+  })
+
   /** Tableros que otros comparten conmigo, y los miembros de los míos. */
   app.get('/api/shares', async (req, reply) => {
     const user = requireUser(req, reply)
@@ -447,25 +478,91 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const shared = (
       db
         .prepare(
-          `SELECT m.board_id, m.role, u.email AS owner_email, m.owner_id FROM board_members m
+          `SELECT m.board_id, m.role, u.email AS owner_email, u.alias AS owner_alias, m.owner_id FROM board_members m
            JOIN users u ON u.id = m.owner_id WHERE m.user_id = ?`,
         )
-        .all(user.id) as { board_id: string; role: string; owner_email: string; owner_id: string }[]
+        .all(user.id) as {
+        board_id: string
+        role: string
+        owner_email: string
+        owner_alias: string
+        owner_id: string
+      }[]
     ).map((m) => ({
       boardId: m.board_id,
       role: m.role,
       ownerId: m.owner_id,
       ownerEmail: m.owner_email,
+      ownerAlias: m.owner_alias,
     }))
     const members = (
       db
         .prepare(
-          `SELECT m.board_id, m.user_id, m.role, u.email FROM board_members m
+          `SELECT m.board_id, m.user_id, m.role, u.email, u.alias FROM board_members m
            JOIN users u ON u.id = m.user_id WHERE m.owner_id = ? ORDER BY m.created_at`,
         )
-        .all(user.id) as { board_id: string; user_id: string; role: string; email: string }[]
-    ).map((m) => ({ boardId: m.board_id, userId: m.user_id, role: m.role, email: m.email }))
-    return { shared, members }
+        .all(user.id) as {
+        board_id: string
+        user_id: string
+        role: string
+        email: string
+        alias: string
+      }[]
+    ).map((m) => ({
+      boardId: m.board_id,
+      userId: m.user_id,
+      role: m.role,
+      email: m.email,
+      alias: m.alias,
+    }))
+    // Todos los que participan en los tableros que veo (para asignar tarjetas y mostrar la lista de
+    // miembros): el dueño y los miembros, también para quien solo es invitado.
+    const participants = (
+      db
+        .prepare(
+          `SELECT m.board_id, m.user_id, m.role, u.email, u.alias FROM board_members m
+           JOIN users u ON u.id = m.user_id
+           WHERE m.board_id IN (
+             SELECT board_id FROM board_members WHERE user_id = ?1
+             UNION SELECT board_id FROM board_members WHERE owner_id = ?1)
+           ORDER BY m.created_at`,
+        )
+        .all(user.id) as {
+        board_id: string
+        user_id: string
+        role: string
+        email: string
+        alias: string
+      }[]
+    ).map((m) => ({
+      boardId: m.board_id,
+      userId: m.user_id,
+      role: m.role,
+      email: m.email,
+      alias: m.alias,
+    }))
+    const owners = new Map<
+      string,
+      { boardId: string; userId: string; role: string; email: string; alias: string }
+    >()
+    for (const s of shared)
+      owners.set(s.boardId, {
+        boardId: s.boardId,
+        userId: s.ownerId,
+        role: 'owner',
+        email: s.ownerEmail,
+        alias: s.ownerAlias,
+      })
+    for (const m of members)
+      if (!owners.has(m.boardId))
+        owners.set(m.boardId, {
+          boardId: m.boardId,
+          userId: user.id,
+          role: 'owner',
+          email: user.email,
+          alias: user.alias,
+        })
+    return { shared, members, participants: [...owners.values(), ...participants] }
   })
 
   /** Pone al día a un usuario recién invitado: sube el `updated_at` de las filas del tablero. */
@@ -507,7 +604,13 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (!had) touchBoard(user.id, id)
     hub.publishAccess(target.id)
     return reply.code(had ? 200 : 201).send({
-      member: { boardId: id, userId: target.id, email: target.email, role: body.role },
+      member: {
+        boardId: id,
+        userId: target.id,
+        email: target.email,
+        alias: target.alias,
+        role: body.role,
+      },
     })
   })
 

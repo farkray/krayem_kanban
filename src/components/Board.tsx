@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   closestCenter,
   closestCorners,
@@ -22,18 +22,20 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { CanEditContext } from '../lib/CanEdit'
+import { displayName } from '../lib/people'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
-import { LIMITS, limitOf, type Board as BoardModel } from '../lib/types'
+import { ASSIGNEE_NONE, LIMITS, limitOf, type Board as BoardModel } from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
 import { useStore } from '../store/store'
-import { removeMember, useBoardAccess } from '../sync/access'
+import { removeMember, useBoardAccess, useParticipants } from '../sync/access'
 import { useAuth } from '../sync/auth'
 import { AddColumn } from './AddColumn'
 import { CardOverlay } from './Card'
 import { Column, ColumnOverlay } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
+import { MembersButton } from './MembersButton'
 import { ShareDialog } from './ShareDialog'
 import { ShareIcon, TrashIcon } from './Icons'
 import { InlineInput } from './InlineInput'
@@ -55,7 +57,15 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
   const labelIndex = useLabelIndex()
   const labelFilter = useStore((s) => s.labelFilter)
   const setLabelFilter = useStore((s) => s.setLabelFilter)
-  const filtering = labelFilter.length > 0
+  const assigneeFilter = useStore((s) => s.assigneeFilter)
+  const setAssigneeFilter = useStore((s) => s.setAssigneeFilter)
+  const people = useParticipants(board.id)
+  // Los filtros son de un tablero (etiquetas y personas): al cambiar de tablero se limpian.
+  useEffect(() => {
+    setLabelFilter([])
+    setAssigneeFilter([])
+  }, [board.id, setLabelFilter, setAssigneeFilter])
+  const filtering = labelFilter.length > 0 || assigneeFilter.length > 0
   const renameBoard = useStore((s) => s.renameBoard)
   const deleteBoard = useStore((s) => s.deleteBoard)
   const addColumn = useStore((s) => s.addColumn)
@@ -76,7 +86,11 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
 
   // Con filtro por etiqueta solo se listan las tarjetas que tengan alguna de las elegidas.
   const matches = (c: (typeof cards)[number]) =>
-    !filtering || (c.labelIds ?? []).some((id) => labelFilter.includes(id))
+    (labelFilter.length === 0 || (c.labelIds ?? []).some((id) => labelFilter.includes(id))) &&
+    (assigneeFilter.length === 0 ||
+      (c.assigneeId
+        ? assigneeFilter.includes(c.assigneeId)
+        : assigneeFilter.includes(ASSIGNEE_NONE)))
 
   const cardsByColumn = useMemo(() => {
     const map = new Map<string, typeof cards>()
@@ -84,7 +98,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
     for (const c of cards) if (matches(c)) map.get(c.columnId)?.push(c)
     return map
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, cards, labelFilter])
+  }, [columns, cards, labelFilter, assigneeFilter])
 
   const totalByColumn = useMemo(() => {
     const map = new Map<string, number>()
@@ -246,6 +260,10 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
             </button>
           )}
           <div className={styles.headAction}>
+            <MembersButton
+              boardId={board.id}
+              onManage={access.isOwner && signedIn ? () => setSharing(true) : undefined}
+            />
             {access.isOwner && signedIn && (
               <button type="button" className={styles.shareBtn} onClick={() => setSharing(true)}>
                 <ShareIcon width={16} height={16} />
@@ -255,7 +273,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
             {!access.isOwner && (
               <>
                 <span className={styles.sharedBy}>
-                  De {access.ownerEmail ?? 'otra persona'} ·{' '}
+                  De {access.ownerName ?? 'otra persona'} ·{' '}
                   {access.canEdit ? 'Editor' : 'Solo lectura'}
                 </span>
                 <button type="button" className={styles.shareBtn} onClick={() => setLeaving(true)}>
@@ -281,7 +299,36 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
                   onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
                 />
               ))}
-            <button type="button" className={styles.clearFilter} onClick={() => setLabelFilter([])}>
+            {assigneeFilter.map((id) => {
+              const p = people.find((x) => x.userId === id)
+              const name =
+                id === ASSIGNEE_NONE
+                  ? 'Sin asignar'
+                  : p
+                    ? p.userId === me
+                      ? 'Yo'
+                      : displayName(p)
+                    : null
+              return name ? (
+                <button
+                  key={id}
+                  type="button"
+                  className={styles.clearFilter}
+                  aria-label={`Quitar filtro: ${name}`}
+                  onClick={() => setAssigneeFilter(assigneeFilter.filter((f) => f !== id))}
+                >
+                  {name} ×
+                </button>
+              ) : null
+            })}
+            <button
+              type="button"
+              className={styles.clearFilter}
+              onClick={() => {
+                setLabelFilter([])
+                setAssigneeFilter([])
+              }}
+            >
               Limpiar filtro
             </button>
           </div>
@@ -345,6 +392,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
                 card={activeCard}
                 stats={stats.get(activeCard.id)}
                 finished={activeCard.columnId === lastColumnId}
+                done={columns.find((c) => c.id === activeCard.columnId)?.kind === 'done'}
               />
             )}
             {activeColumn && (
@@ -388,7 +436,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
             }}
           >
             <p>
-              Dejarás de ver este tablero. {access.ownerEmail ?? 'Su dueño'} puede volver a
+              Dejarás de ver este tablero. {access.ownerName ?? 'Su dueño'} puede volver a
               invitarte.
             </p>
           </ConfirmDialog>

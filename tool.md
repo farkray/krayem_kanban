@@ -331,3 +331,20 @@ Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al 
 - Los cambios llegan en vivo a todos los miembros. Si te quitan acceso, el tablero se borra de tu dispositivo.
 - **Etiquetas por tablero:** pasaron a ser del tablero (se comparten con él). Al actualizar, las etiquetas antiguas se copian a cada tablero que las usaba (las que no usaba ninguno, al primero).
 - Límite conocido: si el admin elimina a un usuario, se borran también las imágenes que subió a tableros de otros.
+
+## 19. Tipo Done, miembros y asignación (implementado)
+
+Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer y otros sistemas de diseño):
+
+- **Done:** cuarto tipo de columna (sin límite). Sus tarjetas se ven *apagadas sin bajar la opacidad* (eso rompe el contraste AA, problema documentado en GitLab): se aplanan (sin sombra), se acercan al fondo de la columna, el título pasa al gris de apoyo con peso normal y llevan una marca de visto bueno, de modo que no dependen solo del color. Al apuntarlas recuperan su relieve. La columna muestra la etiqueta "Done". En tableros nuevos, "Listo" nace como Done. Las tarjetas Done nunca se marcan como vencidas.
+- **Miembros:** en los tableros compartidos (tuyos o ajenos) el encabezado muestra una pila de avatares (máx. 4 y "+n"); al pulsarla se abre la lista completa con correo, "(tú)" y permiso (Dueño / Editor / Solo lectura). El dueño tiene ahí "Administrar acceso". Los avatares usan iniciales y un color estable por correo (misma paleta AA de las etiquetas), con el correo como nombre accesible.
+- **Asignado a:** campo en el detalle de la tarjeta (solo en tableros con más de una persona), con los participantes del tablero, "(tú)" y "Sin asignar". La tarjeta muestra el avatar de la persona asignada junto a su fecha (metadatos abajo, como se recomienda). Si la persona deja el tablero, el campo lo indica.
+- **Filtro por persona:** en Filtros, sección "Asignado a" con "Yo" primero (el atajo que más se usa), cada participante y "Sin asignar"; se combina con las etiquetas (Y entre grupos, O dentro de cada uno) y aparece como chips en la barra de filtros. Los filtros se limpian al cambiar de tablero. Se listan todos los participantes, no solo los que ya tienen tarjetas.
+- El servidor devuelve en `/api/shares` los `participants` (dueño + miembros) también a los invitados.
+
+## 20. Alias de usuario y directorio para compartir (implementado)
+
+- Cada usuario tiene un **alias** (nombre para mostrar, hasta 60 caracteres; espacios sobrantes se limpian). Vacío = se muestra el correo. Se fija **al crear** la cuenta (formulario del admin, CLI `--alias` y registro abierto, campo «Nombre (opcional)») y el admin lo edita después en **Usuarios → Editar alias** (o `set-alias`).
+- El alias se muestra de forma consistente: iniciales del avatar, lista de miembros, «Asignado a», filtros, «De …» en tableros compartidos, el pie de la barra lateral y el diálogo de compartir. El color del avatar depende del correo, así que no cambia si se edita el alias.
+- **Compartir**: en vez de escribir un correo, se elige a la persona de un **menú desplegable con los usuarios registrados** (`alias · correo`), sin uno mismo ni quienes ya tienen acceso. API: `GET /api/users/directory` (solo con sesión; devuelve id, correo y alias, nada más).
+- Los participantes (`/api/shares`) y las respuestas de login/`me` incluyen el alias.
