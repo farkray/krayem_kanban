@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
+import { canEditBoard, roleOf } from '../lib/access'
 import { isConfigured } from '../lib/config'
 import { byPosition, positionAt, positionsFor } from '../lib/position'
 import {
@@ -25,6 +26,16 @@ import {
 } from '../lib/types'
 
 /* ---------- utilidades ---------- */
+
+/** UUID derivado de dos ids (SHA-256): mismo par → mismo id en cualquier dispositivo. */
+async function deterministicId(a: string, b: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${a}|${b}`))
+  const h = [...new Uint8Array(buf)]
+    .slice(0, 16)
+    .map((x) => x.toString(16).padStart(2, '0'))
+    .join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
 
 const uid = () => crypto.randomUUID()
 const stamp = () => new Date().toISOString()
@@ -61,6 +72,10 @@ interface Actions {
   init: () => Promise<void>
   /** Crea el tablero inicial si nunca se sembró en este dispositivo. */
   seedIfEmpty: () => Promise<void>
+  /** Quita del dispositivo todo lo de estos tableros (se perdió el acceso o se salió de ellos). */
+  purgeBoards: (boardIds: string[]) => Promise<void>
+  /** Las etiquetas antiguas (globales) pasan a ser de cada tablero que las usa. Idempotente. */
+  migrateLabels: () => Promise<void>
   /** Aplica filas llegadas de la nube (no se vuelven a enviar). */
   applyRemote: <K extends TableKey>(key: K, rows: Data[K]) => void
   // tableros
@@ -90,7 +105,7 @@ interface Actions {
   moveCard: (id: string, toColumnId: string, index: number) => boolean
   deleteCard: (id: string) => void
   // etiquetas
-  createLabel: (name: string, color: LabelColor) => string | null
+  createLabel: (boardId: string, name: string, color: LabelColor) => string | null
   updateLabel: (id: string, patch: Partial<Pick<Label, 'name' | 'color'>>) => boolean
   deleteLabel: (id: string) => void
   /** Pone o quita una etiqueta de una tarjeta. `false` si se excede el máximo por tarjeta. */
@@ -145,6 +160,25 @@ export const useStore = create<Store>((set, get) => {
    */
   function put<K extends TableKey>(key: K, rows: Data[K], track = true): void {
     if (rows.length === 0) return
+    if (track) {
+      // Los hijos (ítems, comentarios, imágenes) llevan el tablero para saber con quién se comparten.
+      if (key === 'items' || key === 'comments' || key === 'attachments') {
+        const cards = get().cards
+        rows = (rows as { cardId: string; boardId?: string }[]).map((r) =>
+          r.boardId ? r : { ...r, boardId: cards.find((c) => c.id === r.cardId)?.boardId },
+        ) as unknown as Data[K]
+      }
+      // Tablero compartido como solo lectura: no se escribe (el servidor también lo rechaza).
+      const blocked = (rows as { id: string; boardId?: string }[]).some((r) => {
+        const bid = key === 'boards' ? r.id : r.boardId
+        // El tablero en sí (nombre, borrado) solo lo cambia su dueño; lo de dentro, también los editores.
+        return !!bid && (key === 'boards' ? roleOf(bid) !== 'owner' : !canEditBoard(bid))
+      })
+      if (blocked) {
+        set({ toast: { id: ++toastSeq, message: 'Este tablero es de solo lectura.' } })
+        return
+      }
+    }
     set((s) => {
       const incoming = new Map<string, Data[K][number]>(rows.map((r) => [r.id, r]))
       const current = s[key] as Data[K]
@@ -240,6 +274,7 @@ export const useStore = create<Store>((set, get) => {
       db.comments.toArray(),
     ])
     set({ boards, labels, columns, cards, attachments, items, comments, ready: true })
+    await get().migrateLabels()
     // Con nube configurada, el tablero inicial se crea tras la primera descarga (ver sync/engine).
     if (!isConfigured()) await get().seedIfEmpty()
   }
@@ -262,6 +297,76 @@ export const useStore = create<Store>((set, get) => {
     },
 
     applyRemote: (key, rows) => put(key, rows, false),
+
+    purgeBoards: async (boardIds) => {
+      if (boardIds.length === 0) return
+      const gone = new Set(boardIds)
+      await flush()
+      const s = get()
+      const cardIds = new Set(s.cards.filter((c) => gone.has(c.boardId)).map((c) => c.id))
+      const inBoard = (r: { boardId?: string; cardId?: string }) =>
+        (r.boardId !== undefined && gone.has(r.boardId)) ||
+        (r.cardId !== undefined && cardIds.has(r.cardId))
+      const removed = {
+        boards: s.boards.filter((b) => gone.has(b.id)),
+        labels: s.labels.filter((l) => l.boardId !== undefined && gone.has(l.boardId)),
+        columns: s.columns.filter((c) => gone.has(c.boardId)),
+        cards: s.cards.filter((c) => gone.has(c.boardId)),
+        attachments: s.attachments.filter(inBoard),
+        items: s.items.filter(inBoard),
+        comments: s.comments.filter(inBoard),
+      }
+      set({
+        boards: s.boards.filter((x) => !removed.boards.includes(x)),
+        labels: s.labels.filter((x) => !removed.labels.includes(x)),
+        columns: s.columns.filter((x) => !removed.columns.includes(x)),
+        cards: s.cards.filter((x) => !removed.cards.includes(x)),
+        attachments: s.attachments.filter((x) => !removed.attachments.includes(x)),
+        items: s.items.filter((x) => !removed.items.includes(x)),
+        comments: s.comments.filter((x) => !removed.comments.includes(x)),
+      })
+      await db.transaction('rw', [...db.tables], async () => {
+        for (const k of TABLE_KEYS) {
+          const ids = removed[k].map((r) => r.id)
+          await (db[k] as unknown as Table<{ id: string }, string>).bulkDelete(ids)
+          await db.outbox.bulkDelete(ids.map((id) => `${k}:${id}`))
+        }
+        await db.blobs.bulkDelete(removed.attachments.map((a) => a.id))
+      })
+    },
+
+    migrateLabels: async () => {
+      const st = get()
+      const legacy = live(st.labels).filter((l) => !l.boardId)
+      const mine = live(st.boards)
+        .filter((b) => !b.ownerId)
+        .sort(byPosition)
+      if (legacy.length === 0 || mine.length === 0) return
+      const ts = stamp()
+      const copies: Label[] = []
+      const cards: Card[] = []
+      const usedAnywhere = new Set(live(st.cards).flatMap((c) => c.labelIds ?? []))
+      for (const board of mine) {
+        const boardCards = live(st.cards).filter((c) => c.boardId === board.id)
+        const used = new Set(boardCards.flatMap((c) => c.labelIds ?? []))
+        const map = new Map<string, string>()
+        for (const l of legacy) {
+          // Las que ninguna tarjeta usa se conservan en el primer tablero.
+          if (!used.has(l.id) && !(board === mine[0] && !usedAnywhere.has(l.id))) continue
+          // Id determinista: dos dispositivos que migren a la vez producen las mismas filas.
+          const id = await deterministicId(l.id, board.id)
+          map.set(l.id, id)
+          copies.push({ ...l, id, boardId: board.id, updatedAt: ts })
+        }
+        for (const c of boardCards) {
+          if (!c.labelIds?.some((id) => map.has(id))) continue
+          cards.push({ ...c, labelIds: c.labelIds.map((id) => map.get(id) ?? id), updatedAt: ts })
+        }
+      }
+      put('labels', copies)
+      put('cards', cards)
+      markDeleted({ labels: legacy })
+    },
 
     /* ---------- tableros ---------- */
 
@@ -471,13 +576,14 @@ export const useStore = create<Store>((set, get) => {
 
     /* ---------- etiquetas ---------- */
 
-    createLabel: (name, color) => {
+    createLabel: (boardId, name, color) => {
       const n = clean(name, LIMITS.label)
-      const labels = live(get().labels)
+      const labels = live(get().labels).filter((l) => l.boardId === boardId)
       if (!n || !LABEL_COLORS.includes(color) || labels.length >= LIMITS.labels) return null
-      // Un nombre = una etiqueta (sin distinguir mayúsculas): evita "Coppel" y "coppel" a la vez.
+      if (!live(get().boards).some((b) => b.id === boardId)) return null
+      // Un nombre = una etiqueta por tablero (sin distinguir mayúsculas): evita "Coppel" y "coppel" a la vez.
       if (labels.some((l) => l.name.toLowerCase() === n.toLowerCase())) return null
-      const label: Label = { ...base(), name: n, color }
+      const label: Label = { ...base(), name: n, color, boardId }
       put('labels', [label])
       return label.id
     },
@@ -490,7 +596,7 @@ export const useStore = create<Store>((set, get) => {
         const n = clean(patch.name, LIMITS.label)
         if (!n) return false
         const dup = live(get().labels).some(
-          (x) => x.id !== id && x.name.toLowerCase() === n.toLowerCase(),
+          (x) => x.id !== id && x.boardId === l.boardId && x.name.toLowerCase() === n.toLowerCase(),
         )
         if (dup) return false
         next.name = n
@@ -515,7 +621,7 @@ export const useStore = create<Store>((set, get) => {
     toggleCardLabel: (cardId, labelId) => {
       const c = live(get().cards).find((x) => x.id === cardId)
       const l = live(get().labels).find((x) => x.id === labelId)
-      if (!c || !l) return false
+      if (!c || !l || l.boardId !== c.boardId) return false
       const current = (c.labelIds ?? []).filter((id) => live(get().labels).some((x) => x.id === id))
       const has = current.includes(labelId)
       if (!has && current.length >= LIMITS.cardLabels) return false

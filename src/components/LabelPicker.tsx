@@ -91,8 +91,16 @@ function LabelForm({ initial, taken, suggested, onSubmit, onDelete, onCancel }: 
 }
 
 /** Etiquetas de una tarjeta: asignar, crear (nombre + color), editar y eliminar. */
-export function LabelPicker({ cardId, labelIds }: { cardId: string; labelIds: string[] }) {
-  const labels = useLabels()
+export function LabelPicker({
+  cardId,
+  boardId,
+  labelIds,
+}: {
+  cardId: string
+  boardId: string
+  labelIds: string[]
+}) {
+  const labels = useLabels(boardId)
   const index = useLabelIndex()
   const createLabel = useStore((s) => s.createLabel)
   const updateLabel = useStore((s) => s.updateLabel)
@@ -156,7 +164,7 @@ export function LabelPicker({ cardId, labelIds }: { cardId: string; labelIds: st
                 onSubmit={(name, color) => {
                   if (editingLabel) updateLabel(editingLabel.id, { name, color })
                   else {
-                    const id = createLabel(name, color)
+                    const id = createLabel(boardId, name, color)
                     if (id) toggleCardLabel(cardId, id) // la etiqueta nueva queda puesta en esta tarjeta
                   }
                   setEditing(null)

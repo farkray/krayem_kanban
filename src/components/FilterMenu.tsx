@@ -6,8 +6,8 @@ import { LabelChip } from './LabelChip'
 import styles from './FilterMenu.module.css'
 
 /** Botón "Filtros": filtra las tarjetas del tablero por etiqueta (cualquiera de las marcadas). */
-export function FilterMenu() {
-  const labels = useLabels()
+export function FilterMenu({ boardId }: { boardId: string | null }) {
+  const labels = useLabels(boardId)
   const filter = useStore((s) => s.labelFilter)
   const setFilter = useStore((s) => s.setLabelFilter)
   const [open, setOpen] = useState(false)
@@ -29,6 +29,7 @@ export function FilterMenu() {
     }
   }, [open])
 
+  if (!boardId) return null // el filtro es por etiquetas de un tablero
   const active = filter.length
   const toggle = (id: string) =>
     setFilter(filter.includes(id) ? filter.filter((f) => f !== id) : [...filter, id])

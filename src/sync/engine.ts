@@ -14,7 +14,12 @@ export interface Remote {
   /** Descarga el archivo de una imagen subida desde otro dispositivo. */
   downloadBlob(attachment: Attachment): Promise<Blob>
   /** Cambios en vivo. `onReconnect` se llama al (re)conectar para ponerse al día. */
-  subscribe(onRow: (table: TableKey, row: Row) => void, onReconnect: () => void): () => void
+  subscribe(
+    onRow: (table: TableKey, row: Row) => void,
+    onReconnect: () => void,
+    /** Cambió quién ve qué (me compartieron o dejaron de compartirme un tablero). */
+    onAccess?: () => void,
+  ): () => void
 }
 
 export interface EngineOptions {
@@ -25,6 +30,8 @@ export interface EngineOptions {
   chunkSize?: number
   /** Tras la primera descarga (p. ej. sembrar el tablero inicial). */
   onPulled?: () => Promise<void> | void
+  /** El servidor avisa de cambios de acceso: hay que refrescar permisos y descargar. */
+  onAccess?: () => Promise<void> | void
 }
 
 export interface Engine {
@@ -214,6 +221,9 @@ export function createEngine(remote: Remote, opts: EngineOptions = {}): Engine {
       },
       () => {
         void pull().catch((e) => setSync({ error: errMsg(e) }))
+      },
+      () => {
+        void Promise.resolve(opts.onAccess?.()).catch((e) => setSync({ error: errMsg(e) }))
       },
     )
 

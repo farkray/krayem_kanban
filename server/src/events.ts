@@ -27,6 +27,11 @@ export class Hub {
     }
   }
 
+  /** Aviso de que cambió quién ve qué (alta/baja de miembros): el cliente refresca y descarga. */
+  publishAccess(userId: string) {
+    for (const sub of this.subs.get(userId) ?? []) sub.res.write('event: access\ndata: {}\n\n')
+  }
+
   ping() {
     for (const set of this.subs.values()) for (const s of set) s.res.write(': ping\n\n')
   }

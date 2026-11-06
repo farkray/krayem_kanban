@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { LabelChip } from './LabelChip'
 import { useAttachmentIndex, useLabelIndex } from '../store/hooks'
 import { useAttachmentUrl } from '../store/useAttachmentUrl'
+import { useCanEdit } from '../lib/CanEdit'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
 import { useStore } from '../store/store'
@@ -32,11 +33,12 @@ export function CardView({ card, stats, finished, overlay }: ViewProps) {
   const attachments = useAttachmentIndex()
   const cover = card.coverAttachmentId ? attachments.get(card.coverAttachmentId) : undefined
   const coverUrl = useAttachmentUrl(cover)
+  const canEdit = useCanEdit()
   const hasMeta = range || (stats && (stats.total > 0 || stats.comments > 0))
 
   return (
     <>
-      {!overlay && (
+      {!overlay && canEdit && (
         <span className={styles.grip} aria-hidden="true" title="Arrastra para mover">
           <GripIcon width={16} height={16} />
         </span>
@@ -103,11 +105,13 @@ interface Props extends ViewProps {
 
 export function SortableCard({ card, stats, finished, onOpen }: Props) {
   const deleteCard = useStore((s) => s.deleteCard)
+  const canEdit = useCanEdit()
   // Tarjeta recién creada: entra con un pequeño movimiento (las ya existentes no se animan al cargar)
   const [fresh] = useState(() => Date.now() - Date.parse(card.createdAt) < 1500)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: 'card', columnId: card.columnId },
+    disabled: !canEdit,
   })
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -132,15 +136,17 @@ export function SortableCard({ card, stats, finished, onOpen }: Props) {
         <CardView card={card} stats={stats} finished={finished} />
       </article>
       {/* Hermano de la tarjeta (no hijo): un botón dentro de otro control no es accesible */}
-      <button
-        type="button"
-        className={`${styles.trash} ${finished ? styles.trashDone : ''}`}
-        aria-label={`Eliminar tarjeta ${card.title}`}
-        title="Eliminar (puedes deshacer)"
-        onClick={() => deleteCard(card.id)}
-      >
-        <TrashIcon width={15} height={15} />
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          className={`${styles.trash} ${finished ? styles.trashDone : ''}`}
+          aria-label={`Eliminar tarjeta ${card.title}`}
+          title="Eliminar (puedes deshacer)"
+          onClick={() => deleteCard(card.id)}
+        >
+          <TrashIcon width={15} height={15} />
+        </button>
+      )}
     </div>
   )
 }

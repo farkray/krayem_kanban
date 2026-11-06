@@ -47,6 +47,31 @@ const MIGRATIONS: string[] = [
   `,
   // 2: rol de administrador (puede crear y eliminar usuarios desde la app)
   `ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;`,
+  // 3: tableros compartidos. rows.user_id pasa a ser el DUEÑO del tablero; board_id indexa a qué
+  // tablero pertenece cada fila para saber quién puede verla. blob_owners dice quién subió cada imagen.
+  `
+  ALTER TABLE rows ADD COLUMN board_id TEXT;
+  CREATE INDEX rows_board ON rows(board_id);
+  UPDATE rows SET board_id = id WHERE tbl = 'boards';
+  UPDATE rows SET board_id = json_extract(data, '$.boardId') WHERE tbl IN ('columns', 'cards', 'labels');
+  UPDATE rows SET board_id = (
+    SELECT json_extract(c.data, '$.boardId') FROM rows c
+    WHERE c.user_id = rows.user_id AND c.tbl = 'cards' AND c.id = json_extract(rows.data, '$.cardId')
+  ) WHERE tbl IN ('attachments', 'items', 'comments');
+  CREATE TABLE board_members (
+    board_id TEXT NOT NULL,
+    owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('editor', 'viewer')),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (board_id, user_id)
+  );
+  CREATE INDEX members_user ON board_members(user_id);
+  CREATE TABLE blob_owners (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+  );
+  `,
 ]
 
 export function openDb(file: string): DB {

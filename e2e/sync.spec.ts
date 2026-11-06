@@ -364,3 +364,92 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
   await user.ctx.close()
   await again.ctx.close()
 })
+
+test('compartir tableros: privado por defecto, editor, solo lectura y salir', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000)
+  const a = await newDevice(browser)
+  const b = await newDevice(browser)
+  const emailA = unique()
+  const emailB = unique()
+  await signUp(a.page, emailA)
+  await signUp(b.page, emailB)
+
+  // A renombra su tablero y crea otro privado
+  await openBoard(a.page)
+  await a.page.getByRole('heading', { level: 1 }).getByRole('button').click()
+  await a.page.getByLabel('Nombre del tablero').fill('Proyecto A')
+  await a.page.keyboard.press('Enter')
+  await addCard(a.page, 'Por hacer', 'Tarea compartida')
+  await saved(a.page)
+
+  // privado: B no ve nada de A
+  await expect(b.page.getByRole('list', { name: 'Compartidos conmigo' })).toHaveCount(0)
+  await expect(b.page.getByRole('button', { name: /Proyecto A/ })).toHaveCount(0)
+
+  // A comparte con B como editor (correo sin cuenta → error claro)
+  await a.page.getByRole('button', { name: 'Compartir' }).click()
+  const dlg = a.page.getByRole('dialog', { name: /Compartir/ })
+  await expect(dlg.getByText('privado')).toBeVisible()
+  const axe = await new AxeBuilder({ page: a.page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze()
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+  await dlg.getByLabel('Correo de la persona').fill('nadie@prueba.test')
+  await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
+  await expect(dlg.getByRole('alert')).toContainText('no tiene cuenta')
+  await dlg.getByLabel('Correo de la persona').fill(emailB)
+  await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
+  await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(emailB)
+  await dlg.getByRole('button', { name: 'Cerrar' }).click()
+
+  // B lo recibe en vivo, con la tarjeta
+  const shared = b.page.getByRole('list', { name: 'Compartidos conmigo' })
+  await expect(shared).toContainText('Proyecto A', { timeout: 15_000 })
+  await expect(shared).toContainText('Editor')
+  await shared.getByRole('button', { name: /Proyecto A/ }).click()
+  await expect(card(column(b.page, 'Por hacer'), 'Tarea compartida')).toBeVisible()
+
+  // B (editor) agrega una tarjeta y A la ve en vivo; B no puede eliminar ni compartir el tablero
+  await addCard(b.page, 'Por hacer', 'Hecha por B')
+  await saved(b.page)
+  await expect(card(column(a.page, 'Por hacer'), 'Hecha por B')).toBeVisible({ timeout: 15_000 })
+  await expect(b.page.getByRole('button', { name: 'Eliminar tablero' })).toHaveCount(0)
+  await expect(b.page.getByRole('button', { name: 'Compartir' })).toHaveCount(0)
+
+  // A baja a B a solo lectura: B pierde los controles de edición
+  await a.page.getByRole('button', { name: /Compartido · 1/ }).click()
+  await a.page
+    .getByRole('dialog', { name: /Compartir/ })
+    .getByLabel(`Permiso de ${emailB}`)
+    .selectOption('viewer')
+  await a.page
+    .getByRole('dialog', { name: /Compartir/ })
+    .getByRole('button', { name: 'Cerrar' })
+    .click()
+  await expect(shared).toContainText('Solo lectura', { timeout: 15_000 })
+  await expect(b.page.getByRole('button', { name: 'Salir del tablero' })).toBeVisible()
+  const axeB = await new AxeBuilder({ page: b.page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze()
+  expect(axeB.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+  await b.page.screenshot({ path: '/tmp/shared-readonly.png' })
+  await expect(
+    column(b.page, 'Por hacer').getByRole('button', { name: 'Agregar tarjeta' }),
+  ).toHaveCount(0)
+  await expect(b.page.getByRole('button', { name: /Eliminar tarjeta/ })).toHaveCount(0)
+
+  // B se sale: el tablero desaparece de su lista y A queda de nuevo con un tablero privado
+  await b.page.getByRole('button', { name: 'Salir del tablero' }).click()
+  await b.page.getByRole('button', { name: 'Salir del tablero' }).last().click()
+  await expect(b.page.getByRole('list', { name: 'Compartidos conmigo' })).toHaveCount(0, {
+    timeout: 15_000,
+  })
+  await expect(a.page.getByRole('button', { name: 'Compartir', exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  await a.ctx.close()
+  await b.ctx.close()
+})

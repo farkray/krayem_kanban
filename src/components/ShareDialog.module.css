@@ -1,0 +1,136 @@
+.title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.private {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-1);
+  font-size: var(--text-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-fill-1);
+}
+
+.email {
+  flex: 1;
+  min-width: 160px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.form {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.input,
+.select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--weight-regular);
+}
+
+.hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0 0 var(--space-3);
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.primary,
+.secondary,
+.remove {
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-accent-solid);
+  background: var(--color-accent-solid);
+  color: var(--color-on-accent);
+}
+
+.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.remove {
+  color: var(--color-danger-text);
+}
+
+@media (pointer: coarse) {
+  .primary,
+  .secondary,
+  .remove {
+    height: 44px;
+  }
+}

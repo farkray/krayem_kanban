@@ -5,6 +5,7 @@ Tablero Kanban en español, instalable (PWA), con guardado automático en tu pro
 - **Tableros, columnas (máx. 5) y tarjetas** con arrastrar y soltar (mouse, touch y teclado).
 - **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, lista de tareas opcional, feed de actualizaciones con editor de formato (Markdown) e imágenes (comprimidas en el navegador con WebAssembly).
 - **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
+- **Tableros privados o compartidos:** por defecto cada tablero es privado; el dueño puede compartirlo por correo con otras cuentas como **Editor** o **Solo lectura**.
 - **Búsqueda global** (`/` o `Cmd/Ctrl+K`), deshacer en todos los borrados.
 - **Offline-first:** todo se guarda primero en IndexedDB y se sincroniza con tu propio servidor en segundo plano.
 
@@ -38,6 +39,7 @@ La carpeta [server/](server/) es una API pequeña (Node 22 + Fastify + SQLite, s
 - **Cuentas:** correo + contraseña (scrypt), sesión en cookie HttpOnly de 30 días, límite de intentos de acceso y registro **desactivado** por defecto.
 - **Sincronización:** la app envía sus cambios (`POST /api/sync/:tabla`) y descarga por cursor; los demás dispositivos reciben los cambios en vivo por SSE (`/api/events`).
 - **Imágenes:** `PUT/GET /api/blobs/:id`; el servidor comprueba la firma del archivo (no confía en el tipo declarado).
+- **Compartir:** `board_members` (tablero, dueño, usuario, rol). Las filas se guardan a nombre del dueño y cada una indexa su `board_id`; el servidor decide en cada lectura/escritura quién las ve (`GET/POST /api/sync/*`, `GET /api/shares`, `POST /api/boards/:id/members`, `DELETE /api/boards/:id/members/:userId`) y en las imágenes (`/api/blobs/:id`). Solo el dueño cambia el tablero en sí; un editor escribe lo de dentro; un lector no escribe.
 - **Datos:** un solo volumen (`/data`: `kanban.db` + `blobs/`). Respaldo diario incluido en el despliegue.
 - **Seguridad:** comprobación de origen (CSRF), sin CORS (todo mismo origen), hash de tokens de sesión en la base.
 

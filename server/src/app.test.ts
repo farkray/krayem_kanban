@@ -625,3 +625,236 @@ describe('administración de usuarios', () => {
     expect(res.statusCode).toBe(403)
   })
 })
+
+describe('tableros compartidos', () => {
+  const PNG = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.alloc(32, 1),
+  ])
+
+  async function setup() {
+    await makeApp()
+    const owner = await addUser('dueno@correo.com')
+    const ana = await addUser('ana@correo.com')
+    await addUser('beto@correo.com')
+    const c = {
+      owner: (await login('dueno@correo.com')).cookie,
+      ana: (await login('ana@correo.com')).cookie,
+      beto: (await login('beto@correo.com')).cookie,
+    }
+    return { c, owner, ana }
+  }
+
+  const push = (cookie: string, table: string, rows: object[]) =>
+    built.app.inject({
+      method: 'POST',
+      url: `/api/sync/${table}`,
+      headers: headers(cookie),
+      payload: { rows },
+    })
+  const pull = async (cookie: string, table: string, since = '') =>
+    (
+      await built.app.inject({
+        method: 'GET',
+        url: `/api/sync/${table}${since ? `?since=${since}` : ''}`,
+        headers: headers(cookie),
+      })
+    ).json().rows as Record<string, unknown>[]
+  const ids = (rows: Record<string, unknown>[]) => rows.map((r) => r.id)
+  const share = (cookie: string, boardId: string, email: string, role = 'editor') =>
+    built.app.inject({
+      method: 'POST',
+      url: `/api/boards/${boardId}/members`,
+      headers: headers(cookie),
+      payload: { email, role },
+    })
+  const card = (id: string, boardId: string, title = 'C') => ({
+    id,
+    boardId,
+    columnId: 'col1',
+    title,
+    position: 'a0',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2000-01-01T00:00:00.000Z',
+  })
+
+  it('privado por defecto: nadie más ve el tablero ni sus tarjetas', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await push(c.owner, 'cards', [card('k1', 'b1')])
+    expect(ids(await pull(c.ana, 'boards'))).toEqual([])
+    expect(ids(await pull(c.ana, 'cards'))).toEqual([])
+  })
+
+  it('al compartir, el invitado recibe el tablero completo aunque su cursor sea reciente', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await push(c.owner, 'cards', [card('k1', 'b1')])
+    const cursor = new Date().toISOString() // el invitado ya descargó todo lo anterior a este momento
+    expect((await share(c.owner, 'b1', 'ana@correo.com', 'viewer')).statusCode).toBe(201)
+    const boards = await pull(c.ana, 'boards', cursor)
+    expect(ids(boards)).toEqual(['b1'])
+    expect(boards[0].ownerId).toBeTruthy()
+    expect(ids(await pull(c.ana, 'cards', cursor))).toEqual(['k1'])
+    expect(ids(await pull(c.beto, 'cards'))).toEqual([]) // otros siguen sin verlo
+  })
+
+  it('editor escribe (queda a nombre del dueño); lector no', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await share(c.owner, 'b1', 'beto@correo.com', 'viewer')
+
+    expect(
+      (await push(c.ana, 'cards', [card('k1', 'b1', 'de Ana')])).json().rejected,
+    ).toBeUndefined()
+    expect(ids(await pull(c.owner, 'cards'))).toEqual(['k1'])
+    expect(ids(await pull(c.beto, 'cards'))).toEqual(['k1'])
+
+    const res = await push(c.beto, 'cards', [card('k2', 'b1', 'de Beto')])
+    expect(res.json().rejected).toEqual(['k2'])
+    expect(ids(await pull(c.owner, 'cards'))).toEqual(['k1'])
+  })
+
+  it('no se puede escribir en tableros ajenos ni robar filas por id', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await push(c.owner, 'cards', [card('k1', 'b1', 'original')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    // un editor no cambia el tablero en sí (nombre, borrado…)
+    expect((await push(c.ana, 'boards', [board('b1', 'hackeado')])).json().rejected).toEqual(['b1'])
+    // ni escribe donde no tiene acceso
+    expect((await push(c.beto, 'cards', [card('k9', 'b1')])).json().rejected).toEqual(['k9'])
+    // ni mueve una tarjeta de un tablero privado a uno compartido reusando su id
+    await push(c.owner, 'boards', [board('b2')])
+    await push(c.owner, 'cards', [card('k2', 'b2', 'privada')])
+    expect((await push(c.ana, 'cards', [card('k2', 'b1', 'robada')])).json().rejected).toEqual([
+      'k2',
+    ])
+    const mine = await pull(c.owner, 'cards')
+    expect(mine.find((r) => r.id === 'k2')?.title).toBe('privada')
+  })
+
+  it('quitar a un miembro: deja de recibir cambios; un miembro puede salirse; otros no pueden quitar', async () => {
+    const { c, ana } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await share(c.owner, 'b1', 'beto@correo.com', 'viewer')
+    const del = (cookie: string, userId: string) =>
+      built.app.inject({
+        method: 'DELETE',
+        url: `/api/boards/b1/members/${userId}`,
+        headers: headers(cookie),
+      })
+    const beto = findUserByEmail(db, 'beto@correo.com')!
+    expect((await del(c.ana, beto.id)).statusCode).toBe(404) // un miembro no expulsa a otro
+    expect((await del(c.owner, ana.id)).statusCode).toBe(204)
+    await push(c.owner, 'cards', [card('k1', 'b1')])
+    expect(ids(await pull(c.ana, 'cards'))).toEqual([])
+    expect((await del(c.beto, beto.id)).statusCode).toBe(204) // se sale solo
+    expect(ids(await pull(c.beto, 'boards'))).toEqual([])
+  })
+
+  it('validaciones al compartir', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    expect((await share(c.owner, 'b1', 'nadie@correo.com')).statusCode).toBe(404)
+    expect((await share(c.owner, 'b1', 'dueno@correo.com')).statusCode).toBe(400)
+    expect((await share(c.owner, 'b1', 'ana@correo.com', 'admin')).statusCode).toBe(400)
+    expect((await share(c.ana, 'b1', 'beto@correo.com')).statusCode).toBe(404) // no es su tablero
+    // cambiar el rol de alguien ya invitado
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer')
+    expect((await share(c.owner, 'b1', 'ana@correo.com', 'editor')).statusCode).toBe(200)
+  })
+
+  it('/api/shares lista lo compartido conmigo y los miembros de los míos', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer')
+    const get = async (cookie: string) =>
+      (
+        await built.app.inject({ method: 'GET', url: '/api/shares', headers: headers(cookie) })
+      ).json()
+    const ana = await get(c.ana)
+    expect(ana.shared).toMatchObject([
+      { boardId: 'b1', role: 'viewer', ownerEmail: 'dueno@correo.com' },
+    ])
+    const owner = await get(c.owner)
+    expect(owner.members).toMatchObject([
+      { boardId: 'b1', email: 'ana@correo.com', role: 'viewer' },
+    ])
+  })
+
+  it('imágenes: los miembros las ven; quien no tiene acceso, no', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await built.app.inject({
+      method: 'PUT',
+      url: '/api/blobs/img1',
+      headers: { ...headers(c.owner), 'content-type': 'image/png' },
+      payload: PNG,
+    })
+    await push(c.owner, 'attachments', [
+      {
+        id: 'img1',
+        boardId: 'b1',
+        cardId: 'k1',
+        name: 'x',
+        createdAt: '2026-11-01T00:00:00.000Z',
+        updatedAt: '',
+      },
+    ])
+    const get = (cookie: string) =>
+      built.app.inject({ method: 'GET', url: '/api/blobs/img1', headers: headers(cookie) })
+    expect((await get(c.ana)).statusCode).toBe(404)
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer')
+    expect((await get(c.ana)).statusCode).toBe(200)
+    expect((await get(c.beto)).statusCode).toBe(404)
+    // una imagen subida por un editor la ve el dueño
+    await share(c.owner, 'b1', 'beto@correo.com', 'editor')
+    await built.app.inject({
+      method: 'PUT',
+      url: '/api/blobs/img2',
+      headers: { ...headers(c.beto), 'content-type': 'image/png' },
+      payload: PNG,
+    })
+    await push(c.beto, 'attachments', [
+      {
+        id: 'img2',
+        boardId: 'b1',
+        cardId: 'k1',
+        name: 'y',
+        createdAt: '2026-11-01T00:00:00.000Z',
+        updatedAt: '',
+      },
+    ])
+    const owner2 = await built.app.inject({
+      method: 'GET',
+      url: '/api/blobs/img2',
+      headers: headers(c.owner),
+    })
+    expect(owner2.statusCode).toBe(200)
+  })
+
+  it('las filas antiguas sin board_id se completan en la migración', async () => {
+    // (la migración se ejecuta al abrir la BD; aquí se comprueba que los hijos se indexan al escribir)
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1')])
+    await push(c.owner, 'items', [
+      {
+        id: 'i1',
+        boardId: 'b1',
+        cardId: 'k1',
+        text: 't',
+        done: false,
+        position: 'a0',
+        createdAt: '2026-11-01T00:00:00.000Z',
+        updatedAt: '',
+      },
+    ])
+    const row = db.prepare("SELECT board_id FROM rows WHERE tbl = 'items' AND id = 'i1'").get() as {
+      board_id: string
+    }
+    expect(row.board_id).toBe('b1')
+  })
+})

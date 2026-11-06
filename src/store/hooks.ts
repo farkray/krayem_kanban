@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { byPosition } from '../lib/position'
+import { useAccess } from '../sync/access'
+import { useAuth } from '../sync/auth'
 import { useStore } from './store'
 
 type Live = { deletedAt?: string }
@@ -81,24 +83,37 @@ export interface BoardSummary {
   title: string
   columnCount: number
   cardCount: number
+  /** Tablero que otra persona comparte conmigo (rol y dueño). */
+  sharedBy?: { email: string; role: 'editor' | 'viewer' }
+  /** Mi tablero, compartido con otras personas. */
+  memberCount: number
 }
 
 export function useBoardSummaries(): BoardSummary[] {
   const boards = useBoards()
   const columns = useStore((s) => s.columns)
   const cards = useStore((s) => s.cards)
+  const shared = useAccess((s) => s.shared)
+  const members = useAccess((s) => s.members)
+  const me = useAuth((s) => s.userId)
   return useMemo(() => {
     const colCount = new Map<string, number>()
     for (const c of live(columns)) colCount.set(c.boardId, (colCount.get(c.boardId) ?? 0) + 1)
     const cardCount = new Map<string, number>()
     for (const c of live(cards)) cardCount.set(c.boardId, (cardCount.get(c.boardId) ?? 0) + 1)
-    return boards.map((b) => ({
-      id: b.id,
-      title: b.title,
-      columnCount: colCount.get(b.id) ?? 0,
-      cardCount: cardCount.get(b.id) ?? 0,
-    }))
-  }, [boards, columns, cards])
+    return boards.map((b) => {
+      const foreign = !!b.ownerId && !!me && b.ownerId !== me
+      const s = shared.find((x) => x.boardId === b.id)
+      return {
+        id: b.id,
+        title: b.title,
+        columnCount: colCount.get(b.id) ?? 0,
+        cardCount: cardCount.get(b.id) ?? 0,
+        sharedBy: foreign ? { email: s?.ownerEmail ?? '', role: s?.role ?? 'viewer' } : undefined,
+        memberCount: foreign ? 0 : members.filter((m) => m.boardId === b.id).length,
+      }
+    })
+  }, [boards, columns, cards, shared, members, me])
 }
 
 export function useAttachments(cardId: string) {
@@ -118,12 +133,15 @@ export function useAttachmentIndex() {
   return useMemo(() => new Map(live(attachments).map((a) => [a.id, a])), [attachments])
 }
 
-/** Etiquetas vivas, por nombre. */
-export function useLabels() {
+/** Etiquetas vivas de un tablero, por nombre. */
+export function useLabels(boardId: string | null | undefined) {
   const labels = useStore((s) => s.labels)
   return useMemo(
-    () => live(labels).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })),
-    [labels],
+    () =>
+      live(labels)
+        .filter((l) => l.boardId === boardId)
+        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })),
+    [labels, boardId],
   )
 }
 

@@ -1,5 +1,6 @@
 import { db } from '../db/db'
 import { byPosition } from '../lib/position'
+import { setRoleResolver } from '../lib/access'
 import { flush, resetInit, resetStore, useStore } from './store'
 
 const S = () => useStore.getState()
@@ -235,18 +236,19 @@ describe('imágenes', () => {
 })
 
 describe('etiquetas', () => {
+  const B = () => S().boards.find((b) => !b.deletedAt)?.id ?? S().createBoard('T')!
   it('crea con nombre y color, sin duplicar el nombre (sin distinguir mayúsculas)', () => {
-    expect(S().createLabel('   ', 'blue')).toBeNull()
-    const id = S().createLabel('  Coppel ', 'blue')!
+    expect(S().createLabel(B(), '   ', 'blue')).toBeNull()
+    const id = S().createLabel(B(), '  Coppel ', 'blue')!
     expect(S().labels.find((l) => l.id === id)).toMatchObject({ name: 'Coppel', color: 'blue' })
-    expect(S().createLabel('coppel', 'red')).toBeNull()
-    expect(S().createLabel('x'.repeat(31), 'blue')).toBeNull()
-    expect(S().createLabel('Otra', 'fucsia' as never)).toBeNull()
+    expect(S().createLabel(B(), 'coppel', 'red')).toBeNull()
+    expect(S().createLabel(B(), 'x'.repeat(31), 'blue')).toBeNull()
+    expect(S().createLabel(B(), 'Otra', 'fucsia' as never)).toBeNull()
   })
 
   it('edita nombre y color; rechaza duplicados', () => {
-    const a = S().createLabel('Coppel', 'blue')!
-    const b = S().createLabel('Liverpool', 'pink')!
+    const a = S().createLabel(B(), 'Coppel', 'blue')!
+    const b = S().createLabel(B(), 'Liverpool', 'pink')!
     expect(S().updateLabel(a, { color: 'green', name: 'Coppel MX' })).toBe(true)
     expect(S().labels.find((l) => l.id === a)).toMatchObject({ name: 'Coppel MX', color: 'green' })
     expect(S().updateLabel(b, { name: 'coppel mx' })).toBe(false)
@@ -256,7 +258,7 @@ describe('etiquetas', () => {
   it('asigna y quita en una tarjeta; máximo 8 por tarjeta', () => {
     const board = S().createBoard('X')!
     const card = S().addCard(liveCols(board)[0].id, 'A')!
-    const ids = Array.from({ length: 9 }, (_, i) => S().createLabel(`E${i}`, 'gray')!)
+    const ids = Array.from({ length: 9 }, (_, i) => S().createLabel(board, `E${i}`, 'gray')!)
     for (const id of ids.slice(0, 8)) expect(S().toggleCardLabel(card, id)).toBe(true)
     expect(S().toggleCardLabel(card, ids[8])).toBe(false)
     expect(S().cards.find((c) => c.id === card)?.labelIds).toHaveLength(8)
@@ -267,7 +269,7 @@ describe('etiquetas', () => {
   })
 
   it('eliminar una etiqueta se puede deshacer y la saca del filtro', () => {
-    const id = S().createLabel('Coppel', 'blue')!
+    const id = S().createLabel(B(), 'Coppel', 'blue')!
     S().setLabelFilter([id])
     S().deleteLabel(id)
     expect(S().labels.find((l) => l.id === id)?.deletedAt).toBeTruthy()
@@ -277,7 +279,7 @@ describe('etiquetas', () => {
   })
 
   it('el outbox encola las etiquetas para sincronizarlas', async () => {
-    const id = S().createLabel('Coppel', 'blue')!
+    const id = S().createLabel(B(), 'Coppel', 'blue')!
     await flush()
     expect(await db.outbox.get(`labels:${id}`)).toBeTruthy()
     expect((await db.labels.get(id))?.name).toBe('Coppel')
@@ -348,5 +350,106 @@ describe('tipo de columna y límites (WIP)', () => {
     for (const t of ['1', '2', '3']) S().addCard(todo.id, t)
     expect(S().deleteColumn(todo.id, doing.id)).toBe(false)
     expect(liveCols(todo.boardId)).toHaveLength(3)
+  })
+})
+
+describe('etiquetas por tablero', () => {
+  it('una etiqueta solo se asigna a tarjetas de su tablero', () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const label = S().createLabel(a, 'Coppel', 'blue')!
+    const cardB = S().addCard(liveCols(b)[0].id, 'x')!
+    expect(S().toggleCardLabel(cardB, label)).toBe(false)
+    // el mismo nombre sí puede existir en otro tablero
+    expect(S().createLabel(b, 'Coppel', 'red')).toBeTruthy()
+  })
+
+  it('migra las etiquetas antiguas (globales) a cada tablero que las usa', async () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const cardA = S().addCard(liveCols(a)[0].id, 'a')!
+    const cardB = S().addCard(liveCols(b)[0].id, 'b')!
+    const ts = new Date().toISOString()
+    const coppel = {
+      id: 'legacy-1',
+      name: 'Coppel',
+      color: 'blue' as const,
+      createdAt: ts,
+      updatedAt: ts,
+    }
+    const sin = {
+      id: 'legacy-2',
+      name: 'SinUso',
+      color: 'gray' as const,
+      createdAt: ts,
+      updatedAt: ts,
+    }
+    useStore.setState({ labels: [coppel, sin] })
+    S().updateCard(cardA, { labelIds: ['legacy-1'] })
+    S().updateCard(cardB, { labelIds: ['legacy-1'] })
+
+    await S().migrateLabels()
+    const live = S().labels.filter((l) => !l.deletedAt)
+    expect(
+      live
+        .filter((l) => l.name === 'Coppel')
+        .map((l) => l.boardId)
+        .sort(),
+    ).toEqual([a, b].sort())
+    expect(live.filter((l) => l.name === 'SinUso').map((l) => l.boardId)).toEqual([a]) // al primero
+    expect(live.every((l) => !!l.boardId)).toBe(true)
+    for (const [card, board] of [
+      [cardA, a],
+      [cardB, b],
+    ] as const) {
+      const ids = S().cards.find((c) => c.id === card)!.labelIds!
+      expect(live.find((l) => l.id === ids[0])?.boardId).toBe(board)
+    }
+    // idempotente: no vuelve a duplicar
+    const before = S().labels.length
+    await S().migrateLabels()
+    expect(S().labels.length).toBe(before)
+  })
+})
+
+describe('tableros compartidos (cliente)', () => {
+  afterEach(() => setRoleResolver(null))
+
+  it('en solo lectura no se escribe nada y se avisa', () => {
+    const board = S().createBoard('Ajeno')!
+    const col = liveCols(board)[0]
+    setRoleResolver((id) => (id === board ? 'viewer' : 'owner'))
+    expect(S().addCard(col.id, 'No')).toBeTruthy() // la acción devuelve id, pero put() no escribe
+    expect(liveCards(col.id)).toHaveLength(0)
+    expect(S().toast?.message).toContain('solo lectura')
+    expect(S().renameBoard(board, 'Otro')).toBe(true)
+    expect(S().boards.find((b) => b.id === board)?.title).toBe('Ajeno')
+  })
+
+  it('un editor sí escribe, y los hijos llevan el tablero', () => {
+    const board = S().createBoard('Compartido')!
+    setRoleResolver(() => 'editor')
+    const col = liveCols(board)[0]
+    const card = S().addCard(col.id, 'Sí')!
+    const item = S().addItem(card, 'ítem')!
+    const comment = S().addComment(card, 'hola')!
+    expect(S().items.find((i) => i.id === item)?.boardId).toBe(board)
+    expect(S().comments.find((c) => c.id === comment)?.boardId).toBe(board)
+  })
+
+  it('purgeBoards borra el tablero y todo lo suyo del dispositivo', async () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const cardA = S().addCard(liveCols(a)[0].id, 'a')!
+    S().addItem(cardA, 'i')
+    S().addComment(cardA, 'c')
+    S().addCard(liveCols(b)[0].id, 'b')
+    await S().purgeBoards([a])
+    expect(S().boards.map((x) => x.id)).toEqual([b])
+    expect(S().cards.every((c) => c.boardId === b)).toBe(true)
+    expect(S().items).toHaveLength(0)
+    expect(S().comments).toHaveLength(0)
+    expect(await db.cards.where('boardId').equals(a).count()).toBe(0)
+    expect(await db.outbox.get(`cards:${cardA}`)).toBeUndefined()
   })
 })

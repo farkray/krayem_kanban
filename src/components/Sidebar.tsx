@@ -35,6 +35,40 @@ export function Sidebar({
   account,
 }: Props) {
   const [creating, setCreating] = useState(false)
+  const mine = boards.filter((b) => !b.sharedBy)
+  const sharedWithMe = boards.filter((b) => b.sharedBy)
+
+  const renderItem = (b: BoardSummary) => (
+    <li key={b.id}>
+      <button
+        type="button"
+        className={styles.item}
+        aria-current={b.id === activeId ? 'page' : undefined}
+        onClick={() => onSelect(b.id)}
+      >
+        <span className={styles.boardIcon}>
+          <BoardIcon width={16} height={16} />
+        </span>
+        <span className={styles.itemText}>
+          <span className={styles.itemTitle}>{b.title}</span>
+          <span className={styles.itemMeta}>
+            {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}
+            {pluralize(b.cardCount, 'tarjeta', 'tarjetas')}
+          </span>
+          {b.sharedBy && (
+            <span className={styles.itemMeta}>
+              De {b.sharedBy.email} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
+            </span>
+          )}
+          {b.memberCount > 0 && (
+            <span className={styles.itemMeta}>
+              Compartido con {pluralize(b.memberCount, 'persona', 'personas')}
+            </span>
+          )}
+        </span>
+      </button>
+    </li>
+  )
 
   return (
     <aside className={`${styles.sidebar} ${drawer ? styles.drawer : ''}`} aria-label="Tableros">
@@ -79,29 +113,19 @@ export function Sidebar({
       {boards.length === 0 && !creating ? (
         <p className={styles.empty}>Aún no tienes tableros. Crea el primero con “+”.</p>
       ) : (
-        <ul className={styles.list}>
-          {boards.map((b) => (
-            <li key={b.id}>
-              <button
-                type="button"
-                className={styles.item}
-                aria-current={b.id === activeId ? 'page' : undefined}
-                onClick={() => onSelect(b.id)}
-              >
-                <span className={styles.boardIcon}>
-                  <BoardIcon width={16} height={16} />
-                </span>
-                <span className={styles.itemText}>
-                  <span className={styles.itemTitle}>{b.title}</span>
-                  <span className={styles.itemMeta}>
-                    {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}
-                    {pluralize(b.cardCount, 'tarjeta', 'tarjetas')}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className={styles.list} aria-label="Mis tableros">
+            {mine.map(renderItem)}
+          </ul>
+          {sharedWithMe.length > 0 && (
+            <>
+              <h3 className={styles.subheading}>Compartidos conmigo</h3>
+              <ul className={styles.list} aria-label="Compartidos conmigo">
+                {sharedWithMe.map(renderItem)}
+              </ul>
+            </>
+          )}
+        </>
       )}
       {drawer && (
         <div className={styles.install}>

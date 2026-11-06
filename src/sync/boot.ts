@@ -14,6 +14,7 @@ import {
 } from './auth'
 import { setBlobFetcher } from './blobs'
 import { createEngine, type Engine } from './engine'
+import { loadCachedAccess, refreshAccess, resetAccess } from './access'
 import { createHttpRemote } from './httpRemote'
 
 const clientId = crypto.randomUUID() // una conexión en vivo por pestaña
@@ -36,6 +37,7 @@ const loadIdentity = async () => (await db.meta.get('identity'))?.value as Ident
 
 function stopEngine() {
   engine?.stop()
+  resetAccess()
   engine = null
   setBlobFetcher(null)
 }
@@ -61,7 +63,18 @@ async function handleUser(user: Identity): Promise<void> {
   stopEngine()
   const remote = createHttpRemote(getConfig().API_URL, clientId, handleSignedOut)
   setBlobFetcher((att) => remote.downloadBlob(att))
-  engine = createEngine(remote, { onPulled: () => useStore.getState().seedIfEmpty() })
+  await loadCachedAccess()
+  engine = createEngine(remote, {
+    onPulled: async () => {
+      await refreshAccess() // permisos y limpieza de tableros a los que ya no tengo acceso
+      await useStore.getState().migrateLabels()
+      await useStore.getState().seedIfEmpty()
+    },
+    onAccess: async () => {
+      await refreshAccess()
+      await engine?.pull()
+    },
+  })
   await engine.start()
 }
 

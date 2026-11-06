@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useCanEdit } from '../lib/CanEdit'
 import { pluralize } from '../lib/format'
 import {
   COLUMN_KIND_NAMES,
@@ -55,6 +56,7 @@ export function Column({
   const deleteColumn = useStore((s) => s.deleteColumn)
   const addCard = useStore((s) => s.addCard)
   const setColumnKind = useStore((s) => s.setColumnKind)
+  const canEdit = useCanEdit()
   const kind = kindOf(column)
   const limit = limitOf(column)
   const full = limit !== null && total >= limit
@@ -66,6 +68,7 @@ export function Column({
   const sortable = useSortable({
     id: `col:${column.id}`,
     data: { type: 'column', columnId: column.id },
+    disabled: !canEdit,
   })
   const { setNodeRef: setDropRef } = useDroppable({
     id: `drop:${column.id}`,
@@ -83,18 +86,20 @@ export function Column({
       aria-label={column.title}
     >
       <header className={styles.header}>
-        <button
-          type="button"
-          ref={sortable.setActivatorNodeRef}
-          className={styles.grip}
-          aria-label={`Mover columna ${column.title}`}
-          title="Arrastra para mover la columna"
-          {...sortable.attributes}
-          aria-roledescription="columna que se puede mover"
-          {...sortable.listeners}
-        >
-          <GripIcon width={18} height={18} />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            ref={sortable.setActivatorNodeRef}
+            className={styles.grip}
+            aria-label={`Mover columna ${column.title}`}
+            title="Arrastra para mover la columna"
+            {...sortable.attributes}
+            aria-roledescription="columna que se puede mover"
+            {...sortable.listeners}
+          >
+            <GripIcon width={18} height={18} />
+          </button>
+        )}
         <div className={styles.headText}>
           {renaming ? (
             <InlineInput
@@ -113,8 +118,8 @@ export function Column({
               <button
                 type="button"
                 className={styles.titleBtn}
-                onClick={() => setRenaming(true)}
-                title="Renombrar"
+                onClick={() => canEdit && setRenaming(true)}
+                title={canEdit ? 'Renombrar' : undefined}
               >
                 {column.title}
               </button>
@@ -135,17 +140,21 @@ export function Column({
             )}
           </span>
         </div>
-        <ColumnKindMenu column={column} onChange={(k) => setColumnKind(column.id, k)} />
-        <button
-          type="button"
-          className={styles.delete}
-          aria-label={`Eliminar columna ${column.title}`}
-          disabled={siblings.length <= 1}
-          title={siblings.length <= 1 ? 'Un tablero necesita al menos una columna' : undefined}
-          onClick={() => setConfirmDelete(true)}
-        >
-          <TrashIcon width={15} height={15} />
-        </button>
+        {canEdit && (
+          <ColumnKindMenu column={column} onChange={(k) => setColumnKind(column.id, k)} />
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            className={styles.delete}
+            aria-label={`Eliminar columna ${column.title}`}
+            disabled={siblings.length <= 1}
+            title={siblings.length <= 1 ? 'Un tablero necesita al menos una columna' : undefined}
+            onClick={() => setConfirmDelete(true)}
+          >
+            <TrashIcon width={15} height={15} />
+          </button>
+        )}
       </header>
 
       <div ref={setDropRef} className={styles.body}>
@@ -163,7 +172,7 @@ export function Column({
         {cards.length === 0 && !adding && (
           <p className={styles.empty}>{total > 0 ? 'Sin coincidencias' : 'Sin tarjetas'}</p>
         )}
-        {adding ? (
+        {!canEdit ? null : adding ? (
           <InlineInput
             label="Título de la tarjeta"
             placeholder="Título de la tarjeta"

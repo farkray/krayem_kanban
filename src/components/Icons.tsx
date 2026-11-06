@@ -128,3 +128,10 @@ export const CodeIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
   </Svg>
 )
+
+export const ShareIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <circle cx="9" cy="8" r="3" />
+    <path d="M3 19c0-3 2.7-5 6-5s6 2 6 5M16 5.5a3 3 0 0 1 0 5M18 14c2 .6 3 2.2 3 5" />
+  </Svg>
+)

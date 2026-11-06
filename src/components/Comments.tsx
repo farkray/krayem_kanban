@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useCanEdit } from '../lib/CanEdit'
 import { relativeTime } from '../lib/format'
 import type { Comment } from '../lib/types'
 import { useComments } from '../store/hooks'
@@ -65,9 +66,10 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
   const comments = useComments(cardId)
   const addComment = useStore((s) => s.addComment)
   const updates = variant === 'updates'
+  const canEdit = useCanEdit()
   const [sent, setSent] = useState(false)
 
-  const editor = (
+  const editor = !canEdit ? null : (
     <RichEditor
       cardId={cardId}
       label="Nueva actualización"

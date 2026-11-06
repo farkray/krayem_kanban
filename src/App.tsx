@@ -142,6 +142,7 @@ export default function App() {
             navigate('/')
           }}
           onPick={onPick}
+          boardId={active?.id ?? null}
         />
         <main className={styles.content}>
           {active ? (

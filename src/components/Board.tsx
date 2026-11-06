@@ -21,17 +21,21 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
+import { CanEditContext } from '../lib/CanEdit'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
 import { LIMITS, limitOf, type Board as BoardModel } from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
 import { useStore } from '../store/store'
+import { removeMember, useBoardAccess } from '../sync/access'
+import { useAuth } from '../sync/auth'
 import { AddColumn } from './AddColumn'
 import { CardOverlay } from './Card'
 import { Column, ColumnOverlay } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
-import { TrashIcon } from './Icons'
+import { ShareDialog } from './ShareDialog'
+import { ShareIcon, TrashIcon } from './Icons'
 import { InlineInput } from './InlineInput'
 import { LabelChip } from './LabelChip'
 import styles from './Board.module.css'
@@ -57,6 +61,12 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
   const addColumn = useStore((s) => s.addColumn)
   const moveColumn = useStore((s) => s.moveColumn)
   const moveCard = useStore((s) => s.moveCard)
+
+  const access = useBoardAccess(board.id)
+  const me = useAuth((s) => s.userId)
+  const signedIn = useAuth((s) => s.status === 'signedIn')
+  const [sharing, setSharing] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [renaming, setRenaming] = useState(false)
@@ -197,151 +207,193 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
   const lastColumnId = columns[columns.length - 1]?.id
 
   return (
-    <div className={styles.board}>
-      <div className={styles.head}>
-        {renaming ? (
-          <InlineInput
-            className={styles.titleInput}
-            initial={board.title}
-            label="Nombre del tablero"
-            maxLength={LIMITS.board}
-            submitOnBlur
-            onSubmit={(t) => {
-              renameBoard(board.id, t)
-              setRenaming(false)
-            }}
-            onCancel={() => setRenaming(false)}
-          />
-        ) : (
-          <h1 className={styles.title}>
+    <CanEditContext.Provider value={access.canEdit}>
+      <div className={styles.board}>
+        <div className={styles.head}>
+          {renaming ? (
+            <InlineInput
+              className={styles.titleInput}
+              initial={board.title}
+              label="Nombre del tablero"
+              maxLength={LIMITS.board}
+              submitOnBlur
+              onSubmit={(t) => {
+                renameBoard(board.id, t)
+                setRenaming(false)
+              }}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <h1 className={styles.title}>
+              <button
+                type="button"
+                className={styles.titleBtn}
+                onClick={() => access.isOwner && setRenaming(true)}
+                title={access.isOwner ? 'Renombrar tablero' : undefined}
+              >
+                {board.title}
+              </button>
+            </h1>
+          )}
+          {access.isOwner && (
             <button
               type="button"
-              className={styles.titleBtn}
-              onClick={() => setRenaming(true)}
-              title="Renombrar tablero"
+              className={styles.delete}
+              aria-label="Eliminar tablero"
+              onClick={() => setConfirmDelete(true)}
             >
-              {board.title}
+              <TrashIcon width={16} height={16} />
             </button>
-          </h1>
+          )}
+          <div className={styles.headAction}>
+            {access.isOwner && signedIn && (
+              <button type="button" className={styles.shareBtn} onClick={() => setSharing(true)}>
+                <ShareIcon width={16} height={16} />
+                {access.members.length > 0 ? `Compartido · ${access.members.length}` : 'Compartir'}
+              </button>
+            )}
+            {!access.isOwner && (
+              <>
+                <span className={styles.sharedBy}>
+                  De {access.ownerEmail ?? 'otra persona'} ·{' '}
+                  {access.canEdit ? 'Editor' : 'Solo lectura'}
+                </span>
+                <button type="button" className={styles.shareBtn} onClick={() => setLeaving(true)}>
+                  Salir del tablero
+                </button>
+              </>
+            )}
+            {access.canEdit && (
+              <AddColumn count={columns.length} onAdd={(t) => addColumn(board.id, t)} />
+            )}
+          </div>
+        </div>
+
+        {filtering && (
+          <div className={styles.filterBar} role="status">
+            <span className={styles.filterLabel}>Filtrando por:</span>
+            {labelFilter
+              .flatMap((id) => labelIndex.get(id) ?? [])
+              .map((l) => (
+                <LabelChip
+                  key={l.id}
+                  label={l}
+                  onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
+                />
+              ))}
+            <button type="button" className={styles.clearFilter} onClick={() => setLabelFilter([])}>
+              Limpiar filtro
+            </button>
+          </div>
         )}
-        <button
-          type="button"
-          className={styles.delete}
-          aria-label="Eliminar tablero"
-          onClick={() => setConfirmDelete(true)}
-        >
-          <TrashIcon width={16} height={16} />
-        </button>
-        <div className={styles.headAction}>
-          <AddColumn count={columns.length} onAdd={(t) => addColumn(board.id, t)} />
-        </div>
-      </div>
 
-      {filtering && (
-        <div className={styles.filterBar} role="status">
-          <span className={styles.filterLabel}>Filtrando por:</span>
-          {labelFilter
-            .flatMap((id) => labelIndex.get(id) ?? [])
-            .map((l) => (
-              <LabelChip
-                key={l.id}
-                label={l}
-                onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
-              />
-            ))}
-          <button type="button" className={styles.clearFilter} onClick={() => setLabelFilter([])}>
-            Limpiar filtro
-          </button>
-        </div>
-      )}
-
-      <DndContext
-        accessibility={{ announcements: announce, screenReaderInstructions }}
-        sensors={sensors}
-        collisionDetection={collision}
-        onDragStart={onDragStart}
-        onDragOver={onDragOver}
-        onDragEnd={onDragEnd}
-        onDragCancel={() => {
-          setActive(null)
-          setOverColumn(null)
-        }}
-      >
-        <div className={`${styles.columns} ${active ? styles.dragging : ''}`}>
-          <SortableContext
-            items={columns.map((c) => `col:${c.id}`)}
-            strategy={horizontalListSortingStrategy}
-          >
-            {columns.map((col, idx) => (
-              <Column
-                key={col.id}
-                column={col}
-                siblings={columns}
-                cards={cardsByColumn.get(col.id) ?? []}
-                total={totalByColumn.get(col.id) ?? 0}
-                counts={totalByColumn}
-                stats={stats}
-                isLast={col.id === lastColumnId}
-                dropTarget={active?.type === 'card' && overColumn === col.id}
-                blocked={
-                  active?.type === 'card' &&
-                  activeCard?.columnId !== col.id &&
-                  limitOf(col) !== null &&
-                  (totalByColumn.get(col.id) ?? 0) >= (limitOf(col) ?? 0)
-                }
-                tone={
-                  columns.length > 1
-                    ? idx === 0
-                      ? 'start'
-                      : col.id === lastColumnId
-                        ? 'done'
-                        : 'progress'
-                    : 'start'
-                }
-                onOpenCard={onOpenCard}
-              />
-            ))}
-          </SortableContext>
-        </div>
-        <DragOverlay
-          dropAnimation={
-            reducedMotion ? null : { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
-          }
-        >
-          {activeCard && (
-            <CardOverlay
-              card={activeCard}
-              stats={stats.get(activeCard.id)}
-              finished={activeCard.columnId === lastColumnId}
-            />
-          )}
-          {activeColumn && (
-            <ColumnOverlay
-              column={activeColumn}
-              count={cardsByColumn.get(activeColumn.id)?.length ?? 0}
-            />
-          )}
-        </DragOverlay>
-      </DndContext>
-
-      {confirmDelete && (
-        <ConfirmDialog
-          title={`Eliminar “${board.title}”`}
-          confirmLabel="Eliminar tablero"
-          onCancel={() => setConfirmDelete(false)}
-          onConfirm={() => {
-            deleteBoard(board.id)
-            setConfirmDelete(false)
-            onDeleted()
+        <DndContext
+          accessibility={{ announcements: announce, screenReaderInstructions }}
+          sensors={access.canEdit ? sensors : []}
+          collisionDetection={collision}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          onDragCancel={() => {
+            setActive(null)
+            setOverColumn(null)
           }}
         >
-          <p>
-            Se eliminarán {pluralize(columns.length, 'columna', 'columnas')} y{' '}
-            {pluralize(cards.length, 'tarjeta', 'tarjetas')}. Podrás deshacerlo durante unos
-            segundos.
-          </p>
-        </ConfirmDialog>
-      )}
-    </div>
+          <div className={`${styles.columns} ${active ? styles.dragging : ''}`}>
+            <SortableContext
+              items={columns.map((c) => `col:${c.id}`)}
+              strategy={horizontalListSortingStrategy}
+            >
+              {columns.map((col, idx) => (
+                <Column
+                  key={col.id}
+                  column={col}
+                  siblings={columns}
+                  cards={cardsByColumn.get(col.id) ?? []}
+                  total={totalByColumn.get(col.id) ?? 0}
+                  counts={totalByColumn}
+                  stats={stats}
+                  isLast={col.id === lastColumnId}
+                  dropTarget={active?.type === 'card' && overColumn === col.id}
+                  blocked={
+                    active?.type === 'card' &&
+                    activeCard?.columnId !== col.id &&
+                    limitOf(col) !== null &&
+                    (totalByColumn.get(col.id) ?? 0) >= (limitOf(col) ?? 0)
+                  }
+                  tone={
+                    columns.length > 1
+                      ? idx === 0
+                        ? 'start'
+                        : col.id === lastColumnId
+                          ? 'done'
+                          : 'progress'
+                      : 'start'
+                  }
+                  onOpenCard={onOpenCard}
+                />
+              ))}
+            </SortableContext>
+          </div>
+          <DragOverlay
+            dropAnimation={
+              reducedMotion ? null : { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+            }
+          >
+            {activeCard && (
+              <CardOverlay
+                card={activeCard}
+                stats={stats.get(activeCard.id)}
+                finished={activeCard.columnId === lastColumnId}
+              />
+            )}
+            {activeColumn && (
+              <ColumnOverlay
+                column={activeColumn}
+                count={cardsByColumn.get(activeColumn.id)?.length ?? 0}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+
+        {confirmDelete && (
+          <ConfirmDialog
+            title={`Eliminar “${board.title}”`}
+            confirmLabel="Eliminar tablero"
+            onCancel={() => setConfirmDelete(false)}
+            onConfirm={() => {
+              deleteBoard(board.id)
+              setConfirmDelete(false)
+              onDeleted()
+            }}
+          >
+            <p>
+              Se eliminarán {pluralize(columns.length, 'columna', 'columnas')} y{' '}
+              {pluralize(cards.length, 'tarjeta', 'tarjetas')}. Podrás deshacerlo durante unos
+              segundos.
+            </p>
+          </ConfirmDialog>
+        )}
+        {sharing && (
+          <ShareDialog boardId={board.id} title={board.title} onClose={() => setSharing(false)} />
+        )}
+        {leaving && (
+          <ConfirmDialog
+            title={`Salir de “${board.title}”`}
+            confirmLabel="Salir del tablero"
+            onCancel={() => setLeaving(false)}
+            onConfirm={async () => {
+              setLeaving(false)
+              if (me && !(await removeMember(board.id, me))) onDeleted()
+            }}
+          >
+            <p>
+              Dejarás de ver este tablero. {access.ownerEmail ?? 'Su dueño'} puede volver a
+              invitarte.
+            </p>
+          </ConfirmDialog>
+        )}
+      </div>
+    </CanEditContext.Provider>
   )
 }

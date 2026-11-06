@@ -321,3 +321,13 @@ Cada tarjeta tiene un botón de papelera fuera de su área clicable (aparece al 
 - La cuenta de `ADMIN_EMAIL` es **administrador** (se vuelve a asignar en cada arranque del servidor). Cualquier otra cuenta puede ser admin con `set-admin` por CLI.
 - El admin ve el botón **Usuarios** en la barra lateral: lista de cuentas, **crear** (correo + contraseña opcional; vacía = temporal generada, que se muestra una sola vez con botón Copiar), **restablecer contraseña** (nueva temporal; cierra las sesiones de ese usuario) y **eliminar** (con confirmación; borra todos sus datos e imágenes). No puede eliminarse a sí mismo.
 - API `/api/admin/*` (GET/POST `users`, POST `users/:id/password`, DELETE `users/:id`): exige sesión de admin (403 si no) y la misma comprobación de origen que el resto.
+
+## 18. Tableros privados y compartidos (implementado)
+
+- Cada tablero es **privado** por defecto. El dueño pulsa **Compartir** en el tablero e invita por **correo** a una cuenta existente (si no tiene cuenta, el admin debe crearla) con permiso **Editor** (cambia tarjetas, columnas, etiquetas, comentarios e imágenes) o **Solo lectura** (solo ve). Puede cambiar el permiso o quitar a alguien cuando quiera.
+- Solo el dueño comparte, renombra o elimina el tablero. Un invitado puede **Salir del tablero**.
+- En la barra lateral, los tableros ajenos aparecen en **Compartidos conmigo** (con dueño y permiso); los propios compartidos indican con cuántas personas.
+- En solo lectura se ocultan o desactivan los controles de edición (agregar, arrastrar, eliminar, editor de actualizaciones); además el cliente y el servidor rechazan las escrituras.
+- Los cambios llegan en vivo a todos los miembros. Si te quitan acceso, el tablero se borra de tu dispositivo.
+- **Etiquetas por tablero:** pasaron a ser del tablero (se comparten con él). Al actualizar, las etiquetas antiguas se copian a cada tablero que las usaba (las que no usaba ninguno, al primero).
+- Límite conocido: si el admin elimina a un usuario, se borran también las imágenes que subió a tableros de otros.

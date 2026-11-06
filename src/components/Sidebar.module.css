@@ -199,3 +199,13 @@
     font-size: var(--text-sm);
   }
 }
+
+.subheading {
+  margin: var(--space-4) 0 var(--space-1);
+  padding: 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

@@ -306,13 +306,66 @@ export function buildApp(opts: AppOptions): BuiltApp {
   /* ---------- sincronización ---------- */
 
   const selectSince = db.prepare(
-    `SELECT data FROM rows WHERE user_id = ? AND tbl = ? AND updated_at >= ?
-     ORDER BY updated_at, id LIMIT ?`,
+    `SELECT r.data, r.user_id FROM rows r
+     WHERE r.tbl = ? AND r.updated_at >= ?
+       AND (r.user_id = ? OR r.board_id IN (SELECT board_id FROM board_members WHERE user_id = ?))
+     ORDER BY r.updated_at, r.id LIMIT ?`,
   )
   const upsert = db.prepare(
-    `INSERT INTO rows (user_id, tbl, id, data, updated_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT (user_id, tbl, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+    `INSERT INTO rows (user_id, tbl, id, data, updated_at, board_id) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id, tbl, id) DO UPDATE SET
+       data = excluded.data, updated_at = excluded.updated_at,
+       board_id = COALESCE(excluded.board_id, rows.board_id)`,
   )
+  const findRow = db.prepare('SELECT user_id, board_id FROM rows WHERE tbl = ? AND id = ?')
+  const boardOwner = db.prepare("SELECT user_id FROM rows WHERE tbl = 'boards' AND id = ? LIMIT 1")
+  const memberRole = db.prepare('SELECT role FROM board_members WHERE board_id = ? AND user_id = ?')
+  const membersOf = db.prepare('SELECT user_id FROM board_members WHERE board_id = ?')
+
+  /** Tablero al que pertenece una fila (los hijos antiguos sin boardId se resuelven por la fila existente). */
+  const boardIdOf = (table: string, row: Record<string, unknown>): string | null =>
+    table === 'boards'
+      ? String(row.id)
+      : typeof row.boardId === 'string' && ID_RE.test(row.boardId)
+        ? row.boardId
+        : null
+
+  /**
+   * ¿Puede `userId` escribir esta fila y bajo qué dueño se guarda? Reglas:
+   *  · tablero: solo su dueño (o cualquiera si es nuevo: queda a su nombre);
+   *  · el resto: el dueño del tablero, o un miembro con rol editor;
+   *  · una fila ya existente no puede cambiar de tablero (nadie "roba" filas ajenas por id).
+   */
+  const writeOwner = (
+    userId: string,
+    table: string,
+    row: Record<string, unknown>,
+  ): string | null => {
+    const id = String(row.id)
+    const boardId = boardIdOf(table, row)
+    const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]
+    const mine = existing.find((e) => e.user_id === userId)
+
+    if (!boardId) return mine || existing.length === 0 ? userId : null // etiquetas/hijos antiguos
+    const board = boardOwner.get(boardId) as { user_id: string } | undefined
+    let owner = userId
+    if (board && board.user_id !== userId) {
+      if (table === 'boards') return null
+      const m = memberRole.get(boardId, userId) as { role: string } | undefined
+      if (!m || m.role !== 'editor') return null
+      owner = board.user_id
+    }
+    const target = existing.find((e) => e.user_id === owner)
+    if (target && target.board_id && target.board_id !== boardId) return null
+    if (!target && existing.length > 0 && table !== 'boards') return null // id ya usado por otro dueño
+    return owner
+  }
+
+  const recipients = (ownerId: string, boardId: string | null): string[] => {
+    const set = new Set([ownerId])
+    if (boardId) for (const m of membersOf.all(boardId) as { user_id: string }[]) set.add(m.user_id)
+    return [...set]
+  }
 
   app.get('/api/sync/:table', async (req, reply) => {
     const user = requireUser(req, reply)
@@ -322,8 +375,17 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const q = req.query as { since?: string; limit?: string }
     const since = q.since && !Number.isNaN(Date.parse(q.since)) ? q.since : ''
     const limit = Math.min(Math.max(Number(q.limit) || 500, 1), 1000)
-    const rows = selectSince.all(user.id, table, since, limit) as { data: string }[]
-    return { rows: rows.map((r) => JSON.parse(r.data)) }
+    const rows = selectSince.all(table, since, user.id, user.id, limit) as {
+      data: string
+      user_id: string
+    }[]
+    return {
+      rows: rows.map((r) => {
+        const row = JSON.parse(r.data)
+        if (table === 'boards') row.ownerId = r.user_id // para distinguir "mis tableros" de los compartidos
+        return row
+      }),
+    }
   })
 
   app.post('/api/sync/:table', async (req, reply) => {
@@ -343,19 +405,128 @@ export function buildApp(opts: AppOptions): BuiltApp {
         return reply.code(413).send({ error: 'too_large' })
     }
 
-    const stored = transaction(db, () =>
-      rows.map((r) => {
+    const rejected: string[] = []
+    const stored = transaction(db, () => {
+      const out: { row: Record<string, unknown>; owner: string; boardId: string | null }[] = []
+      for (const r of rows) {
+        const input = { ...(r as Record<string, unknown>) }
+        delete input.ownerId // lo pone el servidor al descargar; no se guarda
+        const owner = writeOwner(user.id, table, input)
+        if (!owner) {
+          rejected.push(String(input.id))
+          continue
+        }
         // El servidor manda el reloj: "último en llegar gana" y el cursor de descarga es fiable.
         const ts = nextTs()
-        const row: Record<string, unknown> = { ...(r as Record<string, unknown>), updatedAt: ts }
-        upsert.run(user.id, table, String(row.id), JSON.stringify(row), ts)
-        return row
-      }),
-    )
+        const row: Record<string, unknown> = { ...input, updatedAt: ts }
+        const boardId = boardIdOf(table, row)
+        upsert.run(owner, table, String(row.id), JSON.stringify(row), ts, boardId)
+        out.push({ row, owner, boardId })
+      }
+      return out
+    })
 
     const clientId = String(req.headers['x-client-id'] ?? '')
-    for (const row of stored) hub.publish(user.id, table, row, clientId)
-    return { ok: true, count: stored.length }
+    for (const { row, owner, boardId } of stored) {
+      const payload = table === 'boards' ? { ...row, ownerId: owner } : row
+      const bid =
+        boardId ??
+        (findRow.get(table, String(row.id)) as { board_id: string | null } | undefined)?.board_id ??
+        null
+      for (const uid of recipients(owner, bid)) hub.publish(uid, table, payload, clientId)
+    }
+    return { ok: true, count: stored.length, ...(rejected.length ? { rejected } : {}) }
+  })
+
+  /* ---------- tableros compartidos ---------- */
+
+  /** Tableros que otros comparten conmigo, y los miembros de los míos. */
+  app.get('/api/shares', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const shared = (
+      db
+        .prepare(
+          `SELECT m.board_id, m.role, u.email AS owner_email, m.owner_id FROM board_members m
+           JOIN users u ON u.id = m.owner_id WHERE m.user_id = ?`,
+        )
+        .all(user.id) as { board_id: string; role: string; owner_email: string; owner_id: string }[]
+    ).map((m) => ({
+      boardId: m.board_id,
+      role: m.role,
+      ownerId: m.owner_id,
+      ownerEmail: m.owner_email,
+    }))
+    const members = (
+      db
+        .prepare(
+          `SELECT m.board_id, m.user_id, m.role, u.email FROM board_members m
+           JOIN users u ON u.id = m.user_id WHERE m.owner_id = ? ORDER BY m.created_at`,
+        )
+        .all(user.id) as { board_id: string; user_id: string; role: string; email: string }[]
+    ).map((m) => ({ boardId: m.board_id, userId: m.user_id, role: m.role, email: m.email }))
+    return { shared, members }
+  })
+
+  /** Pone al día a un usuario recién invitado: sube el `updated_at` de las filas del tablero. */
+  const touchBoard = (ownerId: string, boardId: string) =>
+    transaction(db, () => {
+      const rows = db
+        .prepare('SELECT tbl, id, data FROM rows WHERE user_id = ? AND board_id = ?')
+        .all(ownerId, boardId) as { tbl: string; id: string; data: string }[]
+      const upd = db.prepare(
+        'UPDATE rows SET data = ?, updated_at = ? WHERE user_id = ? AND tbl = ? AND id = ?',
+      )
+      for (const r of rows) {
+        const ts = nextTs()
+        const data = { ...JSON.parse(r.data), updatedAt: ts }
+        upd.run(JSON.stringify(data), ts, ownerId, r.tbl, r.id)
+      }
+    })
+
+  const ownBoard = (userId: string, boardId: string) =>
+    ID_RE.test(boardId) &&
+    (boardOwner.get(boardId) as { user_id: string } | undefined)?.user_id === userId
+
+  app.post('/api/boards/:id/members', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const { id } = req.params as { id: string }
+    if (!ownBoard(user.id, id)) return reply.code(404).send({ error: 'not_found' })
+    const body = (req.body ?? {}) as { email?: unknown; role?: unknown }
+    if (!isStr(body.email, 254) || (body.role !== 'editor' && body.role !== 'viewer'))
+      return reply.code(400).send({ error: 'bad_request' })
+    const target = findUserByEmail(db, body.email)
+    if (!target) return reply.code(404).send({ error: 'user_not_found' })
+    if (target.id === user.id) return reply.code(400).send({ error: 'cannot_share_with_self' })
+    const had = memberRole.get(id, target.id)
+    db.prepare(
+      `INSERT INTO board_members (board_id, owner_id, user_id, role, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (board_id, user_id) DO UPDATE SET role = excluded.role`,
+    ).run(id, user.id, target.id, body.role, new Date().toISOString())
+    if (!had) touchBoard(user.id, id)
+    hub.publishAccess(target.id)
+    return reply.code(had ? 200 : 201).send({
+      member: { boardId: id, userId: target.id, email: target.email, role: body.role },
+    })
+  })
+
+  app.delete('/api/boards/:id/members/:userId', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const { id, userId } = req.params as { id: string; userId: string }
+    if (!ID_RE.test(id) || !ID_RE.test(userId)) return reply.code(400).send({ error: 'bad_id' })
+    const owner = (boardOwner.get(id) as { user_id: string } | undefined)?.user_id
+    // El dueño quita a cualquiera; un miembro solo puede salirse él mismo.
+    if (!owner || (owner !== user.id && userId !== user.id))
+      return reply.code(404).send({ error: 'not_found' })
+    const res = db
+      .prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
+      .run(id, userId)
+    if (res.changes === 0) return reply.code(404).send({ error: 'not_found' })
+    hub.publishAccess(userId)
+    hub.publishAccess(owner)
+    return reply.code(204).send()
   })
 
   /* ---------- tiempo real (SSE) ---------- */
@@ -393,6 +564,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (!Buffer.isBuffer(body)) return reply.code(415).send({ error: 'unsupported_media_type' })
     const mime = sniffImage(body)
     if (!mime) return reply.code(415).send({ error: 'not_an_image' })
+    const prev = db.prepare('SELECT user_id FROM blob_owners WHERE id = ?').get(id) as
+      { user_id: string } | undefined
+    if (prev && prev.user_id !== user.id) return reply.code(403).send({ error: 'forbidden' })
+    // Un visor no puede subir imágenes a un tablero compartido, pero sí a los suyos: la fila
+    // de la imagen la valida el sync; aquí solo se guarda el archivo bajo quien lo subió.
+    db.prepare('INSERT OR IGNORE INTO blob_owners (id, user_id) VALUES (?, ?)').run(id, user.id)
 
     const dir = blobDir(user.id)
     await mkdir(dir, { recursive: true })
@@ -408,10 +585,25 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (!user) return
     const { id } = req.params as { id: string }
     if (!ID_RE.test(id)) return reply.code(400).send({ error: 'bad_id' })
+    // Quién puede verla: quien la subió o cualquiera que vea la fila de la imagen (dueño/miembros).
+    const att = db
+      .prepare(
+        `SELECT r.user_id, r.board_id,
+           EXISTS (SELECT 1 FROM board_members m WHERE m.board_id = r.board_id AND m.user_id = ?) AS member
+         FROM rows r WHERE r.tbl = 'attachments' AND r.id = ?`,
+      )
+      .all(user.id, id) as { user_id: string; board_id: string | null; member: number }[]
+    const owner = db.prepare('SELECT user_id FROM blob_owners WHERE id = ?').get(id) as
+      { user_id: string } | undefined
+    const allowed =
+      owner?.user_id === user.id || att.some((a) => a.user_id === user.id || a.member === 1)
+    if (!allowed) return reply.code(404).send({ error: 'not_found' })
+    const dirOwner =
+      owner?.user_id ?? att.find((a) => a.user_id === user.id || a.member === 1)!.user_id
     try {
       const [data, mime] = await Promise.all([
-        readFile(join(blobDir(user.id), id)),
-        readFile(join(blobDir(user.id), `${id}.mime`), 'utf8'),
+        readFile(join(blobDir(dirOwner), id)),
+        readFile(join(blobDir(dirOwner), `${id}.mime`), 'utf8'),
       ])
       return reply
         .header('Content-Type', mime)

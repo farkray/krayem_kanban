@@ -305,3 +305,11 @@
     min-height: 44px;
   }
 }
+
+/* Agrupa los controles editables: en solo lectura se desactivan todos a la vez (fieldset disabled) */
+.fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

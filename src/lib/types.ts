@@ -33,11 +33,15 @@ export const LABEL_COLOR_NAMES: Record<LabelColor, string> = {
 export interface Label extends Base {
   name: string
   color: LabelColor
+  /** Tablero al que pertenece (las etiquetas son del tablero y se comparten con él). */
+  boardId?: string
 }
 
 export interface Board extends Base {
   title: string
   position: string
+  /** Dueño del tablero: lo pone el servidor al descargar. Ausente = tablero propio creado aquí. */
+  ownerId?: string
 }
 
 /** Tipo de columna: define el límite de tarjetas simultáneas (regla WIP). */
@@ -81,6 +85,7 @@ export interface Card extends Base {
 
 export interface Attachment extends Base {
   cardId: string
+  boardId?: string
   name: string
   /** Ruta dentro del bucket del usuario: `${id}.webp`. */
   path: string
@@ -95,6 +100,7 @@ export interface Attachment extends Base {
 
 export interface ChecklistItem extends Base {
   cardId: string
+  boardId?: string
   text: string
   done: boolean
   position: string
@@ -102,6 +108,7 @@ export interface ChecklistItem extends Base {
 
 export interface Comment extends Base {
   cardId: string
+  boardId?: string
   bodyMd: string
   editedAt?: string
 }

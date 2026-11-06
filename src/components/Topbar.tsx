@@ -12,9 +12,11 @@ interface Props {
   onToggleSidebar: () => void
   onHome: () => void
   onPick: (r: SearchResult) => void
+  /** Tablero abierto (el filtro por etiquetas es de ese tablero). */
+  boardId: string | null
 }
 
-export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick }: Props) {
+export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick, boardId }: Props) {
   return (
     <header className={styles.topbar}>
       <div className={styles.left}>
@@ -40,7 +42,7 @@ export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick }: Props) 
         <button type="button" className={`${styles.iconBtn} ${styles.extra}`} aria-label="Ayuda">
           <HelpIcon />
         </button>
-        <FilterMenu />
+        <FilterMenu boardId={boardId} />
         <SearchBox onPick={onPick} />
       </div>
     </header>
