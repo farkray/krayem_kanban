@@ -16,6 +16,12 @@ import { setBlobFetcher } from './blobs'
 import { createEngine, type Engine } from './engine'
 import { loadCachedAccess, refreshAccess, resetAccess } from './access'
 import { createHttpRemote } from './httpRemote'
+import {
+  receiveNotification,
+  refreshNotifications,
+  resetNotifications,
+  type AppNotification,
+} from './notifications'
 
 const clientId = crypto.randomUUID() // una conexión en vivo por pestaña
 let engine: Engine | null = null
@@ -39,6 +45,7 @@ const loadIdentity = async () => (await db.meta.get('identity'))?.value as Ident
 function stopEngine() {
   engine?.stop()
   resetAccess()
+  resetNotifications()
   engine = null
   setBlobFetcher(null)
 }
@@ -76,6 +83,8 @@ async function handleUser(user: Identity): Promise<void> {
       await refreshAccess()
       await engine?.pull()
     },
+    onNotification: (n, unread) => receiveNotification(n as AppNotification, unread),
+    onReconnect: () => void refreshNotifications(),
   })
   await engine.start()
 }

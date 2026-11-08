@@ -28,6 +28,7 @@ import {
 } from './auth.ts'
 import { createClock, isTable, transaction, type DB } from './db.ts'
 import { Hub } from './events.ts'
+import { Notifications, detect, type RowChange } from './notifications.ts'
 
 export interface AppOptions {
   db: DB
@@ -89,6 +90,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
     bodyLimit: 4 * 1024 * 1024,
   })
   const hub = new Hub()
+  const notifications = new Notifications(db)
   const nextTs = createClock(db)
   const byEmail = new LoginLimiter(5)
   const byIp = new LoginLimiter(30)
@@ -337,6 +339,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
        board_id = COALESCE(excluded.board_id, rows.board_id)`,
   )
   const findRow = db.prepare('SELECT user_id, board_id FROM rows WHERE tbl = ? AND id = ?')
+  const prevData = db.prepare('SELECT data FROM rows WHERE user_id = ? AND tbl = ? AND id = ?')
   const boardOwner = db.prepare("SELECT user_id FROM rows WHERE tbl = 'boards' AND id = ? LIMIT 1")
   const memberRole = db.prepare('SELECT role FROM board_members WHERE board_id = ? AND user_id = ?')
   const membersOf = db.prepare('SELECT user_id FROM board_members WHERE board_id = ?')
@@ -386,6 +389,57 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return [...set]
   }
 
+  /** Aviso no ligado a una fila (accesos): guarda y empuja en vivo, sin romper la operación si falla. */
+  const pushNotification = (
+    userId: string,
+    n: {
+      type: 'access_granted' | 'access_role' | 'access_removed'
+      actorId: string
+      boardId: string
+      excerpt?: string
+    },
+  ) => {
+    try {
+      const view = notifications.create({
+        userId,
+        type: n.type,
+        actorId: n.actorId,
+        boardId: n.boardId,
+        title: notifications.titleOfBoard(n.boardId),
+        excerpt: n.excerpt,
+      })
+      if (view)
+        hub.publishNotification(userId, view, notifications.list(userId, { limit: 1 }).unread)
+    } catch (e) {
+      app.log.error(e)
+    }
+  }
+
+  /** Crea los avisos que provoca un cambio y los empuja en vivo a los dispositivos del destinatario. */
+  const notify = (actorId: string, change: RowChange) => {
+    if (!change.boardId) return
+    try {
+      for (const d of detect(change)) {
+        const title = d.cardId
+          ? notifications.titleOfCard(d.cardId)
+          : notifications.titleOfBoard(change.boardId)
+        const view = notifications.create({
+          userId: d.userId,
+          type: d.type,
+          actorId,
+          boardId: change.boardId,
+          cardId: d.cardId,
+          title,
+          excerpt: d.excerpt,
+        })
+        if (view)
+          hub.publishNotification(d.userId, view, notifications.list(d.userId, { limit: 1 }).unread)
+      }
+    } catch (e) {
+      app.log.error(e) // un fallo al avisar nunca debe impedir guardar el cambio
+    }
+  }
+
   app.get('/api/sync/:table', async (req, reply) => {
     const user = requireUser(req, reply)
     if (!user) return
@@ -426,7 +480,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
     const rejected: string[] = []
     const stored = transaction(db, () => {
-      const out: { row: Record<string, unknown>; owner: string; boardId: string | null }[] = []
+      const out: {
+        row: Record<string, unknown>
+        owner: string
+        boardId: string | null
+        prev: Record<string, unknown> | null
+      }[] = []
       for (const r of rows) {
         const input = { ...(r as Record<string, unknown>) }
         delete input.ownerId // lo pone el servidor al descargar; no se guarda
@@ -439,20 +498,22 @@ export function buildApp(opts: AppOptions): BuiltApp {
         const ts = nextTs()
         const row: Record<string, unknown> = { ...input, updatedAt: ts }
         const boardId = boardIdOf(table, row)
+        const before = prevData.get(owner, table, String(row.id)) as { data: string } | undefined
         upsert.run(owner, table, String(row.id), JSON.stringify(row), ts, boardId)
-        out.push({ row, owner, boardId })
+        out.push({ row, owner, boardId, prev: before ? JSON.parse(before.data) : null })
       }
       return out
     })
 
     const clientId = String(req.headers['x-client-id'] ?? '')
-    for (const { row, owner, boardId } of stored) {
+    for (const { row, owner, boardId, prev } of stored) {
       const payload = table === 'boards' ? { ...row, ownerId: owner } : row
       const bid =
         boardId ??
         (findRow.get(table, String(row.id)) as { board_id: string | null } | undefined)?.board_id ??
         null
       for (const uid of recipients(owner, bid)) hub.publish(uid, table, payload, clientId)
+      notify(user.id, { table, row, prev, boardId: bid })
     }
     return { ok: true, count: stored.length, ...(rejected.length ? { rejected } : {}) }
   })
@@ -603,6 +664,14 @@ export function buildApp(opts: AppOptions): BuiltApp {
     ).run(id, user.id, target.id, body.role, new Date().toISOString())
     if (!had) touchBoard(user.id, id)
     hub.publishAccess(target.id)
+    const prevRole = (had as { role?: string } | undefined)?.role
+    if (!had || prevRole !== body.role)
+      pushNotification(target.id, {
+        type: had ? 'access_role' : 'access_granted',
+        actorId: user.id,
+        boardId: id,
+        excerpt: body.role === 'editor' ? 'editor' : 'solo lectura',
+      })
     return reply.code(had ? 200 : 201).send({
       member: {
         boardId: id,
@@ -627,10 +696,47 @@ export function buildApp(opts: AppOptions): BuiltApp {
       .prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?')
       .run(id, userId)
     if (res.changes === 0) return reply.code(404).send({ error: 'not_found' })
+    if (userId !== user.id)
+      pushNotification(userId, { type: 'access_removed', actorId: user.id, boardId: id })
     hub.publishAccess(userId)
     hub.publishAccess(owner)
     return reply.code(204).send()
   })
+
+  /* ---------- notificaciones ---------- */
+
+  app.get('/api/notifications', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const q = req.query as { unread?: string; limit?: string }
+    return notifications.list(user.id, {
+      unreadOnly: q.unread === '1',
+      limit: Number(q.limit) || 50,
+    })
+  })
+
+  /** Marca como leídas: `{ all: true }`, `{ ids: [...] }` o `{ cardId }` (al abrir una tarjeta). */
+  app.post('/api/notifications/read', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const body = (req.body ?? {}) as { all?: unknown; ids?: unknown; cardId?: unknown }
+    if (body.all === true) notifications.markRead(user.id, 'all')
+    else if (typeof body.cardId === 'string' && ID_RE.test(body.cardId))
+      notifications.markCardRead(user.id, body.cardId)
+    else if (
+      Array.isArray(body.ids) &&
+      body.ids.length <= 200 &&
+      body.ids.every((i) => typeof i === 'string' && i.length <= 64)
+    )
+      notifications.markRead(user.id, body.ids as string[])
+    else return reply.code(400).send({ error: 'bad_request' })
+    return { unread: notifications.list(user.id, { limit: 1 }).unread }
+  })
+
+  notifications.purge()
+  const purgeTimer = setInterval(() => notifications.purge(), 6 * 3_600_000)
+  purgeTimer.unref()
+  app.addHook('onClose', async () => clearInterval(purgeTimer))
 
   /* ---------- tiempo real (SSE) ---------- */
 

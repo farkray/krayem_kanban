@@ -19,6 +19,8 @@ export interface Remote {
     onReconnect: () => void,
     /** Cambió quién ve qué (me compartieron o dejaron de compartirme un tablero). */
     onAccess?: () => void,
+    /** Llegó una notificación nueva (centro de notificaciones). */
+    onNotification?: (notification: unknown, unread: number) => void,
   ): () => void
 }
 
@@ -32,6 +34,10 @@ export interface EngineOptions {
   onPulled?: () => Promise<void> | void
   /** El servidor avisa de cambios de acceso: hay que refrescar permisos y descargar. */
   onAccess?: () => Promise<void> | void
+  /** Llegó un aviso en vivo al centro de notificaciones. */
+  onNotification?: (notification: unknown, unread: number) => void
+  /** El canal en vivo se (re)conectó: conviene volver a pedir lo que pudo perderse. */
+  onReconnect?: () => void
 }
 
 export interface Engine {
@@ -221,10 +227,12 @@ export function createEngine(remote: Remote, opts: EngineOptions = {}): Engine {
       },
       () => {
         void pull().catch((e) => setSync({ error: errMsg(e) }))
+        opts.onReconnect?.()
       },
       () => {
         void Promise.resolve(opts.onAccess?.()).catch((e) => setSync({ error: errMsg(e) }))
       },
+      (notification, unread) => opts.onNotification?.(notification, unread),
     )
 
     const onOnline = () => {

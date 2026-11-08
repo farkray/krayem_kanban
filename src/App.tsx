@@ -16,6 +16,7 @@ import type { SearchResult } from './lib/search'
 import { useBoardSummaries, useBoards } from './store/hooks'
 import { useAuth } from './sync/auth'
 import { bootSync, signOut } from './sync/boot'
+import { markCardRead, refreshNotifications, type AppNotification } from './sync/notifications'
 import { useSync } from './sync/status'
 import { useStore } from './store/store'
 import styles from './App.module.css'
@@ -68,6 +69,16 @@ export default function App() {
     void bootSync()
   }, [init])
 
+  // Al abrir una tarjeta se leen sus avisos (mención, asignación): la campana queda al día.
+  useEffect(() => {
+    if (openCardId) markCardRead(openCardId)
+  }, [openCardId])
+
+  // Con sesión iniciada se descarga la bandeja (después llegan los avisos en vivo).
+  useEffect(() => {
+    if (authStatus === 'signedIn') void refreshNotifications()
+  }, [authStatus])
+
   const active = boards.find((b) => b.id === boardId) ?? null
   const closeCard = useCallback(() => setOpenCardId(null), [])
 
@@ -86,6 +97,14 @@ export default function App() {
     closeDrawer()
     navigate(boardPath(r.boardId))
     setOpenCardId(r.cardId ?? null)
+  }
+
+  /** Un aviso abre su tarjeta; si es de acceso, el tablero (salvo que ya no tenga acceso). */
+  const onOpenNotification = (n: AppNotification) => {
+    closeDrawer()
+    if (n.type === 'access_removed') return
+    navigate(boardPath(n.boardId))
+    setOpenCardId(n.cardId)
   }
 
   if (!ready || authStatus === 'loading') return <div className={styles.loading}>Cargando…</div>
@@ -146,6 +165,7 @@ export default function App() {
           }}
           onPick={onPick}
           boardId={isAdminPage ? null : (active?.id ?? null)}
+          onOpenNotification={onOpenNotification}
         />
         <main className={styles.content}>
           {isAdminPage ? (

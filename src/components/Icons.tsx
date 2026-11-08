@@ -147,3 +147,8 @@ export const MoreIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M5 12h.01M12 12h.01M19 12h.01" />
   </Svg>
 )
+export const BellIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16zM10 21h4" />
+  </Svg>
+)

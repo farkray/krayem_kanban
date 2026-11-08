@@ -984,3 +984,245 @@ describe('alias de usuarios y directorio', () => {
     expect(participants.map((p: { alias: string }) => p.alias)).toContain('Jorge Menéndez')
   })
 })
+
+describe('centro de notificaciones', () => {
+  async function setup() {
+    await makeApp()
+    const owner = await addUser('dueno@correo.com')
+    const ana = await addUser('ana@correo.com')
+    const beto = await addUser('beto@correo.com')
+    const c = {
+      owner: (await login('dueno@correo.com')).cookie,
+      ana: (await login('ana@correo.com')).cookie,
+      beto: (await login('beto@correo.com')).cookie,
+    }
+    return { c, owner, ana, beto }
+  }
+
+  const call = (method: 'GET' | 'POST', url: string, cookie: string, payload?: object) =>
+    built.app.inject({ method, url, headers: headers(cookie), payload })
+  const push = (cookie: string, table: string, rows: object[]) =>
+    call('POST', `/api/sync/${table}`, cookie, { rows })
+  const share = (cookie: string, boardId: string, email: string, role = 'editor') =>
+    call('POST', `/api/boards/${boardId}/members`, cookie, { email, role })
+  const inbox = async (cookie: string, query = '') =>
+    (await call('GET', `/api/notifications${query}`, cookie)).json() as {
+      notifications: {
+        id: string
+        type: string
+        cardId: string | null
+        title: string
+        excerpt: string
+        count: number
+        actorName: string
+        readAt: string | null
+      }[]
+      unread: number
+    }
+  const card = (id: string, extra: object = {}) => ({
+    id,
+    boardId: 'b1',
+    columnId: 'c1',
+    title: 'Banner importador',
+    position: 'a0',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2000-01-01T00:00:00.000Z',
+    ...extra,
+  })
+  const comment = (id: string, bodyMd: string, cardId = 'k1') => ({
+    id,
+    boardId: 'b1',
+    cardId,
+    bodyMd,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2000-01-01T00:00:00.000Z',
+  })
+  const mention = (name: string, id: string) => `[@${name}](mention:${id})`
+
+  async function sharedBoard() {
+    const s = await setup()
+    await push(s.c.owner, 'boards', [board('b1', 'Trabajo')])
+    await push(s.c.owner, 'cards', [card('k1')])
+    await share(s.c.owner, 'b1', 'ana@correo.com', 'editor')
+    db.exec('DELETE FROM notifications') // el aviso de acceso no es lo que se prueba aquí
+    return s
+  }
+
+  it('requiere sesión', async () => {
+    await makeApp()
+    const res = await built.app.inject({
+      method: 'GET',
+      url: '/api/notifications',
+      headers: headers(),
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('una mención en una actualización avisa a la persona mencionada', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'comments', [
+      comment('m1', `${mention('Ana', ana.id)} revisa el **banner** antes del viernes`),
+    ])
+    const { notifications, unread } = await inbox(c.ana)
+    expect(unread).toBe(1)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]).toMatchObject({
+      type: 'mention',
+      cardId: 'k1',
+      title: 'Banner importador',
+      excerpt: '@Ana revisa el banner antes del viernes',
+      actorName: 'dueno@correo.com',
+      readAt: null,
+    })
+  })
+
+  it('una mención en una tarea de la lista también avisa', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'items', [
+      {
+        id: 'i1',
+        boardId: 'b1',
+        cardId: 'k1',
+        text: `Mandar recibo a ${mention('Ana', ana.id)}`,
+        done: false,
+        position: 'a0',
+        createdAt: '2026-11-01T00:00:00.000Z',
+        updatedAt: '2000-01-01T00:00:00.000Z',
+      },
+    ])
+    expect((await inbox(c.ana)).notifications[0].type).toBe('mention')
+  })
+
+  it('nadie se avisa a sí mismo', async () => {
+    const { c, owner } = await sharedBoard()
+    await push(c.owner, 'comments', [comment('m1', `nota para ${mention('yo', owner.id)}`)])
+    expect((await inbox(c.owner)).notifications).toEqual([])
+  })
+
+  it('editar sin añadir menciones no vuelve a avisar, y una mención nueva sí', async () => {
+    const { c, ana, beto } = await sharedBoard()
+    await share(c.owner, 'b1', 'beto@correo.com', 'viewer')
+    await call('POST', '/api/notifications/read', c.beto, { all: true }) // aviso de acceso
+    const first = `hola ${mention('Ana', ana.id)}`
+    await push(c.owner, 'comments', [comment('m1', first)])
+    await call('POST', '/api/notifications/read', c.ana, { all: true })
+    await push(c.owner, 'comments', [comment('m1', `${first}, gracias`)]) // misma mención
+    expect((await inbox(c.ana)).unread).toBe(0)
+    await push(c.owner, 'comments', [comment('m1', `${first} y ${mention('Beto', beto.id)}`)])
+    expect((await inbox(c.beto)).unread).toBe(1)
+    expect((await inbox(c.ana)).unread).toBe(0)
+  })
+
+  it('no avisa a quien no tiene acceso al tablero', async () => {
+    const { c, beto } = await sharedBoard() // beto no es miembro
+    await push(c.owner, 'comments', [comment('m1', `psst ${mention('Beto', beto.id)}`)])
+    expect((await inbox(c.beto)).notifications).toEqual([])
+  })
+
+  it('asignar una tarjeta avisa al nuevo asignado, no al autor ni al repetir', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'cards', [card('k1', { assigneeId: ana.id })])
+    let box = await inbox(c.ana)
+    expect(box.notifications[0]).toMatchObject({ type: 'assignment', cardId: 'k1' })
+    await call('POST', '/api/notifications/read', c.ana, { all: true })
+    await push(c.owner, 'cards', [card('k1', { assigneeId: ana.id, title: 'Otro título' })])
+    box = await inbox(c.ana)
+    expect(box.unread).toBe(0)
+    // Ana se asigna sola: no se avisa a sí misma
+    await push(c.ana, 'cards', [card('k2', { assigneeId: ana.id })])
+    expect((await inbox(c.ana)).unread).toBe(0)
+  })
+
+  it('funde avisos repetidos de la misma tarjeta y tipo', async () => {
+    const { c, ana } = await sharedBoard()
+    for (const [i, id] of ['m1', 'm2', 'm3'].entries())
+      await push(c.owner, 'comments', [comment(id, `${i} ${mention('Ana', ana.id)}`)])
+    const { notifications, unread } = await inbox(c.ana)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0].count).toBe(3)
+    expect(unread).toBe(1)
+  })
+
+  it('accesos: alta, cambio de permiso y baja avisan a la persona afectada', async () => {
+    const { c, ana } = await setup()
+    await push(c.owner, 'boards', [board('b1', 'Trabajo')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer')
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer') // igual: no avisa
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await built.app.inject({
+      method: 'DELETE',
+      url: `/api/boards/b1/members/${ana.id}`,
+      headers: headers(c.owner),
+    })
+    const types = (await inbox(c.ana)).notifications.map((n) => n.type).sort()
+    expect(types).toEqual(['access_granted', 'access_removed', 'access_role'])
+    expect((await inbox(c.ana)).notifications.every((n) => n.title === 'Trabajo')).toBe(true)
+    // salirse uno mismo no genera aviso para sí
+    await share(c.owner, 'b1', 'ana@correo.com', 'viewer')
+    await call('POST', '/api/notifications/read', c.ana, { all: true })
+    await built.app.inject({
+      method: 'DELETE',
+      url: `/api/boards/b1/members/${ana.id}`,
+      headers: headers(c.ana),
+    })
+    expect((await inbox(c.ana)).unread).toBe(0)
+  })
+
+  it('marca leídas por id, por tarjeta y todas; cada quien solo las suyas', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'cards', [card('k1', { assigneeId: ana.id })])
+    await push(c.owner, 'comments', [comment('m1', mention('Ana', ana.id))])
+    const box = await inbox(c.ana)
+    expect(box.unread).toBe(2)
+    // otra persona no puede leer las de Ana
+    expect(
+      (
+        await call('POST', '/api/notifications/read', c.owner, { ids: [box.notifications[0].id] })
+      ).json().unread,
+    ).toBe(0)
+    expect((await inbox(c.ana)).unread).toBe(2)
+    const byId = await call('POST', '/api/notifications/read', c.ana, {
+      ids: [box.notifications[0].id],
+    })
+    expect(byId.json().unread).toBe(1)
+    const byCard = await call('POST', '/api/notifications/read', c.ana, { cardId: 'k1' })
+    expect(byCard.json().unread).toBe(0)
+    expect((await inbox(c.ana, '?unread=1')).notifications).toEqual([])
+    expect((await inbox(c.ana)).notifications).toHaveLength(2) // siguen en el historial
+    expect((await call('POST', '/api/notifications/read', c.ana, { nada: 1 })).statusCode).toBe(400)
+  })
+
+  it('las notificaciones de otra persona no se ven', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'comments', [comment('m1', mention('Ana', ana.id))])
+    expect((await inbox(c.owner)).notifications).toEqual([])
+  })
+
+  it('borra las de más de 90 días', async () => {
+    const { c, ana } = await sharedBoard()
+    await push(c.owner, 'comments', [comment('m1', mention('Ana', ana.id))])
+    db.prepare('UPDATE notifications SET created_at = ?').run('2020-01-01T00:00:00.000Z')
+    const { Notifications } = await import('./notifications.ts')
+    expect(new Notifications(db).purge()).toBe(1)
+    expect((await inbox(c.ana)).notifications).toEqual([])
+  })
+
+  it('un fallo al avisar no impide guardar el cambio', async () => {
+    const { c, ana } = await sharedBoard()
+    db.exec('DROP TABLE notifications')
+    const res = await push(c.owner, 'comments', [comment('m1', mention('Ana', ana.id))])
+    expect(res.statusCode).toBe(200)
+    expect(res.json().count).toBe(1)
+  })
+})
+
+describe('notificaciones: texto', () => {
+  it('extrae menciones y deja un extracto legible', async () => {
+    const { mentionedIds, excerptOf } = await import('./notifications.ts')
+    const text = 'Hola [@Ana Pérez](mention:u1), mira ![img](x.webp) [esto](http://a.b) **ya**'
+    expect([...mentionedIds(text)]).toEqual(['u1'])
+    expect(excerptOf(text)).toBe('Hola @Ana Pérez, mira esto ya')
+    expect(excerptOf('x'.repeat(300)).length).toBe(140)
+    expect(mentionedIds(undefined).size).toBe(0)
+  })
+})

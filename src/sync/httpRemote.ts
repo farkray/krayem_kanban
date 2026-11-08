@@ -52,11 +52,18 @@ export function createHttpRemote(
       return res.blob()
     },
 
-    subscribe(onRow, onReconnect, onAccess) {
+    subscribe(onRow, onReconnect, onAccess, onNotification) {
       // EventSource reconecta solo; cada (re)conexión dispara una descarga para ponerse al día.
       const es = new EventSource(`${apiUrl}/events?client=${encodeURIComponent(clientId)}`)
       es.addEventListener('ready', () => onReconnect())
       es.addEventListener('access', () => onAccess?.())
+      es.addEventListener('notification', (e) => {
+        const { notification, unread } = JSON.parse((e as MessageEvent<string>).data) as {
+          notification: unknown
+          unread: number
+        }
+        onNotification?.(notification, unread)
+      })
       es.addEventListener('row', (e) => {
         const { table, row } = JSON.parse((e as MessageEvent<string>).data) as {
           table: TableKey

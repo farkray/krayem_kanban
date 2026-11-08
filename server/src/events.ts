@@ -32,6 +32,12 @@ export class Hub {
     for (const sub of this.subs.get(userId) ?? []) sub.res.write('event: access\ndata: {}\n\n')
   }
 
+  /** Una notificación nueva (o actualizada) para este usuario, en todos sus dispositivos. */
+  publishNotification(userId: string, notification: unknown, unread: number) {
+    const payload = `event: notification\ndata: ${JSON.stringify({ notification, unread })}\n\n`
+    for (const sub of this.subs.get(userId) ?? []) sub.res.write(payload)
+  }
+
   ping() {
     for (const set of this.subs.values()) for (const s of set) s.res.write(': ping\n\n')
   }

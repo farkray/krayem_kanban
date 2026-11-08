@@ -1,6 +1,8 @@
 import type { SearchResult } from '../lib/search'
+import type { AppNotification } from '../sync/notifications'
 import { FilterMenu } from './FilterMenu'
 import { HelpIcon, HomeIcon, SidebarIcon } from './Icons'
+import { NotificationsBell } from './NotificationsBell'
 import { InstallButton } from './PwaPrompts'
 import { SearchBox } from './SearchBox'
 import { SyncStatus } from './SyncStatus'
@@ -14,9 +16,18 @@ interface Props {
   onPick: (r: SearchResult) => void
   /** Tablero abierto (el filtro por etiquetas es de ese tablero). */
   boardId: string | null
+  /** Se pulsó un aviso del centro de notificaciones. */
+  onOpenNotification: (n: AppNotification) => void
 }
 
-export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick, boardId }: Props) {
+export function Topbar({
+  menuVisible,
+  onToggleSidebar,
+  onHome,
+  onPick,
+  boardId,
+  onOpenNotification,
+}: Props) {
   return (
     <header className={styles.topbar}>
       <div className={styles.left}>
@@ -44,6 +55,7 @@ export function Topbar({ menuVisible, onToggleSidebar, onHome, onPick, boardId }
         </button>
         <FilterMenu boardId={boardId} />
         <SearchBox onPick={onPick} />
+        <NotificationsBell onOpen={onOpenNotification} />
       </div>
     </header>
   )

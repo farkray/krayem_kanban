@@ -74,6 +74,26 @@ const MIGRATIONS: string[] = [
   `,
   // 4: alias (nombre para mostrar) de cada usuario; vacío = se muestra el correo
   `ALTER TABLE users ADD COLUMN alias TEXT NOT NULL DEFAULT '';`,
+  // 5: centro de notificaciones. No son filas de sincronización: se piden aparte (GET /api/notifications).
+  // `title` guarda el título de la tarjeta (o del tablero) en el momento del aviso; `count` agrupa avisos
+  // repetidos de la misma tarjeta y tipo.
+  `
+  CREATE TABLE notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    board_id TEXT NOT NULL,
+    card_id TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    excerpt TEXT NOT NULL DEFAULT '',
+    count INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+  );
+  CREATE INDEX notifications_user ON notifications(user_id, read_at, created_at);
+  CREATE INDEX notifications_card ON notifications(user_id, card_id);
+  `,
 ]
 
 export function openDb(file: string): DB {

@@ -497,10 +497,27 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   // B ve la marca "Te mencionan" en la tarjeta y su chip resaltado dentro
   const cardB = card(column(b.page, 'Por hacer'), 'Tarea compartida')
   await expect(cardB.getByTitle('Te mencionan')).toBeVisible({ timeout: 15_000 })
+  // y la campana de B avisa de la mención (en vivo), con quién y en qué tarjeta
+  const bell = b.page.getByRole('button', { name: /^Notificaciones, \d+ sin leer$/ })
+  await expect(bell).toBeVisible({ timeout: 15_000 })
+  await bell.click()
+  const inbox = b.page.getByRole('group', { name: 'Notificaciones' })
+  const mentionItem = inbox.getByRole('button', { name: /te mencionó/ })
+  await expect(mentionItem).toContainText('Tarea compartida')
+  await expect(mentionItem).toContainText('Sin leer')
+  await b.page.keyboard.press('Escape')
   await cardB.click()
   const db = b.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
   await expect(db.getByTitle('Te mencionan').first()).toBeVisible()
   await db.getByRole('button', { name: 'Listo' }).click()
+  // al abrir la tarjeta su aviso quedó leído
+  await b.page.getByRole('button', { name: /^Notificaciones/ }).click()
+  await expect(
+    b.page
+      .getByRole('group', { name: 'Notificaciones' })
+      .getByRole('button', { name: /te mencionó/ }),
+  ).not.toContainText('Sin leer')
+  await b.page.keyboard.press('Escape')
 
   // B (editor) agrega una tarjeta y A la ve en vivo; B no puede eliminar ni compartir el tablero
   await addCard(b.page, 'Por hacer', 'Hecha por B')
