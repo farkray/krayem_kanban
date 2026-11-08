@@ -217,3 +217,75 @@
     min-height: 44px;
   }
 }
+
+.today {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.todayTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.group + .group {
+  margin-top: var(--space-2);
+}
+
+.groupLabel {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.overdue {
+  color: var(--color-danger-text);
+}
+
+.todayList {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todayItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 4px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.todayItem:hover {
+  background: var(--color-fill-2);
+}
+
+.todayName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayDate {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.more {
+  margin: 2px var(--space-2) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

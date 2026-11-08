@@ -166,6 +166,11 @@ export default function App() {
           onPick={onPick}
           boardId={isAdminPage ? null : (active?.id ?? null)}
           onOpenNotification={onOpenNotification}
+          onOpenTodayCard={(item) => {
+            closeDrawer()
+            navigate(boardPath(item.boardId))
+            setOpenCardId(item.cardId)
+          }}
         />
         <main className={styles.content}>
           {isAdminPage ? (

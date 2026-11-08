@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { relativeTime } from '../lib/format'
+import { formatShortDate, relativeTime } from '../lib/format'
+import { TODAY_GROUPS, type TodayItem } from '../lib/today'
+import { markSeen, useTodaySummary, wasSeen } from '../store/today'
+import { useAuth } from '../sync/auth'
 import {
   markAllRead,
   markRead,
@@ -37,12 +40,25 @@ function describe(n: AppNotification): string {
 
 const matches = (n: AppNotification, f: Filter) => f === 'all' || n.type === f
 
+const MAX_PER_GROUP = 5
+
 /** Campana con contador y panel con los avisos; al pulsar uno se abre su tarjeta o tablero. */
-export function NotificationsBell({ onOpen }: { onOpen: (n: AppNotification) => void }) {
+export function NotificationsBell({
+  onOpen,
+  onOpenCard,
+}: {
+  onOpen: (n: AppNotification) => void
+  /** Se pulsó una tarjeta del resumen "Hoy". */
+  onOpenCard: (item: TodayItem) => void
+}) {
   const items = useNotifications((s) => s.items)
   const unread = useNotifications((s) => s.unread)
+  const me = useAuth((s) => s.userId)
+  const { items: today, day } = useTodaySummary()
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
+  // El resumen "Hoy" suma 1 al contador hasta que se abre el panel; el día siguiente vuelve a sumar.
+  const [seenDay, setSeenDay] = useState(() => (wasSeen(day, me) ? day : ''))
   const wrap = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -63,7 +79,9 @@ export function NotificationsBell({ onOpen }: { onOpen: (n: AppNotification) => 
   }, [open])
 
   const shown = items.filter((n) => matches(n, filter))
-  const label = unread > 0 ? `Notificaciones, ${unread} sin leer` : 'Notificaciones'
+  const showToday = filter === 'all' && today.length > 0
+  const badge = unread + (today.length > 0 && seenDay !== day ? 1 : 0)
+  const label = badge > 0 ? `Notificaciones, ${badge} sin leer` : 'Notificaciones'
 
   return (
     <div className={styles.wrap} ref={wrap}>
@@ -73,12 +91,18 @@ export function NotificationsBell({ onOpen }: { onOpen: (n: AppNotification) => 
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="true"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) {
+            markSeen(day, me)
+            setSeenDay(day)
+          }
+          setOpen((v) => !v)
+        }}
       >
         <BellIcon />
-        {unread > 0 && (
+        {badge > 0 && (
           <span className={styles.badge} aria-hidden="true">
-            {unread > 9 ? '9+' : unread}
+            {badge > 9 ? '9+' : badge}
           </span>
         )}
       </button>
@@ -108,10 +132,50 @@ export function NotificationsBell({ onOpen }: { onOpen: (n: AppNotification) => 
               </button>
             ))}
           </div>
+          {showToday && (
+            <section className={styles.today} aria-label="Hoy">
+              <h3 className={styles.todayTitle}>Hoy</h3>
+              {TODAY_GROUPS.map((g) => {
+                const rows = today.filter((i) => i.group === g.id)
+                if (rows.length === 0) return null
+                return (
+                  <div key={g.id} className={styles.group}>
+                    <p
+                      className={`${styles.groupLabel} ${g.id === 'overdue' ? styles.overdue : ''}`}
+                    >
+                      {g.label} · {rows.length}
+                    </p>
+                    <ul className={styles.todayList}>
+                      {rows.slice(0, MAX_PER_GROUP).map((i) => (
+                        <li key={i.cardId}>
+                          <button
+                            type="button"
+                            className={styles.todayItem}
+                            onClick={() => {
+                              setOpen(false)
+                              onOpenCard(i)
+                            }}
+                          >
+                            <span className={styles.todayName}>{i.title}</span>
+                            <span className={styles.todayDate}>{formatShortDate(i.date)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {rows.length > MAX_PER_GROUP && (
+                      <p className={styles.more}>y {rows.length - MAX_PER_GROUP} más</p>
+                    )}
+                  </div>
+                )
+              })}
+            </section>
+          )}
           {shown.length === 0 ? (
-            <p className={styles.empty}>
-              {items.length === 0 ? 'Todavía no tienes avisos.' : 'No hay avisos de este tipo.'}
-            </p>
+            showToday ? null : (
+              <p className={styles.empty}>
+                {items.length === 0 ? 'Todavía no tienes avisos.' : 'No hay avisos de este tipo.'}
+              </p>
+            )
           ) : (
             <ul className={styles.list}>
               {shown.map((n) => (

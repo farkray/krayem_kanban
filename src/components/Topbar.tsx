@@ -1,4 +1,5 @@
 import type { SearchResult } from '../lib/search'
+import type { TodayItem } from '../lib/today'
 import type { AppNotification } from '../sync/notifications'
 import { FilterMenu } from './FilterMenu'
 import { HelpIcon, HomeIcon, SidebarIcon } from './Icons'
@@ -18,6 +19,8 @@ interface Props {
   boardId: string | null
   /** Se pulsó un aviso del centro de notificaciones. */
   onOpenNotification: (n: AppNotification) => void
+  /** Se pulsó una tarjeta del resumen "Hoy". */
+  onOpenTodayCard: (item: TodayItem) => void
 }
 
 export function Topbar({
@@ -27,6 +30,7 @@ export function Topbar({
   onPick,
   boardId,
   onOpenNotification,
+  onOpenTodayCard,
 }: Props) {
   return (
     <header className={styles.topbar}>
@@ -55,7 +59,7 @@ export function Topbar({
         </button>
         <FilterMenu boardId={boardId} />
         <SearchBox onPick={onPick} />
-        <NotificationsBell onOpen={onOpenNotification} />
+        <NotificationsBell onOpen={onOpenNotification} onOpenCard={onOpenTodayCard} />
       </div>
     </header>
   )
