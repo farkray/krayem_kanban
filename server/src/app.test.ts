@@ -1226,3 +1226,34 @@ describe('notificaciones: texto', () => {
     expect(mentionedIds(undefined).size).toBe(0)
   })
 })
+
+describe('aspecto del tablero', () => {
+  it('el color y el icono viajan con el tablero y los ve quien lo comparte; un editor no los cambia', async () => {
+    await makeApp()
+    await addUser('dueno@correo.com')
+    await addUser('ana@correo.com')
+    const owner = (await login('dueno@correo.com')).cookie
+    const ana = (await login('ana@correo.com')).cookie
+    const post = (cookie: string, rows: object[]) =>
+      built.app.inject({
+        method: 'POST',
+        url: '/api/sync/boards',
+        headers: headers(cookie),
+        payload: { rows },
+      })
+    await post(owner, [{ ...board('b1', 'Trabajo'), color: 'morado', icon: 'cohete' }])
+    await built.app.inject({
+      method: 'POST',
+      url: '/api/boards/b1/members',
+      headers: headers(owner),
+      payload: { email: 'ana@correo.com', role: 'editor' },
+    })
+    const mine = (
+      await built.app.inject({ method: 'GET', url: '/api/sync/boards', headers: headers(ana) })
+    ).json().rows
+    expect(mine[0]).toMatchObject({ id: 'b1', color: 'morado', icon: 'cohete' })
+    // el editor no puede reescribir el tablero (ni su aspecto)
+    const res = await post(ana, [{ ...board('b1', 'Trabajo'), color: 'rojo', icon: 'casa' }])
+    expect(res.json().rejected).toEqual(['b1'])
+  })
+})

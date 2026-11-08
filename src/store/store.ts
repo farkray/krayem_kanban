@@ -11,7 +11,11 @@ import {
   TABLE_KEYS,
   COLUMN_KIND_NAMES,
   limitOf,
+  boardColorOf,
+  boardIconOf,
   type Board,
+  type BoardColor,
+  type BoardIconName,
   LABEL_COLORS,
   type Attachment,
   type Card,
@@ -81,6 +85,8 @@ interface Actions {
   // tableros
   createBoard: (title: string) => string | null
   renameBoard: (id: string, title: string) => boolean
+  /** Cambia el color y/o el icono del tablero (solo el dueño; los demás no pueden escribir el tablero). */
+  setBoardAppearance: (id: string, look: { color?: BoardColor; icon?: BoardIconName }) => boolean
   deleteBoard: (id: string) => void
   // columnas
   addColumn: (boardId: string, title: string) => string | null
@@ -442,6 +448,17 @@ export const useStore = create<Store>((set, get) => {
       const b = get().boards.find((x) => x.id === id)
       if (!t || !b) return false
       put('boards', [{ ...b, title: t, updatedAt: stamp() }])
+      return true
+    },
+
+    setBoardAppearance: (id, look) => {
+      const b = get().boards.find((x) => x.id === id && !x.deletedAt)
+      if (!b) return false
+      // Los valores desconocidos se normalizan; lo que no se pide se deja como estaba.
+      const color = look.color === undefined ? b.color : boardColorOf(look)
+      const icon = look.icon === undefined ? b.icon : boardIconOf(look)
+      if (color === b.color && icon === b.icon) return true
+      put('boards', [{ ...b, color, icon, updatedAt: stamp() }])
       return true
     },
 

@@ -91,6 +91,8 @@ export function useCardStats() {
 export interface BoardSummary {
   id: string
   title: string
+  color?: string
+  icon?: string
   columnCount: number
   cardCount: number
   /** Tablero que otra persona comparte conmigo (rol y dueño). */
@@ -117,6 +119,8 @@ export function useBoardSummaries(): BoardSummary[] {
       return {
         id: b.id,
         title: b.title,
+        color: b.color,
+        icon: b.icon,
         columnCount: colCount.get(b.id) ?? 0,
         cardCount: cardCount.get(b.id) ?? 0,
         sharedBy: foreign

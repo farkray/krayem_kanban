@@ -212,6 +212,11 @@
 }
 
 @media (pointer: coarse) {
+  .bell {
+    width: 44px;
+    height: 44px;
+  }
+
   .item,
   .tab {
     min-height: 44px;

@@ -32,6 +32,7 @@ import { useStore } from '../store/store'
 import { removeMember, useBoardAccess, useParticipants } from '../sync/access'
 import { useAuth } from '../sync/auth'
 import { AddColumn } from './AddColumn'
+import { BoardAppearance } from './BoardAppearance'
 import { CardOverlay } from './Card'
 import { Column, ColumnOverlay } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -224,6 +225,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
     <CanEditContext.Provider value={access.canEdit}>
       <div className={styles.board}>
         <div className={styles.head}>
+          <BoardAppearance board={board} editable={access.isOwner} className={styles.tile} />
           {renaming ? (
             <InlineInput
               className={styles.titleInput}

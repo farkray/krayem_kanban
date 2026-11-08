@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { pluralize } from '../lib/format'
 import { LIMITS } from '../lib/types'
 import type { BoardSummary } from '../store/hooks'
-import { BoardIcon, PlusIcon } from './Icons'
+import { BoardTile } from './BoardTile'
+import { PlusIcon } from './Icons'
 import { InlineInput } from './InlineInput'
 import styles from './HomeView.module.css'
 
@@ -24,9 +25,7 @@ export function HomeView({ boards, onOpen, onCreate }: Props) {
       <div className={styles.grid}>
         {boards.map((b) => (
           <button key={b.id} type="button" className={styles.tile} onClick={() => onOpen(b.id)}>
-            <span className={styles.icon}>
-              <BoardIcon width={20} height={20} />
-            </span>
+            <BoardTile className={styles.icon} color={b.color} icon={b.icon} size={20} />
             <span className={styles.name}>{b.title}</span>
             <span className={styles.meta}>
               {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}

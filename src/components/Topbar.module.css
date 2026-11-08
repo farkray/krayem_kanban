@@ -58,6 +58,12 @@
     padding-left: max(var(--space-3), env(safe-area-inset-left));
   }
 
+  /* La campana ocupa un lugar más: se aprietan los espacios para que Buscar conserve su ancho */
+  .left,
+  .right {
+    gap: var(--space-1);
+  }
+
   .right {
     flex: 1;
     min-width: 0;

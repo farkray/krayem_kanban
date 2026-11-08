@@ -49,7 +49,11 @@
   height: 36px;
   margin-bottom: var(--space-2);
   border-radius: 10px;
-  background: linear-gradient(180deg, var(--brand-from), var(--brand-to));
+  background: linear-gradient(
+    180deg,
+    var(--tile-from, var(--brand-from)),
+    var(--tile-to, var(--brand-to))
+  );
   color: var(--color-on-accent);
 }
 

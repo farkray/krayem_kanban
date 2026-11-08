@@ -1,0 +1,131 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-sm) + 3px);
+  background: none;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  border-color: var(--color-border);
+  background: var(--color-control);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 292px;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lifted);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 var(--space-2);
+}
+
+.head:not(:first-child) {
+  margin-top: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.name {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.opt {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.opt:hover {
+  background: var(--color-fill-2);
+}
+
+.on {
+  border-color: var(--color-text);
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--color-on-accent);
+}
+
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: var(--color-fill-1);
+}
+
+.on .glyph {
+  background: linear-gradient(180deg, var(--tile-from), var(--tile-to));
+  color: var(--color-on-accent);
+}
+
+.reset {
+  width: 100%;
+  height: 34px;
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  background: var(--color-fill-2);
+}
+
+.reset:disabled {
+  color: var(--color-text-faint);
+  cursor: default;
+}
+
+@media (pointer: coarse) {
+  .reset {
+    height: 44px;
+  }
+}

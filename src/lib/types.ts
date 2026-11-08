@@ -37,9 +37,83 @@ export interface Label extends Base {
   boardId?: string
 }
 
+/**
+ * Aspecto de un tablero: un color y un icono para reconocerlo de un vistazo (100 combinaciones).
+ * El color y el icono juntos identifican; así no depende solo del tono (daltonismo). Los colores
+ * están ordenados por tono para escanearlos fácil, y el neutro (grafito) va al final.
+ */
+export const BOARD_COLORS = [
+  'petroleo',
+  'cielo',
+  'azul',
+  'morado',
+  'rosa',
+  'rojo',
+  'naranja',
+  'marron',
+  'verde',
+  'grafito',
+] as const
+export type BoardColor = (typeof BOARD_COLORS)[number]
+
+export const BOARD_COLOR_NAMES: Record<BoardColor, string> = {
+  petroleo: 'Petróleo',
+  cielo: 'Cielo',
+  azul: 'Azul',
+  morado: 'Morado',
+  rosa: 'Rosa',
+  rojo: 'Rojo',
+  naranja: 'Naranja',
+  marron: 'Marrón',
+  verde: 'Verde',
+  grafito: 'Grafito',
+}
+
+export const BOARD_ICONS = [
+  'tablero',
+  'trabajo',
+  'estudio',
+  'codigo',
+  'grafica',
+  'anuncio',
+  'casa',
+  'corazon',
+  'estrella',
+  'cohete',
+] as const
+export type BoardIconName = (typeof BOARD_ICONS)[number]
+
+export const BOARD_ICON_NAMES: Record<BoardIconName, string> = {
+  tablero: 'Tablero',
+  trabajo: 'Trabajo',
+  estudio: 'Estudio',
+  codigo: 'Código',
+  grafica: 'Gráfica',
+  anuncio: 'Anuncio',
+  casa: 'Casa',
+  corazon: 'Personal',
+  estrella: 'Favorito',
+  cohete: 'Lanzamiento',
+}
+
+export const DEFAULT_BOARD_COLOR: BoardColor = 'petroleo'
+export const DEFAULT_BOARD_ICON: BoardIconName = 'tablero'
+
+/** Valores desconocidos (p. ej. de una versión más nueva) caen al aspecto por defecto. */
+export const boardColorOf = (b: { color?: string }): BoardColor =>
+  (BOARD_COLORS as readonly string[]).includes(b.color ?? '')
+    ? (b.color as BoardColor)
+    : DEFAULT_BOARD_COLOR
+export const boardIconOf = (b: { icon?: string }): BoardIconName =>
+  (BOARD_ICONS as readonly string[]).includes(b.icon ?? '')
+    ? (b.icon as BoardIconName)
+    : DEFAULT_BOARD_ICON
+
 export interface Board extends Base {
   title: string
   position: string
+  color?: BoardColor // ausente = petróleo
+  icon?: BoardIconName // ausente = tablero
   /** Dueño del tablero: lo pone el servidor al descargar. Ausente = tablero propio creado aquí. */
   ownerId?: string
 }

@@ -59,6 +59,27 @@ describe('tableros y columnas', () => {
     expect(S().renameBoard(id, '')).toBe(false)
   })
 
+  it('cambia el color y el icono de un tablero, normaliza lo desconocido y no escribe si nada cambia', async () => {
+    const id = S().createBoard('Casa')!
+    const look = () => S().boards.find((b) => b.id === id)!
+    expect(look().color).toBeUndefined() // por defecto no se guarda nada
+    expect(S().setBoardAppearance(id, { color: 'morado' })).toBe(true)
+    expect(look()).toMatchObject({ color: 'morado' })
+    expect(look().icon).toBeUndefined()
+    expect(S().setBoardAppearance(id, { icon: 'cohete' })).toBe(true)
+    expect(look()).toMatchObject({ color: 'morado', icon: 'cohete' }) // pedir uno no borra el otro
+    // un valor desconocido cae al de por defecto
+    S().setBoardAppearance(id, { color: 'fucsia' as never })
+    expect(look().color).toBe('petroleo')
+    // sin cambios no se vuelve a escribir (no sube updatedAt)
+    const before = look().updatedAt
+    expect(S().setBoardAppearance(id, { color: 'petroleo', icon: 'cohete' })).toBe(true)
+    expect(look().updatedAt).toBe(before)
+    expect(S().setBoardAppearance('no-existe', { color: 'rojo' })).toBe(false)
+    await flush()
+    expect((await db.boards.get(id))?.color).toBe('petroleo') // y queda guardado
+  })
+
   it('límite de 10 columnas', () => {
     const b = S().createBoard('X')!
     for (let i = 4; i <= 10; i++) expect(S().addColumn(b, `C${i}`)).not.toBeNull()

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { pluralize } from '../lib/format'
 import { LIMITS } from '../lib/types'
 import type { BoardSummary } from '../store/hooks'
-import { BoardIcon, PlusIcon, SidebarIcon } from './Icons'
+import { BoardTile } from './BoardTile'
+import { PlusIcon, SidebarIcon } from './Icons'
 import { InlineInput } from './InlineInput'
 import { InstallButton } from './PwaPrompts'
 import styles from './Sidebar.module.css'
@@ -48,9 +49,7 @@ export function Sidebar({
         aria-current={b.id === activeId ? 'page' : undefined}
         onClick={() => onSelect(b.id)}
       >
-        <span className={styles.boardIcon}>
-          <BoardIcon width={16} height={16} />
-        </span>
+        <BoardTile className={styles.boardIcon} color={b.color} icon={b.icon} size={16} />
         <span className={styles.itemText}>
           <span className={styles.itemTitle}>{b.title}</span>
           <span className={styles.itemMeta}>

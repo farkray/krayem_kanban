@@ -66,7 +66,8 @@ test.describe('teléfono (390×844, táctil)', () => {
     await expect(page.getByRole('button', { name: 'Ayuda' })).toBeHidden()
     await expect(page.getByRole('button', { name: 'Filtros' })).toBeVisible() // ya filtra por etiqueta
     const search = page.getByRole('combobox', { name: 'Buscar' })
-    expect((await sizeOf(search)).width).toBeGreaterThan(150)
+    // Con la campana de notificaciones la barra tiene un botón más: el campo conserva lo que sobra.
+    expect((await sizeOf(search)).width).toBeGreaterThan(100)
     await expect(search).toHaveAttribute('placeholder', 'Buscar')
     for (const name of ['Mostrar barra lateral', 'Inicio']) {
       const b = await sizeOf(page.getByRole('button', { name }))

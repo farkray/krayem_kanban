@@ -98,6 +98,31 @@
   --label-gray-soft: rgba(122, 136, 148, 0.2);
   --label-gray-text: #3f4c56;
 
+  /* Color de los tableros: degradado vertical (--board-X → --board-X-deep) con el icono en blanco.
+     Todos dan ≥ 3:1 con blanco arriba (el petróleo es el color de marca de siempre) y se separan
+     entre sí también con visión protanope, deuteranope y tritanope (simulación de Machado et al.:
+     las parejas más cercanas, azul/cielo y rosa/grafito, siguen distinguiéndose por el icono). */
+  --board-petroleo: #3fbfd0;
+  --board-petroleo-deep: #0d7388;
+  --board-cielo: #0284c7;
+  --board-cielo-deep: #075985;
+  --board-azul: #4f8ff7;
+  --board-azul-deep: #1d4ed8;
+  --board-morado: #7c3aed;
+  --board-morado-deep: #5b21b6;
+  --board-rosa: #ec4899;
+  --board-rosa-deep: #be185d;
+  --board-rojo: #dc2626;
+  --board-rojo-deep: #991b1b;
+  --board-naranja: #ea580c;
+  --board-naranja-deep: #c2410c;
+  --board-marron: #92400e;
+  --board-marron-deep: #5a2a0a;
+  --board-verde: #16a34a;
+  --board-verde-deep: #15803d;
+  --board-grafito: #64748b;
+  --board-grafito-deep: #334155;
+
   /* Avisos (toast / banner): siempre una superficie oscura flotante */
   --color-toast-bg: rgba(22, 38, 43, 0.94);
   --color-toast-text: #ffffff;

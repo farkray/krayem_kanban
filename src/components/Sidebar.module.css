@@ -91,7 +91,11 @@
   width: 34px;
   height: 34px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, var(--brand-from), var(--brand-to));
+  background: linear-gradient(
+    180deg,
+    var(--tile-from, var(--brand-from)),
+    var(--tile-to, var(--brand-to))
+  );
   color: var(--color-on-accent);
 }
 
