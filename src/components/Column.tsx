@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -36,6 +36,9 @@ interface Props {
   blocked?: boolean
   /** Etapa de la columna: inicio, en proceso o terminada (punto de color junto al contador). */
   tone?: 'start' | 'progress' | 'done'
+  /** Recién creada: nace con el nombre en edición y a la vista. */
+  startRenaming?: boolean
+  onRenameStarted?: () => void
   onOpenCard: (id: string) => void
 }
 
@@ -50,6 +53,8 @@ export function Column({
   dropTarget,
   blocked,
   tone = 'start',
+  startRenaming = false,
+  onRenameStarted,
   onOpenCard,
 }: Props) {
   const renameColumn = useStore((s) => s.renameColumn)
@@ -61,7 +66,8 @@ export function Column({
   const limit = limitOf(column)
   const full = limit !== null && total >= limit
 
-  const [renaming, setRenaming] = useState(false)
+  const [renaming, setRenaming] = useState(startRenaming)
+  const root = useRef<HTMLElement | null>(null)
   const [adding, setAdding] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -70,6 +76,13 @@ export function Column({
     data: { type: 'column', columnId: column.id },
     disabled: !canEdit,
   })
+  // Recién creada: se lleva a la vista (el tablero se desplaza en horizontal) y se avisa al tablero.
+  useEffect(() => {
+    if (!startRenaming) return
+    root.current?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+    onRenameStarted?.()
+  }, [startRenaming, onRenameStarted])
+
   const { setNodeRef: setDropRef } = useDroppable({
     id: `drop:${column.id}`,
     data: { type: 'column', columnId: column.id },
@@ -77,7 +90,10 @@ export function Column({
 
   return (
     <section
-      ref={sortable.setNodeRef}
+      ref={(el) => {
+        sortable.setNodeRef(el)
+        root.current = el
+      }}
       style={{
         transform: CSS.Transform.toString(sortable.transform),
         transition: sortable.transition,

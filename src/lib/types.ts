@@ -96,6 +96,9 @@ export const BOARD_ICON_NAMES: Record<BoardIconName, string> = {
   cohete: 'Lanzamiento',
 }
 
+/** Nombre con el que nace una columna nueva; enseguida se abre para renombrarla. */
+export const DEFAULT_COLUMN_TITLE = 'Nueva columna'
+
 export const DEFAULT_BOARD_COLOR: BoardColor = 'petroleo'
 export const DEFAULT_BOARD_ICON: BoardIconName = 'tablero'
 

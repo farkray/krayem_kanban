@@ -85,12 +85,41 @@ describe('columnas y tarjetas', () => {
     await openFirstBoard(user)
     for (const n of ['C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10']) {
       await user.click(screen.getByRole('button', { name: /Agregar columna/ }))
-      await user.type(screen.getByLabelText('Nombre de la columna'), `${n}{Enter}`)
+      await user.keyboard(`${n}{Enter}`) // el nombre queda en edición y seleccionado: se escribe encima
     }
     expect(screen.getByRole('button', { name: /Agregar columna/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Agregar columna/ })).toHaveTextContent(
       '10 de 10 columnas',
     )
+  })
+
+  it('agregar columna la crea al instante y deja su nombre en edición, seleccionado', async () => {
+    const user = await setup()
+    await openFirstBoard(user)
+    await user.click(screen.getByRole('button', { name: /Agregar columna/ }))
+    // ya existe, con nombre provisional, y el campo para nombrarla está enfocado
+    const input = screen.getByLabelText('Nombre de la columna') as HTMLInputElement
+    expect(input).toHaveFocus()
+    expect(input.value).toBe('Nueva columna')
+    expect(input.selectionStart).toBe(0)
+    expect(input.selectionEnd).toBe('Nueva columna'.length)
+    expect(screen.getByRole('button', { name: /Agregar columna/ })).toHaveTextContent(
+      '4 de 10 columnas',
+    )
+    await user.keyboard('Revisión{Enter}')
+    expect(screen.getByRole('region', { name: 'Revisión' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Nombre de la columna')).not.toBeInTheDocument()
+  })
+
+  it('si no se escribe nombre (Escape o vacío) la columna se queda como "Nueva columna"', async () => {
+    const user = await setup()
+    await openFirstBoard(user)
+    await user.click(screen.getByRole('button', { name: /Agregar columna/ }))
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('region', { name: 'Nueva columna' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Agregar columna/ }))
+    await user.keyboard('{Backspace}{Enter}') // vacío: no la borra ni la deja sin nombre
+    expect(screen.getAllByRole('region', { name: 'Nueva columna' })).toHaveLength(2)
   })
 
   it('elimina columna con tarjetas moviéndolas', async () => {

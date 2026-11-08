@@ -43,10 +43,6 @@
   white-space: nowrap;
 }
 
-.form {
-  width: min(240px, 100%);
-}
-
 @media (pointer: coarse) {
   .btn {
     height: 44px;

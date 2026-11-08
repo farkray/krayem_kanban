@@ -1,35 +1,16 @@
-import { useState } from 'react'
-import { LIMITS, MAX_COLUMNS } from '../lib/types'
+import { MAX_COLUMNS } from '../lib/types'
 import { PlusIcon } from './Icons'
-import { InlineInput } from './InlineInput'
 import styles from './AddColumn.module.css'
 
 interface Props {
   count: number
-  onAdd: (title: string) => void
+  /** Crea la columna al instante; quien llama abre su nombre para escribirlo. */
+  onAdd: () => void
 }
 
 /** Va en la cabecera del tablero: así nunca queda cortada al final de las columnas. */
 export function AddColumn({ count, onAdd }: Props) {
-  const [open, setOpen] = useState(false)
   const full = count >= MAX_COLUMNS
-
-  if (open && !full) {
-    return (
-      <div className={styles.form}>
-        <InlineInput
-          label="Nombre de la columna"
-          placeholder="Nombre de la columna"
-          maxLength={LIMITS.column}
-          onSubmit={(t) => {
-            onAdd(t)
-            setOpen(false)
-          }}
-          onCancel={() => setOpen(false)}
-        />
-      </div>
-    )
-  }
 
   return (
     <button
@@ -37,7 +18,7 @@ export function AddColumn({ count, onAdd }: Props) {
       className={styles.btn}
       disabled={full}
       title={full ? `Un tablero admite como máximo ${MAX_COLUMNS} columnas` : undefined}
-      onClick={() => setOpen(true)}
+      onClick={onAdd}
     >
       <PlusIcon width={16} height={16} />
       <span>Agregar columna</span>

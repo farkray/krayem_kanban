@@ -25,7 +25,13 @@ import { CanEditContext } from '../lib/CanEdit'
 import { displayName } from '../lib/people'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
-import { ASSIGNEE_NONE, LIMITS, limitOf, type Board as BoardModel } from '../lib/types'
+import {
+  ASSIGNEE_NONE,
+  DEFAULT_COLUMN_TITLE,
+  LIMITS,
+  limitOf,
+  type Board as BoardModel,
+} from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
 import { useStore } from '../store/store'
@@ -81,6 +87,8 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
 
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [renaming, setRenaming] = useState(false)
+  // Columna recién creada: se abre su nombre para escribirlo (primero se crea, luego se nombra).
+  const [newColumnId, setNewColumnId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [active, setActive] = useState<Active>(null)
   const [overColumn, setOverColumn] = useState<string | null>(null) // columna bajo el puntero al arrastrar una tarjeta
@@ -284,7 +292,10 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
               </>
             )}
             {access.canEdit && (
-              <AddColumn count={columns.length} onAdd={(t) => addColumn(board.id, t)} />
+              <AddColumn
+                count={columns.length}
+                onAdd={() => setNewColumnId(addColumn(board.id, DEFAULT_COLUMN_TITLE))}
+              />
             )}
           </div>
         </div>
@@ -363,6 +374,8 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
                   counts={totalByColumn}
                   stats={stats}
                   isLast={col.id === lastColumnId}
+                  startRenaming={col.id === newColumnId}
+                  onRenameStarted={() => setNewColumnId(null)}
                   dropTarget={active?.type === 'card' && overColumn === col.id}
                   blocked={
                     active?.type === 'card' &&

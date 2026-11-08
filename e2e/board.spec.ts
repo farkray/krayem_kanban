@@ -18,6 +18,28 @@ test.describe('tablero', () => {
     await expect(add).toContainText('10 de 10 columnas')
   })
 
+  test('agregar columna la crea de inmediato, a la vista, con su nombre listo para escribir', async ({
+    page,
+  }) => {
+    await openFirstBoard(page)
+    const add = page.getByRole('button', { name: /Agregar columna/ })
+    for (const n of ['C4', 'C5', 'C6', 'C7', 'C8']) {
+      await add.click()
+      await page.keyboard.type(n) // el nombre provisional está seleccionado: se escribe encima
+      await page.keyboard.press('Enter')
+    }
+    await add.click()
+    const input = page.getByLabel('Nombre de la columna')
+    await expect(add).toContainText('9 de 10 columnas') // ya existe antes de ponerle nombre
+    await expect(input).toBeFocused()
+    await expect(input).toHaveValue('Nueva columna')
+    await expect(input).toBeInViewport() // aunque el tablero ya se desplaza en horizontal
+    await page.keyboard.type('Revisión')
+    await page.keyboard.press('Enter')
+    await expect(column(page, 'Revisión')).toBeVisible()
+    await expect(column(page, 'C8')).toBeVisible()
+  })
+
   test('crea tarjetas, persisten al recargar y se renombra la columna', async ({ page }) => {
     await openFirstBoard(page)
     await addCard(page, 'Por hacer', 'Banner importador')
