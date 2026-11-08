@@ -826,8 +826,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
       ['email', 'whatsapp'],
     )
     if (!payload) return reply.code(404).send({ error: 'not_found' })
-    const error = await delivery.post(payload)
-    return error ? reply.code(502).send({ error: 'webhook_failed', detail: error }) : { ok: true }
+    // Un envío por canal, como los avisos reales; se detiene en el primer fallo.
+    for (const channel of payload.channels) {
+      const error = await delivery.post({ ...payload, channels: [channel] })
+      if (error) return reply.code(502).send({ error: 'webhook_failed', detail: error })
+    }
+    return { ok: true }
   })
 
   app.post('/api/admin/notifications/retry', async (req, reply) => {
@@ -840,7 +844,9 @@ export function buildApp(opts: AppOptions): BuiltApp {
   /** Descarga el flujo de n8n (JSON importable), sin secretos. */
   app.get('/api/admin/notifications/workflow', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
-    const flow = buildN8nWorkflow({ kanbanUrl: delivery.settings().publicUrl })
+    // Sin dirección pública guardada se usa la de esta misma petición (la que ve el admin).
+    const kanbanUrl = delivery.settings().publicUrl || `${req.protocol}://${req.hostname}`
+    const flow = buildN8nWorkflow({ kanbanUrl })
     return reply
       .header('Content-Type', 'application/json; charset=utf-8')
       .header('Content-Disposition', 'attachment; filename="kanban-avisos-n8n.json"')

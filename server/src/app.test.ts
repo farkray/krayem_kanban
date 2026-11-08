@@ -1397,8 +1397,9 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
     await push(c.admin, 'comments', [
       comment('m1', `[@Ana](mention:${ana.id}) revisa el **banner**`),
     ])
-    expect(outbox()).toHaveLength(1)
-    expect(await built.delivery.flush()).toBe(1)
+    expect(outbox()).toHaveLength(2) // un envío por canal: si uno falla, el reintento no repite el otro
+    expect(await built.delivery.flush()).toBe(2)
+    expect(calls.map((c) => c.body.channels)).toEqual([['email'], ['whatsapp']])
     const { url, headers: h, body } = calls[0]
     expect(url).toBe(HOOK)
     const secret = (
@@ -1410,7 +1411,7 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
     expect(body).toMatchObject({
       event: 'notification',
       type: 'mention',
-      channels: ['email', 'whatsapp'],
+      channels: ['email'],
       recipient: { name: 'ana@correo.com', email: 'ana@correo.com', phone: '+525512345678' },
       actor: 'Admin',
       board: { id: 'b1', title: 'Trabajo' },
@@ -1418,7 +1419,7 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
       excerpt: 'revisa el banner'.replace(/^/, '@Ana '),
       url: 'https://kanban.test/b/b1',
     })
-    expect(outbox()[0]).toMatchObject({ status: 'sent', attempts: 1 })
+    expect(outbox().map((r) => r.status)).toEqual(['sent', 'sent'])
     expect(await built.delivery.flush()).toBe(0) // ya enviado: no se repite
   })
 
@@ -1488,7 +1489,10 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
     expect((await call('POST', '/api/admin/notifications/test', c.admin)).json()).toEqual({
       ok: true,
     })
-    expect(calls[0].body).toMatchObject({ event: 'test', channels: ['email', 'whatsapp'] })
+    expect(calls.map((c) => [c.body.event, c.body.channels])).toEqual([
+      ['test', ['email']],
+      ['test', ['whatsapp']],
+    ])
     reply = () => new Response('no', { status: 404 })
     const bad = await call('POST', '/api/admin/notifications/test', c.admin)
     expect(bad.statusCode).toBe(502)
@@ -1509,8 +1513,9 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         'Aviso del kanban',
-        'Responder 200',
         'Preparar aviso',
+        'Correo no activo',
+        'WhatsApp no activo',
         'Cada mañana',
         'Pedir resumen',
         'Enviar correo',
@@ -1528,6 +1533,13 @@ describe('entrega de avisos (webhook hacia n8n)', () => {
     const digest = flow.nodes.find((n: { name: string }) => n.name === 'Pedir resumen')
     expect(digest.parameters.url).toBe('https://kanban.test/api/integrations/digest')
     expect(flow.active).toBe(false)
+    // responde al terminar de enviar (no antes): si falla un envío, el kanban reintenta
+    const hook = flow.nodes.find((n: { name: string }) => n.name === 'Aviso del kanban')
+    expect(hook.parameters.responseMode).toBe('lastNode')
+    expect(names).not.toContain('Responder 200')
+    // las dos salidas de cada filtro (true y false) llevan a un nodo
+    for (const f of ['¿Por correo?', '¿Por WhatsApp?'])
+      expect(flow.connections[f].main).toHaveLength(2)
   })
 
   describe('resumen diario', () => {

@@ -221,20 +221,21 @@ export class Delivery {
   }
 
   /**
-   * Encola el aviso si el webhook está activo y la persona eligió algún canal. Los avisos fundidos
-   * (count > 1) ya se enviaron al crearse: no se repite el correo por cada menciones nueva.
+   * Encola el aviso si el webhook está activo y la persona eligió algún canal. Va **un envío por
+   * canal** (cada uno con `channels` de un solo elemento): así, si n8n falla en uno, el reintento
+   * no repite el otro. Los avisos fundidos (count > 1) ya se enviaron al crearse.
    */
   enqueue(n: Alert, userId: string, boardTitle = ''): boolean {
     if (n.count > 1 || !this.settings().enabled) return false
-    const payload = this.buildPayload(n, userId)
-    if (!payload || payload.channels.length === 0) return false
-    if (payload.board) payload.board.title = boardTitle
+    const all = this.buildPayload(n, userId)
+    if (!all || all.channels.length === 0) return false
+    if (all.board) all.board.title = boardTitle
     const now = new Date().toISOString()
-    this.db
-      .prepare(
-        'INSERT INTO outbox (id, user_id, payload, next_attempt_at, created_at) VALUES (?, ?, ?, ?, ?)',
-      )
-      .run(randomUUID(), userId, JSON.stringify(payload), now, now)
+    const insert = this.db.prepare(
+      'INSERT INTO outbox (id, user_id, payload, next_attempt_at, created_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    for (const channel of all.channels)
+      insert.run(randomUUID(), userId, JSON.stringify({ ...all, channels: [channel] }), now, now)
     return true
   }
 

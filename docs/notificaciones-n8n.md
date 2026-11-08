@@ -28,7 +28,9 @@ Quién configura qué:
 4. En *Enviar correo* elige tu credencial SMTP y cambia el remitente.
 5. En *Enviar WhatsApp* pon la URL y la clave de tu pasarela (ver abajo).
 6. Activa el flujo y copia la **URL de producción** del webhook al panel del kanban. Marca *Enviar avisos al webhook* y guarda.
-7. Pulsa **Enviar prueba**: llega un correo y un WhatsApp al administrador (si activó sus canales).
+7. Pulsa **Enviar prueba**: llega un correo y un WhatsApp al administrador (dos envíos, uno por canal).
+
+En el lienzo, las salidas *false* de *¿Por correo?* y *¿Por WhatsApp?* van a un nodo *no activo*: significan que esa persona no usa el canal y no se hace nada.
 
 ## WhatsApp
 
@@ -61,8 +63,8 @@ El kanban no vincula WhatsApp. El flujo envía con una **pasarela** que tú gest
 ```
 
 - `type`: `mention`, `assignment`, `access_granted`, `access_role`, `access_removed` y `test` (el botón de prueba).
-- `channels`: solo los que la persona activó (WhatsApp requiere teléfono).
-- Responde con cualquier 2xx. Si no, el kanban reintenta a 1 min, 5 min, 30 min, 2 h y 6 h; después queda como *fallido* y el panel ofrece **Reintentar fallidos**.
+- `channels`: **un solo canal por envío** (`["email"]` o `["whatsapp"]`). Si la persona activó los dos, llegan dos envíos separados: así, si uno falla, el reintento no repite el otro. WhatsApp requiere teléfono.
+- **Responde cuando termines de enviar**, con cualquier 2xx. El flujo descargable lo hace así (el webhook responde al terminar): si el correo o WhatsApp falla, n8n responde con error y el kanban reintenta ese envío. Si no hay 2xx, el kanban reintenta a 1 min, 5 min, 30 min, 2 h y 6 h; después queda como *fallido* y el panel ofrece **Reintentar fallidos**.
 - Los avisos repetidos de la misma tarjeta que se funden en la campana no se vuelven a enviar.
 
 ## Resumen diario
