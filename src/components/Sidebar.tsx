@@ -21,6 +21,8 @@ interface Props {
     email: string | null
     onSignOut: () => void
     onChangePassword: () => void
+    /** Elegir por qué canales recibir avisos fuera de la app (correo, WhatsApp). */
+    onAlerts: () => void
     /** Solo administradores: abre la gestión de usuarios. */
     onManageUsers?: () => void
     /** Estás en el panel de control. */
@@ -148,6 +150,9 @@ export function Sidebar({
               Panel de control
             </button>
           )}
+          <button type="button" className={styles.signOut} onClick={account.onAlerts}>
+            Avisos por correo y WhatsApp
+          </button>
           <button type="button" className={styles.signOut} onClick={account.onChangePassword}>
             Cambiar contraseña
           </button>

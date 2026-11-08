@@ -28,7 +28,10 @@ import {
 } from './auth.ts'
 import { createClock, isTable, transaction, type DB } from './db.ts'
 import { Hub } from './events.ts'
-import { Notifications, detect, type RowChange } from './notifications.ts'
+import { Notifications, detect, type NotificationView, type RowChange } from './notifications.ts'
+import { Delivery, cleanPhone, cleanWebhookUrl, validTimezone } from './delivery.ts'
+import { buildDigest } from './digest.ts'
+import { buildN8nWorkflow } from './n8nWorkflow.ts'
 
 export interface AppOptions {
   db: DB
@@ -37,11 +40,14 @@ export interface AppOptions {
   /** Cookie con atributo Secure (producción, detrás de HTTPS). Desactívalo solo en pruebas por http. */
   cookieSecure?: boolean
   logger?: boolean
+  /** Cliente HTTP para el webhook de avisos (se sustituye en pruebas). */
+  fetch?: typeof fetch
 }
 
 export interface BuiltApp {
   app: FastifyInstance
   hub: Hub
+  delivery: Delivery
 }
 
 const MAX_BLOB_BYTES = 20 * 1024 * 1024
@@ -91,6 +97,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
   })
   const hub = new Hub()
   const notifications = new Notifications(db)
+  const delivery = new Delivery(db, opts.fetch)
   const nextTs = createClock(db)
   const byEmail = new LoginLimiter(5)
   const byIp = new LoginLimiter(30)
@@ -389,6 +396,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return [...set]
   }
 
+  /** Entrega un aviso nuevo: en vivo a sus dispositivos y, si procede, a la cola del webhook. */
+  const emit = (userId: string, view: NotificationView) => {
+    hub.publishNotification(userId, view, notifications.list(userId, { limit: 1 }).unread)
+    delivery.enqueue(view, userId, notifications.titleOfBoard(view.boardId))
+  }
+
   /** Aviso no ligado a una fila (accesos): guarda y empuja en vivo, sin romper la operación si falla. */
   const pushNotification = (
     userId: string,
@@ -408,8 +421,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
         title: notifications.titleOfBoard(n.boardId),
         excerpt: n.excerpt,
       })
-      if (view)
-        hub.publishNotification(userId, view, notifications.list(userId, { limit: 1 }).unread)
+      if (view) emit(userId, view)
     } catch (e) {
       app.log.error(e)
     }
@@ -432,8 +444,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
           title,
           excerpt: d.excerpt,
         })
-        if (view)
-          hub.publishNotification(d.userId, view, notifications.list(d.userId, { limit: 1 }).unread)
+        if (view) emit(d.userId, view)
       }
     } catch (e) {
       app.log.error(e) // un fallo al avisar nunca debe impedir guardar el cambio
@@ -733,10 +744,155 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return { unread: notifications.list(user.id, { limit: 1 }).unread }
   })
 
+  /* ---------- entrega fuera de la app (webhook → n8n) ---------- */
+
+  const publicOrigin = (raw: unknown): string | null => {
+    if (raw === '' || raw === undefined) return ''
+    const u = cleanWebhookUrl(raw)
+    return u ? new URL(u).origin : null
+  }
+
+  const adminView = () => ({ ...delivery.settings(), stats: delivery.stats() })
+
+  app.get('/api/admin/notifications', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return adminView()
+  })
+
+  /** Guarda la URL del webhook, si está activo, la dirección pública y la zona horaria. */
+  app.put('/api/admin/notifications', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const b = (req.body ?? {}) as {
+      enabled?: unknown
+      url?: unknown
+      publicUrl?: unknown
+      timezone?: unknown
+    }
+    const patch: Parameters<Delivery['save']>[0] = {}
+    if (b.url !== undefined) {
+      if (b.url === '') patch.url = ''
+      else {
+        const url = cleanWebhookUrl(b.url)
+        if (!url) return reply.code(400).send({ error: 'invalid_url' })
+        patch.url = url
+      }
+    }
+    if (b.publicUrl !== undefined) {
+      const origin = publicOrigin(b.publicUrl)
+      if (origin === null) return reply.code(400).send({ error: 'invalid_public_url' })
+      patch.publicUrl = origin
+    }
+    if (b.timezone !== undefined) {
+      if (typeof b.timezone !== 'string' || !validTimezone(b.timezone))
+        return reply.code(400).send({ error: 'invalid_timezone' })
+      patch.timezone = b.timezone
+    }
+    if (b.enabled !== undefined) {
+      if (typeof b.enabled !== 'boolean') return reply.code(400).send({ error: 'bad_request' })
+      const url = patch.url ?? delivery.settings().url
+      if (b.enabled && !url) return reply.code(400).send({ error: 'url_required' })
+      if (b.enabled && !delivery.settings().hasSecret) delivery.rotateSecret()
+      patch.enabled = b.enabled
+    }
+    delivery.save(patch)
+    return adminView()
+  })
+
+  /** Genera un secreto nuevo (invalida el anterior). Se muestra una sola vez. */
+  app.post('/api/admin/notifications/secret', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return { secret: delivery.rotateSecret(), ...adminView() }
+  })
+
+  /** Envía un aviso de prueba al propio admin, con los dos canales, y dice cómo fue. */
+  app.post('/api/admin/notifications/test', async (req, reply) => {
+    const admin = requireAdmin(req, reply)
+    if (!admin) return
+    const now = new Date().toISOString()
+    const payload = delivery.buildPayload(
+      {
+        id: 'prueba',
+        type: 'test',
+        boardId: '',
+        cardId: null,
+        title: '',
+        excerpt: '',
+        count: 1,
+        actorName: 'El kanban',
+        createdAt: now,
+      },
+      admin.id,
+      'test',
+      ['email', 'whatsapp'],
+    )
+    if (!payload) return reply.code(404).send({ error: 'not_found' })
+    const error = await delivery.post(payload)
+    return error ? reply.code(502).send({ error: 'webhook_failed', detail: error }) : { ok: true }
+  })
+
+  app.post('/api/admin/notifications/retry', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    delivery.retryFailed()
+    void delivery.flush()
+    return adminView()
+  })
+
+  /** Descarga el flujo de n8n (JSON importable), sin secretos. */
+  app.get('/api/admin/notifications/workflow', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const flow = buildN8nWorkflow({ kanbanUrl: delivery.settings().publicUrl })
+    return reply
+      .header('Content-Type', 'application/json; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="kanban-avisos-n8n.json"')
+      .send(JSON.stringify(flow, null, 2))
+  })
+
+  /** ¿Se pueden elegir canales? (solo si el admin activó la entrega) */
+  app.get('/api/notifications/channels', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    return { available: delivery.settings().enabled, ...delivery.channelsOf(user.id) }
+  })
+
+  app.put('/api/me/notifications', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const b = (req.body ?? {}) as Record<string, unknown>
+    const phone = cleanPhone(b.phone)
+    if (phone === null) return reply.code(400).send({ error: 'invalid_phone' })
+    for (const k of ['email', 'whatsapp', 'digest'])
+      if (typeof b[k] !== 'boolean') return reply.code(400).send({ error: 'bad_request' })
+    if (b.whatsapp === true && phone === '')
+      return reply.code(400).send({ error: 'phone_required' })
+    delivery.setChannels(user.id, {
+      phone,
+      email: b.email as boolean,
+      whatsapp: b.whatsapp as boolean,
+      digest: b.digest as boolean,
+    })
+    return { available: delivery.settings().enabled, ...delivery.channelsOf(user.id) }
+  })
+
+  /** Resumen "Hoy" de todas las personas que lo pidieron; lo consulta n8n cada mañana (Bearer). */
+  app.get('/api/integrations/digest', async (req, reply) => {
+    const token = /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ''))?.[1] ?? ''
+    if (!delivery.settings().enabled || !delivery.checkSecret(token))
+      return reply.code(401).send({ error: 'unauthorized' })
+    return buildDigest(db, delivery)
+  })
+
   notifications.purge()
-  const purgeTimer = setInterval(() => notifications.purge(), 6 * 3_600_000)
+  delivery.purge()
+  delivery.start()
+  const purgeTimer = setInterval(() => {
+    notifications.purge()
+    delivery.purge()
+  }, 6 * 3_600_000)
   purgeTimer.unref()
-  app.addHook('onClose', async () => clearInterval(purgeTimer))
+  app.addHook('onClose', async () => {
+    clearInterval(purgeTimer)
+    delivery.stop()
+  })
 
   /* ---------- tiempo real (SSE) ---------- */
 
@@ -829,5 +985,5 @@ export function buildApp(opts: AppOptions): BuiltApp {
     hub.closeAll()
   })
 
-  return { app, hub }
+  return { app, hub, delivery }
 }

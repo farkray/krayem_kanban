@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Board } from './components/Board'
 import { displayName } from './lib/people'
 import { AdminPanel } from './components/AdminPanel'
+import { AlertsDialog } from './components/AlertsDialog'
 import { ChangePasswordDialog } from './components/ChangePasswordDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { HomeView } from './components/HomeView'
@@ -40,6 +41,7 @@ export default function App() {
   const pending = useSync((s) => s.pending)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [editingAlerts, setEditingAlerts] = useState(false)
 
   // Pantalla ancha: barra lateral fija (se puede ocultar). Angosta: panel deslizable, cerrado al inicio.
   const wide = useMediaQuery(WIDE_QUERY, true)
@@ -131,6 +133,10 @@ export default function App() {
                 closeDrawer()
                 setChangingPassword(true)
               },
+              onAlerts: () => {
+                closeDrawer()
+                setEditingAlerts(true)
+              },
               onManageUsers: isAdmin
                 ? () => {
                     setOpenCardId(null)
@@ -195,6 +201,7 @@ export default function App() {
       <Toast />
       <PwaPrompts />
       {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
+      {editingAlerts && <AlertsDialog onClose={() => setEditingAlerts(false)} />}
       {confirmSignOut && (
         <ConfirmDialog
           title="Cerrar sesión"

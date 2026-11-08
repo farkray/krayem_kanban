@@ -15,6 +15,7 @@ import {
   adminSetAlias,
   type AdminUser,
 } from '../sync/admin'
+import { AdminNotifications } from './AdminNotifications'
 import { Avatar } from './Avatar'
 import { ConfirmDialog } from './ConfirmDialog'
 import { MoreIcon } from './Icons'
@@ -359,6 +360,8 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
               </div>
             </section>
           )}
+
+          <AdminNotifications />
 
           <section className={styles.card} aria-labelledby="new-title">
             <div className={styles.cardHead}>

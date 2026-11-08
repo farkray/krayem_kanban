@@ -94,6 +94,30 @@ const MIGRATIONS: string[] = [
   CREATE INDEX notifications_user ON notifications(user_id, read_at, created_at);
   CREATE INDEX notifications_card ON notifications(user_id, card_id);
   `,
+  // 6: entrega de avisos fuera de la app (webhook hacia n8n: correo, WhatsApp…). `settings` guarda la
+  // configuración del admin; `outbox` es la cola de envío con reintentos; el usuario elige sus canales.
+  `
+  ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN notify_email INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN notify_whatsapp INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN notify_digest INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE outbox (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    sent_at TEXT
+  );
+  CREATE INDEX outbox_due ON outbox(status, next_attempt_at);
+  `,
 ]
 
 export function openDb(file: string): DB {
