@@ -9,9 +9,16 @@ import { useStore } from './store'
 type Live = { deletedAt?: string }
 const live = <T extends Live>(rows: T[]) => rows.filter((r) => !r.deletedAt)
 
+/** Mis tableros (en el orden que elegí) y después los que otras personas comparten conmigo. */
 export function useBoards() {
   const boards = useStore((s) => s.boards)
-  return useMemo(() => live(boards).sort(byPosition), [boards])
+  const me = useAuth((s) => s.userId)
+  return useMemo(() => {
+    const foreign = (b: { ownerId?: string }) => !!b.ownerId && !!me && b.ownerId !== me
+    return live(boards).sort(
+      (a, b) => Number(foreign(a)) - Number(foreign(b)) || byPosition(a, b),
+    )
+  }, [boards, me])
 }
 
 export function useColumns(boardId: string | null) {

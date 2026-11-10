@@ -94,6 +94,8 @@ interface Actions {
   renameColumn: (id: string, title: string) => boolean
   deleteColumn: (id: string, moveToId?: string) => boolean
   moveColumn: (id: string, index: number) => void
+  /** Reordena mis tableros: `index` es el lugar entre los tableros propios. */
+  moveBoard: (id: string, index: number) => void
   /** Cambia el tipo de columna (Estándar / Next / Doing). Falla si ya tiene más tarjetas que el límite. */
   setColumnKind: (id: string, kind: ColumnKind) => boolean
   // tarjetas
@@ -554,6 +556,15 @@ export const useStore = create<Store>((set, get) => {
       markDeleted(snap)
       notify(`Columna “${col.title}” eliminada`, () => restore(snap))
       return true
+    },
+
+    moveBoard: (id, index) => {
+      const board = live(get().boards).find((b) => b.id === id)
+      if (!board || roleOf(id) !== 'owner') return
+      const mine = live(get().boards)
+        .filter((b) => b.id !== id && roleOf(b.id) === 'owner')
+        .sort(byPosition)
+      put('boards', [{ ...board, position: positionAt(mine, index), updatedAt: stamp() }])
     },
 
     moveColumn: (id, index) => {

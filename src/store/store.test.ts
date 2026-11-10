@@ -102,6 +102,24 @@ describe('tableros y columnas', () => {
     expect(liveCols(b).map((c) => c.title)).toEqual(['En curso', 'Listo', 'Por hacer'])
   })
 
+  it('reordena tableros', () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const c = S().createBoard('C')!
+    const titles = () =>
+      S()
+        .boards.filter((x) => !x.deletedAt)
+        .sort((x, y) => (x.position < y.position ? -1 : 1))
+        .map((x) => x.title)
+    expect(titles()).toEqual(['A', 'B', 'C'])
+    S().moveBoard(c, 0)
+    expect(titles()).toEqual(['C', 'A', 'B'])
+    S().moveBoard(c, 2)
+    expect(titles()).toEqual(['A', 'B', 'C'])
+    void a
+    void b
+  })
+
   it('eliminar columna moviendo tarjetas y deshacer', () => {
     const b = S().createBoard('X')!
     const [c1, , c2] = liveCols(b) // "Listo": estándar, sin límite

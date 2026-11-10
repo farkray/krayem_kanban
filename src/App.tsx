@@ -31,6 +31,7 @@ export default function App() {
   const ready = useStore((s) => s.ready)
   const init = useStore((s) => s.init)
   const createBoard = useStore((s) => s.createBoard)
+  const moveBoard = useStore((s) => s.moveBoard)
   const boards = useBoards()
   const summaries = useBoardSummaries()
   const { boardId, isAdminPage, navigate } = useRoute()
@@ -189,7 +190,7 @@ export default function App() {
               onDeleted={() => navigate('/')}
             />
           ) : (
-            <HomeView boards={summaries} onOpen={openBoard} onCreate={create} />
+            <HomeView boards={summaries} onOpen={openBoard} onCreate={create} onMove={moveBoard} />
           )}
         </main>
       </div>
