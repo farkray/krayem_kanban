@@ -9,7 +9,9 @@ test('los tableros se reordenan con el teclado y el orden se conserva', async ({
     await page.getByRole('textbox', { name: 'Nombre del tablero' }).fill(name)
     await page.keyboard.press('Enter')
     await expect(
-      page.getByRole('complementary', { name: 'Tableros' }).getByRole('button', { name: new RegExp(`^${name}`) }),
+      page
+        .getByRole('complementary', { name: 'Tableros' })
+        .getByRole('button', { name: new RegExp(`^${name}`) }),
     ).toBeVisible()
   }
   await page.goto('/')
@@ -42,12 +44,18 @@ test('el orden también se cambia desde la barra lateral', async ({ page }) => {
     await page.getByRole('textbox', { name: 'Nombre del tablero' }).fill(name)
     await page.keyboard.press('Enter')
     await expect(
-      page.getByRole('complementary', { name: 'Tableros' }).getByRole('button', { name: new RegExp(`^${name}`) }),
+      page
+        .getByRole('complementary', { name: 'Tableros' })
+        .getByRole('button', { name: new RegExp(`^${name}`) }),
     ).toBeVisible()
   }
   await page.goto('/')
   const side = page.getByRole('complementary', { name: 'Tableros' })
-  const names = () => side.getByRole('list', { name: 'Mis tableros' }).locator('li [class*="itemTitle"]').allTextContents()
+  const names = () =>
+    side
+      .getByRole('list', { name: 'Mis tableros' })
+      .locator('li [class*="itemTitle"]')
+      .allTextContents()
   expect(await names()).toEqual(['Mi tablero', 'Segundo', 'Tercero'])
   const grip = side.getByRole('button', { name: 'Mover tablero Tercero' })
   await grip.focus()
@@ -69,7 +77,10 @@ test('una tarjeta se mueve a otro tablero y columna', async ({ page }) => {
     page.getByRole('complementary', { name: 'Tableros' }).getByRole('button', { name: /^Destino/ }),
   ).toBeVisible()
   await page.goto('/')
-  await page.getByRole('main').getByRole('button', { name: /^Mi tablero/ }).click()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: /^Mi tablero/ })
+    .click()
   await addCard(page, 'Por hacer', 'Viajera')
   await card(column(page, 'Por hacer'), 'Viajera').click()
   const dialog = page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
@@ -80,6 +91,9 @@ test('una tarjeta se mueve a otro tablero y columna', async ({ page }) => {
   await expect(page.getByText(/Tarjeta movida a “Destino” · En curso/)).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(card(column(page, 'Por hacer'), 'Viajera')).toHaveCount(0)
-  await page.getByRole('complementary', { name: 'Tableros' }).getByRole('button', { name: /^Destino/ }).click()
+  await page
+    .getByRole('complementary', { name: 'Tableros' })
+    .getByRole('button', { name: /^Destino/ })
+    .click()
   await expect(card(column(page, 'En curso'), 'Viajera')).toBeVisible()
 })

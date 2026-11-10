@@ -661,7 +661,8 @@ export const useStore = create<Store>((set, get) => {
       const card = live(st.cards).find((c) => c.id === id)
       const col = live(st.columns).find((c) => c.id === toColumnId)
       if (!card || !col) return false
-      if (col.boardId === card.boardId) return get().moveCard(id, toColumnId, cardsOf(toColumnId).length)
+      if (col.boardId === card.boardId)
+        return get().moveCard(id, toColumnId, cardsOf(toColumnId).length)
       const from = live(st.boards).find((b) => b.id === card.boardId)
       const to = live(st.boards).find((b) => b.id === col.boardId)
       // Mismo dueño y permiso de edición en los dos: así el servidor guarda todo bajo la misma cuenta.
@@ -704,7 +705,8 @@ export const useStore = create<Store>((set, get) => {
       const snap = cardSnapshot([id])
       for (const k of ['items', 'comments', 'attachments', 'likes'] as const) {
         const rows = snap[k]
-        if (rows?.length) put(k, rows.map((r) => ({ ...r, boardId: to.id, updatedAt: ts })) as never)
+        if (rows?.length)
+          put(k, rows.map((r) => ({ ...r, boardId: to.id, updatedAt: ts })) as never)
       }
       notify(`Tarjeta movida a “${to.title}” · ${col.title}`)
       return true

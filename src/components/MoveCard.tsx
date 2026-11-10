@@ -19,16 +19,12 @@ export function MoveCard({ card }: { card: Card }) {
   const targets = useMemo(
     () =>
       boards.filter(
-        (b) =>
-          b.id !== card.boardId && (b.ownerId ?? null) === (current?.ownerId ?? null),
+        (b) => b.id !== card.boardId && (b.ownerId ?? null) === (current?.ownerId ?? null),
       ),
     [boards, card.boardId, current?.ownerId],
   )
   const cols = useMemo(
-    () =>
-      columns
-        .filter((c) => !c.deletedAt && c.boardId === boardId)
-        .sort(byPosition),
+    () => columns.filter((c) => !c.deletedAt && c.boardId === boardId).sort(byPosition),
     [columns, boardId],
   )
 
@@ -38,9 +34,7 @@ export function MoveCard({ card }: { card: Card }) {
     const first = targets[0].id
     setBoardId(first)
     setColumnId(
-      columns
-        .filter((c) => !c.deletedAt && c.boardId === first)
-        .sort(byPosition)[0]?.id ?? '',
+      columns.filter((c) => !c.deletedAt && c.boardId === first).sort(byPosition)[0]?.id ?? '',
     )
     setOpen(true)
   }

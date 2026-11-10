@@ -743,13 +743,17 @@ describe('tableros compartidos', () => {
     await share(c.owner, 'b1', 'ana@correo.com', 'editor')
     await share(c.owner, 'b2', 'ana@correo.com', 'editor')
     // el dueño la pasa a otro tablero suyo
-    expect((await push(c.owner, 'cards', [card('k1', 'b3', 'viaja')])).json().rejected).toBeUndefined()
+    expect(
+      (await push(c.owner, 'cards', [card('k1', 'b3', 'viaja')])).json().rejected,
+    ).toBeUndefined()
     expect((await pull(c.owner, 'cards')).find((r) => r.id === 'k1')?.boardId).toBe('b3')
     // un editor no la saca de un tablero donde solo ve (b3 no está compartido con ana)
     expect((await push(c.ana, 'cards', [card('k1', 'b2', 'x')])).json().rejected).toEqual(['k1'])
     // vuelve a b1; ahora una editora con acceso a b1 y b2 sí la pasa entre ellos
     await push(c.owner, 'cards', [card('k1', 'b1', 'viaja')])
-    expect((await push(c.ana, 'cards', [card('k1', 'b2', 'viaja')])).json().rejected).toBeUndefined()
+    expect(
+      (await push(c.ana, 'cards', [card('k1', 'b2', 'viaja')])).json().rejected,
+    ).toBeUndefined()
     // y nadie la lleva a un tablero de otro dueño
     expect((await push(c.owner, 'cards', [card('k1', 'bx', 'viaja')])).json().rejected).toEqual([
       'k1',

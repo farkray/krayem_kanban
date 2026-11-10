@@ -33,7 +33,15 @@ interface Props {
   onMove?: (id: string, index: number) => void
 }
 
-function Tile({ board: b, onOpen, sortable }: { board: BoardSummary; onOpen: () => void; sortable: boolean }) {
+function Tile({
+  board: b,
+  onOpen,
+  sortable,
+}: {
+  board: BoardSummary
+  onOpen: () => void
+  sortable: boolean
+}) {
   const s = useSortable({ id: b.id, disabled: !sortable })
   return (
     <div
@@ -105,31 +113,36 @@ export function HomeView({ boards, onOpen, onCreate, onMove }: Props) {
         <SortableContext items={mine.map((b) => b.id)} strategy={rectSortingStrategy}>
           <div className={styles.grid}>
             {boards.map((b) => (
-              <Tile key={b.id} board={b} sortable={canSort && !b.sharedBy} onOpen={() => onOpen(b.id)} />
+              <Tile
+                key={b.id}
+                board={b}
+                sortable={canSort && !b.sharedBy}
+                onOpen={() => onOpen(b.id)}
+              />
             ))}
-        {creating ? (
-          <div className={styles.tile}>
-            <InlineInput
-              label="Nombre del tablero"
-              placeholder="Nombre del tablero"
-              maxLength={LIMITS.board}
-              onSubmit={(t) => {
-                onCreate(t)
-                setCreating(false)
-              }}
-              onCancel={() => setCreating(false)}
-            />
-          </div>
-        ) : (
-          <button
-            type="button"
-            className={`${styles.tile} ${styles.new}`}
-            onClick={() => setCreating(true)}
-          >
-            <PlusIcon width={24} height={24} />
-            <span className={styles.name}>Nuevo tablero</span>
-          </button>
-        )}
+            {creating ? (
+              <div className={styles.tile}>
+                <InlineInput
+                  label="Nombre del tablero"
+                  placeholder="Nombre del tablero"
+                  maxLength={LIMITS.board}
+                  onSubmit={(t) => {
+                    onCreate(t)
+                    setCreating(false)
+                  }}
+                  onCancel={() => setCreating(false)}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`${styles.tile} ${styles.new}`}
+                onClick={() => setCreating(true)}
+              >
+                <PlusIcon width={24} height={24} />
+                <span className={styles.name}>Nuevo tablero</span>
+              </button>
+            )}
           </div>
         </SortableContext>
       </DndContext>

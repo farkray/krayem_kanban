@@ -119,12 +119,22 @@ describe('tableros y columnas', () => {
     expect(card).toMatchObject({ boardId: b, columnId: b1.id })
     // "Urgente" ya existía en B (otro uso de mayúsculas); "Solo A" se crea en B
     expect(card.labelIds).toContain(lb)
-    expect(S().labels.filter((l) => l.boardId === b && !l.deletedAt).map((l) => l.name).sort()).toEqual([
-      'Solo A',
-      'urgente',
-    ])
-    expect(S().comments.filter((c) => c.cardId === id).every((c) => c.boardId === b)).toBe(true)
-    expect(S().items.filter((i) => i.cardId === id).every((i) => i.boardId === b)).toBe(true)
+    expect(
+      S()
+        .labels.filter((l) => l.boardId === b && !l.deletedAt)
+        .map((l) => l.name)
+        .sort(),
+    ).toEqual(['Solo A', 'urgente'])
+    expect(
+      S()
+        .comments.filter((c) => c.cardId === id)
+        .every((c) => c.boardId === b),
+    ).toBe(true)
+    expect(
+      S()
+        .items.filter((i) => i.cardId === id)
+        .every((i) => i.boardId === b),
+    ).toBe(true)
     expect(liveCards(a1.id)).toHaveLength(0)
     expect(liveCards(b1.id).map((c) => c.id)).toEqual([id])
   })

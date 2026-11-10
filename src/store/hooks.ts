@@ -15,9 +15,7 @@ export function useBoards() {
   const me = useAuth((s) => s.userId)
   return useMemo(() => {
     const foreign = (b: { ownerId?: string }) => !!b.ownerId && !!me && b.ownerId !== me
-    return live(boards).sort(
-      (a, b) => Number(foreign(a)) - Number(foreign(b)) || byPosition(a, b),
-    )
+    return live(boards).sort((a, b) => Number(foreign(a)) - Number(foreign(b)) || byPosition(a, b))
   }, [boards, me])
 }
 
