@@ -102,6 +102,45 @@ describe('tableros y columnas', () => {
     expect(liveCols(b).map((c) => c.title)).toEqual(['En curso', 'Listo', 'Por hacer'])
   })
 
+  it('mueve una tarjeta a otro tablero con sus datos y las etiquetas por nombre', () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const [a1] = liveCols(a)
+    const [b1] = liveCols(b)
+    const la = S().createLabel(a, 'Urgente', 'red')!
+    const lb = S().createLabel(b, 'urgente', 'red')!
+    const lx = S().createLabel(a, 'Solo A', 'blue')!
+    const id = S().addCard(a1.id, 'Viaja')!
+    S().updateCard(id, { labelIds: [la, lx] } as never)
+    S().addComment(id, 'Hola')
+    S().addItem(id, 'Paso')
+    expect(S().moveCardToBoard(id, b1.id)).toBe(true)
+    const card = S().cards.find((c) => c.id === id)!
+    expect(card).toMatchObject({ boardId: b, columnId: b1.id })
+    // "Urgente" ya existía en B (otro uso de mayúsculas); "Solo A" se crea en B
+    expect(card.labelIds).toContain(lb)
+    expect(S().labels.filter((l) => l.boardId === b && !l.deletedAt).map((l) => l.name).sort()).toEqual([
+      'Solo A',
+      'urgente',
+    ])
+    expect(S().comments.filter((c) => c.cardId === id).every((c) => c.boardId === b)).toBe(true)
+    expect(S().items.filter((i) => i.cardId === id).every((i) => i.boardId === b)).toBe(true)
+    expect(liveCards(a1.id)).toHaveLength(0)
+    expect(liveCards(b1.id).map((c) => c.id)).toEqual([id])
+  })
+
+  it('no mueve a una columna llena de otro tablero', () => {
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B')!
+    const [a1] = liveCols(a)
+    const doing = liveCols(b)[1] // En curso: límite 2
+    S().addCard(doing.id, 'x')
+    S().addCard(doing.id, 'y')
+    const id = S().addCard(a1.id, 'z')!
+    expect(S().moveCardToBoard(id, doing.id)).toBe(false)
+    expect(S().cards.find((c) => c.id === id)?.boardId).toBe(a)
+  })
+
   it('reordena tableros', () => {
     const a = S().createBoard('A')!
     const b = S().createBoard('B')!

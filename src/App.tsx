@@ -121,6 +121,7 @@ export default function App() {
       drawer={drawer}
       onSelect={openBoard}
       onCreate={create}
+      onMove={moveBoard}
       onToggle={() => setSidebarOpen(false)}
       account={
         authStatus === 'signedIn'

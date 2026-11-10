@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
-import { canEditBoard, currentUserId, roleOf } from '../lib/access'
+import { canEditBoard, currentUserId, participantIds, roleOf } from '../lib/access'
 import { isConfigured } from '../lib/config'
 import { byPosition, positionAt, positionsFor } from '../lib/position'
 import {
@@ -118,6 +118,8 @@ interface Actions {
   ) => boolean
   /** Devuelve false si la columna destino llegó a su límite (la tarjeta no se mueve). */
   moveCard: (id: string, toColumnId: string, index: number) => boolean
+  /** Pasa la tarjeta (con sus actualizaciones, lista y adjuntos) a una columna de otro tablero. */
+  moveCardToBoard: (id: string, toColumnId: string) => boolean
   deleteCard: (id: string) => void
   // etiquetas
   createLabel: (boardId: string, name: string, color: LabelColor) => string | null
@@ -651,6 +653,60 @@ export const useStore = create<Store>((set, get) => {
           updatedAt: stamp(),
         },
       ])
+      return true
+    },
+
+    moveCardToBoard: (id, toColumnId) => {
+      const st = get()
+      const card = live(st.cards).find((c) => c.id === id)
+      const col = live(st.columns).find((c) => c.id === toColumnId)
+      if (!card || !col) return false
+      if (col.boardId === card.boardId) return get().moveCard(id, toColumnId, cardsOf(toColumnId).length)
+      const from = live(st.boards).find((b) => b.id === card.boardId)
+      const to = live(st.boards).find((b) => b.id === col.boardId)
+      // Mismo dueño y permiso de edición en los dos: así el servidor guarda todo bajo la misma cuenta.
+      if (!from || !to || (from.ownerId ?? null) !== (to.ownerId ?? null)) return false
+      if (!canEditBoard(from.id) || !canEditBoard(to.id)) return false
+      const siblings = cardsOf(toColumnId)
+      const limit = limitOf(col)
+      if (limit !== null && siblings.length >= limit) {
+        notifyFull(col)
+        return false
+      }
+
+      // Las etiquetas son de cada tablero: se usa la del mismo nombre o se crea igual en el destino.
+      const labelIds: string[] = []
+      for (const lid of card.labelIds ?? []) {
+        const src = live(get().labels).find((l) => l.id === lid)
+        if (!src) continue
+        const found = live(get().labels).find(
+          (l) => l.boardId === to.id && l.name.toLowerCase() === src.name.toLowerCase(),
+        )
+        const target = found?.id ?? get().createLabel(to.id, src.name, src.color)
+        if (target && !labelIds.includes(target)) labelIds.push(target)
+      }
+      // La persona asignada se conserva solo si también participa en el tablero destino.
+      const people = participantIds(to.id)
+      const keepAssignee = !!card.assigneeId && (!people || people.includes(card.assigneeId))
+
+      const ts = stamp()
+      const moved: Card = {
+        ...card,
+        columnId: toColumnId,
+        boardId: to.id,
+        position: positionAt(siblings, siblings.length),
+        labelIds: labelIds.length ? labelIds : undefined,
+        updatedAt: ts,
+      }
+      if (!labelIds.length) delete moved.labelIds
+      if (!keepAssignee) delete moved.assigneeId
+      put('cards', [moved])
+      const snap = cardSnapshot([id])
+      for (const k of ['items', 'comments', 'attachments', 'likes'] as const) {
+        const rows = snap[k]
+        if (rows?.length) put(k, rows.map((r) => ({ ...r, boardId: to.id, updatedAt: ts })) as never)
+      }
+      notify(`Tarjeta movida a “${to.title}” · ${col.title}`)
       return true
     },
 

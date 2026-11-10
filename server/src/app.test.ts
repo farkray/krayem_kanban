@@ -735,6 +735,27 @@ describe('tableros compartidos', () => {
     expect(mine.find((r) => r.id === 'k2')?.title).toBe('privada')
   })
 
+  it('una tarjeta pasa a otro tablero solo dentro del mismo dueño y con permiso de edición en ambos', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1'), board('b2'), board('b3')])
+    await push(c.beto, 'boards', [board('bx')])
+    await push(c.owner, 'cards', [card('k1', 'b1', 'viaja')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await share(c.owner, 'b2', 'ana@correo.com', 'editor')
+    // el dueño la pasa a otro tablero suyo
+    expect((await push(c.owner, 'cards', [card('k1', 'b3', 'viaja')])).json().rejected).toBeUndefined()
+    expect((await pull(c.owner, 'cards')).find((r) => r.id === 'k1')?.boardId).toBe('b3')
+    // un editor no la saca de un tablero donde solo ve (b3 no está compartido con ana)
+    expect((await push(c.ana, 'cards', [card('k1', 'b2', 'x')])).json().rejected).toEqual(['k1'])
+    // vuelve a b1; ahora una editora con acceso a b1 y b2 sí la pasa entre ellos
+    await push(c.owner, 'cards', [card('k1', 'b1', 'viaja')])
+    expect((await push(c.ana, 'cards', [card('k1', 'b2', 'viaja')])).json().rejected).toBeUndefined()
+    // y nadie la lleva a un tablero de otro dueño
+    expect((await push(c.owner, 'cards', [card('k1', 'bx', 'viaja')])).json().rejected).toEqual([
+      'k1',
+    ])
+  })
+
   it('quitar a un miembro: deja de recibir cambios; un miembro puede salirse; otros no pueden quitar', async () => {
     const { c, ana } = await setup()
     await push(c.owner, 'boards', [board('b1')])

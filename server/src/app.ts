@@ -363,7 +363,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
    * ¿Puede `userId` escribir esta fila y bajo qué dueño se guarda? Reglas:
    *  · tablero: solo su dueño (o cualquiera si es nuevo: queda a su nombre);
    *  · el resto: el dueño del tablero, o un miembro con rol editor;
-   *  · una fila ya existente no puede cambiar de tablero (nadie "roba" filas ajenas por id).
+   *  · una fila ya existente solo cambia de tablero dentro del mismo dueño (nadie "roba" filas ajenas por id).
    */
   const writeOwner = (
     userId: string,
@@ -388,7 +388,16 @@ export function buildApp(opts: AppOptions): BuiltApp {
       owner = board.user_id
     }
     const target = existing.find((e) => e.user_id === owner)
-    if (target && target.board_id && target.board_id !== boardId) return null
+    if (target && target.board_id && target.board_id !== boardId) {
+      // Solo se permite pasar una fila a otro tablero del MISMO dueño, y si puedo editar el de origen.
+      if (table === 'boards') return null
+      const old = boardOwner.get(target.board_id) as { user_id: string } | undefined
+      if (!old || old.user_id !== owner) return null
+      if (old.user_id !== userId) {
+        const m = memberRole.get(target.board_id, userId) as { role: string } | undefined
+        if (m?.role !== 'editor') return null
+      }
+    }
     if (!target && existing.length > 0 && table !== 'boards') return null // id ya usado por otro dueño
     return owner
   }

@@ -63,6 +63,49 @@
   gap: var(--space-1);
 }
 
+.row {
+  position: relative;
+}
+
+.dragging {
+  z-index: 2;
+  opacity: 0.85;
+}
+
+.grip {
+  position: absolute;
+  top: 50%;
+  right: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--color-text-faint);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+  transform: translateY(-50%);
+}
+
+.row:hover .grip,
+.grip:focus-visible {
+  opacity: 1;
+}
+
+.grip:hover {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+
+@media (hover: none) {
+  .grip {
+    opacity: 1;
+  }
+}
+
 .item {
   display: flex;
   align-items: center;

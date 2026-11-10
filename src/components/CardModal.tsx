@@ -14,6 +14,7 @@ import { Checklist } from './Checklist'
 import { LabelPicker } from './LabelPicker'
 import { Comments } from './Comments'
 import { Modal } from './Modal'
+import { MoveCard } from './MoveCard'
 import styles from './CardModal.module.css'
 
 interface Props {
@@ -189,6 +190,7 @@ export function CardModal({ cardId, onClose }: Props) {
                       {dateError}
                     </p>
                   )}
+                  <MoveCard card={card} />
                 </section>
 
                 {people.length > 1 && (
