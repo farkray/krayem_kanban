@@ -12,6 +12,7 @@ export const TABLES = [
   'attachments',
   'items',
   'comments',
+  'likes',
 ] as const
 export type Table = (typeof TABLES)[number]
 export const isTable = (t: string): t is Table => (TABLES as readonly string[]).includes(t)

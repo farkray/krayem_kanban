@@ -34,7 +34,8 @@ export function CardModal({ cardId, onClose }: Props) {
   const [title, setTitle] = useState(card?.title ?? '')
   const [showDates, setShowDates] = useState(false)
   const [tab, setTab] = useState<'details' | 'updates'>('details')
-  const updatesCount = useComments(cardId).length
+  // Se cuentan las actualizaciones, no sus respuestas.
+  const updatesCount = useComments(cardId).filter((c) => !c.parentId).length
   const [dateError, setDateError] = useState<string | null>(null)
 
   // La descripción ya no existe como campo aparte: lo que había pasa a ser la primera actualización.

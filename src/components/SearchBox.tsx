@@ -33,7 +33,11 @@ export function SearchBox({ onPick }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const results = useMemo(
-    () => searchAll({ boards, labels, columns, cards, attachments: [], items, comments }, query),
+    () =>
+      searchAll(
+        { boards, labels, columns, cards, attachments: [], items, comments, likes: [] },
+        query,
+      ),
     [boards, labels, columns, cards, items, comments, query],
   )
 

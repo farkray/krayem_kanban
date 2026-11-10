@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
 import { db } from '../db/db'
-import { setRoleResolver, type Role } from '../lib/access'
+import { setIdentityResolver, setRoleResolver, type Role } from '../lib/access'
 import { displayName } from '../lib/people'
 import { getConfig } from '../lib/config'
 import { useStore } from '../store/store'
@@ -59,6 +59,7 @@ function resolve(boardId: string): Role {
   return useAccess.getState().shared.find((s) => s.boardId === boardId)?.role ?? 'viewer'
 }
 setRoleResolver(resolve)
+setIdentityResolver(() => useAuth.getState().userId)
 
 const api = (path: string) => `${getConfig().API_URL}${path}`
 

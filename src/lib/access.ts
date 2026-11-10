@@ -11,4 +11,13 @@ export const setRoleResolver = (fn: Resolver | null) => {
 }
 
 export const roleOf = (boardId: string): Role => resolver(boardId)
+
+let identity: () => string | null = () => null
+
+/** Quién es la persona con sesión (id de usuario); null en el modo solo-local. */
+export const setIdentityResolver = (fn: (() => string | null) | null) => {
+  identity = fn ?? (() => null)
+}
+
+export const currentUserId = (): string | null => identity()
 export const canEditBoard = (boardId: string) => roleOf(boardId) !== 'viewer'

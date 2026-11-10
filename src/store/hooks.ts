@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { byPosition } from '../lib/position'
 import { displayName } from '../lib/people'
+import type { Comment } from '../lib/types'
 import { useAccess } from '../sync/access'
 import { useAuth } from '../sync/auth'
 import { useStore } from './store'
@@ -56,6 +57,50 @@ export function useComments(cardId: string) {
         .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
     [comments, cardId],
   )
+}
+
+/** Una actualización con sus respuestas (las más viejas primero). */
+export interface UpdateThread {
+  update: Comment
+  replies: Comment[]
+}
+
+/** Actualizaciones de una tarjeta, las más nuevas primero, cada una con sus respuestas. */
+export function useUpdateThreads(cardId: string): UpdateThread[] {
+  const comments = useComments(cardId)
+  return useMemo(() => {
+    const replies = new Map<string, Comment[]>()
+    for (const c of comments)
+      if (c.parentId) replies.set(c.parentId, [...(replies.get(c.parentId) ?? []), c])
+    return comments
+      .filter((c) => !c.parentId)
+      .map((update) => ({ update, replies: replies.get(update.id) ?? [] }))
+      .reverse()
+  }, [comments])
+}
+
+export interface LikeInfo {
+  count: number
+  mine: boolean
+  /** Quienes dieron "me gusta" (ids de usuario). */
+  by: string[]
+}
+
+/** "Me gusta" por actualización: cuántos y si yo di uno. Dos dispositivos de la misma persona cuentan una vez. */
+export function useLikes(cardId: string): Map<string, LikeInfo> {
+  const likes = useStore((s) => s.likes)
+  const me = useAuth((s) => s.userId) ?? 'local'
+  return useMemo(() => {
+    const by = new Map<string, Set<string>>()
+    for (const l of live(likes))
+      if (l.cardId === cardId) by.set(l.commentId, (by.get(l.commentId) ?? new Set()).add(l.userId))
+    return new Map(
+      [...by].map(([id, users]) => [
+        id,
+        { count: users.size, mine: users.has(me), by: [...users] },
+      ]),
+    )
+  }, [likes, cardId, me])
 }
 
 /** Conteos por tarjeta para chips (checklist y comentarios). */

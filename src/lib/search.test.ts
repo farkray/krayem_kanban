@@ -41,6 +41,7 @@ const data: Data = {
     { ...base, id: 'i1', cardId: 't1', text: 'Preparar diapositivas', done: false, position: 'a0' },
   ],
   comments: [{ ...base, id: 'm1', cardId: 't2', bodyMd: 'Hablar con **diseño**' }],
+  likes: [],
 }
 
 describe('búsqueda por etiqueta', () => {

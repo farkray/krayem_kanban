@@ -371,6 +371,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
     row: Record<string, unknown>,
   ): string | null => {
     const id = String(row.id)
+    // Un "me gusta" solo lo escribe su dueño (nadie da "me gusta" en nombre de otra persona).
+    if (table === 'likes' && row.userId !== userId) return null
     const boardId = boardIdOf(table, row)
     const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]
     const mine = existing.find((e) => e.user_id === userId)
@@ -381,7 +383,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (board && board.user_id !== userId) {
       if (table === 'boards') return null
       const m = memberRole.get(boardId, userId) as { role: string } | undefined
-      if (!m || m.role !== 'editor') return null
+      // Editar exige ser editor; el "me gusta" lo puede dar también quien solo lee el tablero.
+      if (!m || (m.role !== 'editor' && !(table === 'likes' && m.role === 'viewer'))) return null
       owner = board.user_id
     }
     const target = existing.find((e) => e.user_id === owner)

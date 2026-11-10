@@ -196,3 +196,13 @@ export const RocketIcon = (p: SVGProps<SVGSVGElement>) => (
     <circle cx="12" cy="10" r="1.4" />
   </Svg>
 )
+export const ThumbsUpIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zM7 11l4-7a2 2 0 0 1 2 2v3h5.5a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A2 2 0 0 1 16.8 19H7" />
+  </Svg>
+)
+export const ReplyIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M9 7L4 12l5 5M4 12h9a7 7 0 0 1 7 7" />
+  </Svg>
+)

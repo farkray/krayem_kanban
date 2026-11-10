@@ -1,5 +1,5 @@
 import { db } from '../db/db'
-import type { Attachment, Data, TableKey } from '../lib/types'
+import { TABLE_KEYS, type Attachment, type Data, type TableKey } from '../lib/types'
 import { loadBlob, setBlobFetcher } from './blobs'
 import { flush as flushWrites, resetStore, useStore } from '../store/store'
 import { createEngine, type Engine, type Remote } from './engine'
@@ -16,6 +16,7 @@ class FakeRemote implements Remote {
     attachments: new Map(),
     items: new Map(),
     comments: new Map(),
+    likes: new Map(),
   }
   upserts: TableKey[] = []
   blobs = new Map<string, Blob>()
@@ -177,7 +178,7 @@ describe('descarga (pull) y tiempo real', () => {
     expect(S().boards.map((b) => b.title)).toEqual(['Remoto'])
     const cursor = (await db.meta.get('cursor:boards'))!.value as string
     await engine.pull()
-    expect(remote.fetches.at(-7)).toMatchObject({ table: 'boards', cursor })
+    expect(remote.fetches.at(-TABLE_KEYS.length)).toMatchObject({ table: 'boards', cursor })
   })
 
   it('no pisa filas con cambios locales pendientes', async () => {

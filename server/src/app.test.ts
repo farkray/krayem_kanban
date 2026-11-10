@@ -1648,3 +1648,84 @@ describe('entrega: utilidades', () => {
     expect(cleanWebhookUrl('javascript:alert(1)')).toBeNull()
   })
 })
+
+describe('"me gusta" y respuestas', () => {
+  it('quien solo lee puede dar "me gusta" (a su nombre); nadie lo da por otra persona ni escribe', async () => {
+    await makeApp()
+    const owner = await addUser('dueno@correo.com')
+    const ana = await addUser('ana@correo.com')
+    const cOwner = (await login('dueno@correo.com')).cookie
+    const cAna = (await login('ana@correo.com')).cookie
+    const post = (cookie: string, table: string, rows: object[]) =>
+      built.app.inject({
+        method: 'POST',
+        url: `/api/sync/${table}`,
+        headers: headers(cookie),
+        payload: { rows },
+      })
+    const get = async (cookie: string, table: string) =>
+      (
+        await built.app.inject({
+          method: 'GET',
+          url: `/api/sync/${table}`,
+          headers: headers(cookie),
+        })
+      ).json().rows as { id: string; userId?: string }[]
+    const t = '2026-11-01T00:00:00.000Z'
+    await post(cOwner, 'boards', [{ ...board('b1', 'Trabajo') }])
+    await post(cOwner, 'comments', [
+      {
+        id: 'm1',
+        boardId: 'b1',
+        cardId: 'k1',
+        bodyMd: 'Hola',
+        authorId: owner.id,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ])
+    await built.app.inject({
+      method: 'POST',
+      url: '/api/boards/b1/members',
+      headers: headers(cOwner),
+      payload: { email: 'ana@correo.com', role: 'viewer' },
+    })
+    const like = (id: string, userId: string) => ({
+      id,
+      boardId: 'b1',
+      cardId: 'k1',
+      commentId: 'm1',
+      userId,
+      createdAt: t,
+      updatedAt: t,
+    })
+    // el lector da "me gusta"
+    expect((await post(cAna, 'likes', [like('l1', ana.id)])).json().rejected).toBeUndefined()
+    expect((await get(cOwner, 'likes')).map((l) => l.userId)).toEqual([ana.id])
+    // pero no lo da por otra persona…
+    expect((await post(cAna, 'likes', [like('l2', owner.id)])).json().rejected).toEqual(['l2'])
+    // …ni escribe una respuesta
+    const reply = {
+      id: 'r1',
+      boardId: 'b1',
+      cardId: 'k1',
+      parentId: 'm1',
+      bodyMd: 'x',
+      createdAt: t,
+      updatedAt: t,
+    }
+    expect((await post(cAna, 'comments', [reply])).json().rejected).toEqual(['r1'])
+    // quien no tiene acceso al tablero tampoco
+    await addUser('beto@correo.com')
+    const cBeto = (await login('beto@correo.com')).cookie
+    expect(
+      (await post(cBeto, 'likes', [like('l3', findUserByEmail(db, 'beto@correo.com')!.id)])).json()
+        .rejected,
+    ).toEqual(['l3'])
+    // quitar el "me gusta" (borrado lógico) lo hace la misma persona
+    expect(
+      (await post(cAna, 'likes', [{ ...like('l1', ana.id), deletedAt: t }])).json().rejected,
+    ).toBeUndefined()
+    expect((await get(cOwner, 'likes'))[0]).toMatchObject({ deletedAt: t })
+  })
+})
