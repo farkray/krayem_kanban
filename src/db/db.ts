@@ -7,6 +7,7 @@ import type {
   Column,
   Comment,
   Label,
+  Like,
   TableKey,
 } from '../lib/types'
 
@@ -38,6 +39,7 @@ class KanbanDB extends Dexie {
   attachments!: Table<Attachment, string>
   items!: Table<ChecklistItem, string>
   comments!: Table<Comment, string>
+  likes!: Table<Like, string>
   meta!: Table<MetaRow, string>
   outbox!: Table<OutboxEntry, string>
   blobs!: Table<BlobRow, string>
@@ -61,6 +63,9 @@ class KanbanDB extends Dexie {
     })
     this.version(4).stores({
       labels: 'id',
+    })
+    this.version(5).stores({
+      likes: 'id, commentId, cardId',
     })
   }
 }

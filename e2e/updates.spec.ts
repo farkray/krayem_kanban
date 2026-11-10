@@ -31,6 +31,8 @@ test.describe('actualizaciones y editor visual', () => {
     await expect(d.getByRole('tab', { name: 'Detalles' })).toHaveAttribute('aria-selected', 'true')
     await d.getByRole('tab', { name: /^Actualizaciones/ }).click()
 
+    await d.getByRole('button', { name: 'Nueva actualización' }).click() // el cuadro de la pestaña se abre al pulsarlo
+
     const editor = d.getByRole('textbox', { name: 'Nueva actualización' })
     await editor.click()
     await d.getByRole('button', { name: 'Negrita' }).click()
@@ -49,7 +51,7 @@ test.describe('actualizaciones y editor visual', () => {
     await expect(feed.locator('strong', { hasText: 'importante' })).toBeVisible()
     await expect(feed.locator('li li', { hasText: 'uno' })).toBeVisible()
     await expect(d.getByRole('tab', { name: 'Actualizaciones / 1' })).toBeVisible()
-    await expect(editor).not.toContainText('importante') // el cuadro queda limpio
+    await expect(editor).toHaveCount(0) // el cuadro vuelve a quedar cerrado
   })
 
   test('desde Detalles se envía una actualización que aparece renderizada en el feed', async ({
@@ -89,6 +91,7 @@ test.describe('actualizaciones y editor visual', () => {
     await card(page, 'Con imagen').click()
     const d = detail(page)
     await d.getByRole('tab', { name: /^Actualizaciones/ }).click()
+    await d.getByRole('button', { name: 'Nueva actualización' }).click() // el cuadro de la pestaña se abre al pulsarlo
     const editor = d.getByRole('textbox', { name: 'Nueva actualización' })
     await editor.click()
     await page.keyboard.type('Captura:')
@@ -123,11 +126,98 @@ test.describe('actualizaciones y editor visual', () => {
     await detail(page)
       .getByRole('tab', { name: /^Actualizaciones/ })
       .click()
+    await detail(page).getByRole('button', { name: 'Nueva actualización' }).click() // el cuadro de la pestaña se abre al pulsarlo
     const editor = detail(page).getByRole('textbox', { name: 'Nueva actualización' })
     await editor.click()
     await page.keyboard.type('texto de prueba')
     await detail(page).getByRole('button', { name: 'Actualizar', exact: true }).click()
     const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
     expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+  })
+
+  test('responder, dar "me gusta" y "Ver más" en una actualización larga (sin fallos de accesibilidad)', async ({
+    page,
+  }) => {
+    await openFirstBoard(page)
+    await addCard(page, 'Por hacer', 'Con hilo')
+    await card(page, 'Con hilo').click()
+    const d = detail(page)
+    await d.getByRole('tab', { name: /^Actualizaciones/ }).click()
+
+    const post = async (text: string) => {
+      await d.getByRole('button', { name: 'Nueva actualización' }).click()
+      await d.getByRole('textbox', { name: 'Nueva actualización' }).fill(text)
+      await d.getByRole('button', { name: 'Actualizar', exact: true }).click()
+    }
+    await post('Primera actualización')
+    await post(
+      Array.from(
+        { length: 16 },
+        (_, i) => `Párrafo ${i + 1} con bastante texto para ocupar espacio.`,
+      ).join('\n\n'),
+    )
+
+    // "Ver más" en la larga: recorta, expande y vuelve a contraer
+    const more = d.getByRole('button', { name: /Ver más/ })
+    await expect(more).toBeVisible()
+    await more.click()
+    await expect(d.getByText('Párrafo 16')).toBeVisible()
+    await d.getByRole('button', { name: 'Ver menos' }).click()
+    await expect(d.getByRole('button', { name: /Ver más/ })).toBeVisible()
+
+    // "Me gusta" y respuesta en la primera
+    const first = d.getByRole('listitem').filter({ hasText: 'Primera actualización' }).first()
+    await first.getByRole('button', { name: 'Me gusta' }).click()
+    await expect(first.getByRole('button', { name: 'Me gusta, 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await first.getByRole('button', { name: 'Responder' }).first().click()
+    await d.getByRole('textbox', { name: /Responder a/ }).fill('Listo, lo reviso')
+    await d.getByRole('button', { name: 'Responder' }).last().click()
+    await expect(d.getByRole('list', { name: 'Respuestas' })).toContainText('Listo, lo reviso')
+    await expect(d.getByRole('tab', { name: 'Actualizaciones / 2' })).toBeVisible() // no cuenta la respuesta
+
+    const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+    expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
+
+    // el "me gusta" y la respuesta se conservan al recargar
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            new Promise<boolean>((resolve) => {
+              const req = indexedDB.open('kanban')
+              req.onsuccess = () => {
+                const all = req.result
+                  .transaction('likes', 'readonly')
+                  .objectStore('likes')
+                  .getAll()
+                all.onsuccess = () => {
+                  resolve((all.result as { deletedAt?: string }[]).some((l) => !l.deletedAt))
+                  req.result.close()
+                }
+              }
+              req.onerror = () => resolve(false)
+            }),
+        ),
+      )
+      .toBe(true)
+    await page.reload()
+    await page
+      .getByRole('button', { name: /Mi tablero/ })
+      .first()
+      .click()
+    await card(page, 'Con hilo').click()
+    await detail(page)
+      .getByRole('tab', { name: /^Actualizaciones/ })
+      .click()
+    await expect(detail(page).getByRole('button', { name: 'Me gusta, 1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(detail(page).getByRole('list', { name: 'Respuestas' })).toContainText(
+      'Listo, lo reviso',
+    )
   })
 })

@@ -13,7 +13,7 @@ const PASSWORD = 'contraseña-larga-123'
 let db: DB
 let built: BuiltApp
 
-async function makeApp(opts: { allowSignup?: boolean } = {}) {
+async function makeApp(opts: { allowSignup?: boolean; fetch?: typeof fetch } = {}) {
   db = openDb(':memory:')
   built = buildApp({
     db,
@@ -735,6 +735,31 @@ describe('tableros compartidos', () => {
     expect(mine.find((r) => r.id === 'k2')?.title).toBe('privada')
   })
 
+  it('una tarjeta pasa a otro tablero solo dentro del mismo dueño y con permiso de edición en ambos', async () => {
+    const { c } = await setup()
+    await push(c.owner, 'boards', [board('b1'), board('b2'), board('b3')])
+    await push(c.beto, 'boards', [board('bx')])
+    await push(c.owner, 'cards', [card('k1', 'b1', 'viaja')])
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    await share(c.owner, 'b2', 'ana@correo.com', 'editor')
+    // el dueño la pasa a otro tablero suyo
+    expect(
+      (await push(c.owner, 'cards', [card('k1', 'b3', 'viaja')])).json().rejected,
+    ).toBeUndefined()
+    expect((await pull(c.owner, 'cards')).find((r) => r.id === 'k1')?.boardId).toBe('b3')
+    // un editor no la saca de un tablero donde solo ve (b3 no está compartido con ana)
+    expect((await push(c.ana, 'cards', [card('k1', 'b2', 'x')])).json().rejected).toEqual(['k1'])
+    // vuelve a b1; ahora una editora con acceso a b1 y b2 sí la pasa entre ellos
+    await push(c.owner, 'cards', [card('k1', 'b1', 'viaja')])
+    expect(
+      (await push(c.ana, 'cards', [card('k1', 'b2', 'viaja')])).json().rejected,
+    ).toBeUndefined()
+    // y nadie la lleva a un tablero de otro dueño
+    expect((await push(c.owner, 'cards', [card('k1', 'bx', 'viaja')])).json().rejected).toEqual([
+      'k1',
+    ])
+  })
+
   it('quitar a un miembro: deja de recibir cambios; un miembro puede salirse; otros no pueden quitar', async () => {
     const { c, ana } = await setup()
     await push(c.owner, 'boards', [board('b1')])
@@ -1255,5 +1280,477 @@ describe('aspecto del tablero', () => {
     // el editor no puede reescribir el tablero (ni su aspecto)
     const res = await post(ana, [{ ...board('b1', 'Trabajo'), color: 'rojo', icon: 'casa' }])
     expect(res.json().rejected).toEqual(['b1'])
+  })
+})
+
+describe('entrega de avisos (webhook hacia n8n)', () => {
+  const HOOK = 'https://n8n.test/webhook/kanban-avisos'
+  type Call = { url: string; headers: Record<string, string>; body: Record<string, any> }
+  let calls: Call[]
+  let reply: () => Response | Promise<Response>
+
+  async function setup() {
+    calls = []
+    reply = () => new Response('{"ok":true}', { status: 200 })
+    await makeApp({
+      fetch: (async (url: string, init: RequestInit) => {
+        calls.push({
+          url: String(url),
+          headers: init.headers as Record<string, string>,
+          body: JSON.parse(String(init.body)),
+        })
+        return reply()
+      }) as unknown as typeof fetch,
+    })
+    const admin = createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true, 'Admin')
+    const ana = await addUser('ana@correo.com')
+    const c = {
+      admin: (await login('admin@correo.com')).cookie,
+      ana: (await login('ana@correo.com')).cookie,
+    }
+    return { c, admin, ana }
+  }
+
+  const call = (method: 'GET' | 'POST' | 'PUT', url: string, cookie?: string, payload?: object) =>
+    built.app.inject({ method, url, headers: headers(cookie), payload })
+  const enable = async (cookie: string) =>
+    (
+      await call('PUT', '/api/admin/notifications', cookie, {
+        url: HOOK,
+        enabled: true,
+        publicUrl: 'https://kanban.test/algo/mas',
+      })
+    ).json()
+  const prefs = (cookie: string, p: object) =>
+    call('PUT', '/api/me/notifications', cookie, {
+      phone: '',
+      email: false,
+      whatsapp: false,
+      digest: false,
+      ...p,
+    })
+  const card = (id: string, extra: object = {}) => ({
+    id,
+    boardId: 'b1',
+    columnId: 'c1',
+    title: 'Banner importador',
+    position: 'a0',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2000-01-01T00:00:00.000Z',
+    ...extra,
+  })
+  const comment = (id: string, bodyMd: string) => ({
+    id,
+    boardId: 'b1',
+    cardId: 'k1',
+    bodyMd,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2000-01-01T00:00:00.000Z',
+  })
+  const push = (cookie: string, table: string, rows: object[]) =>
+    call('POST', `/api/sync/${table}`, cookie, { rows })
+
+  /** Tablero compartido con Ana; deja la bandeja y la cola vacías. */
+  async function shared() {
+    const s = await setup()
+    await enable(s.c.admin)
+    await push(s.c.admin, 'boards', [board('b1', 'Trabajo')])
+    await push(s.c.admin, 'cards', [card('k1')])
+    await call('POST', '/api/boards/b1/members', s.c.admin, {
+      email: 'ana@correo.com',
+      role: 'editor',
+    })
+    db.exec('DELETE FROM notifications; DELETE FROM outbox')
+    return s
+  }
+  const outbox = () => db.prepare('SELECT * FROM outbox ORDER BY created_at').all() as any[]
+
+  it('solo el admin ve y cambia la configuración, y valida la URL', async () => {
+    const { c } = await setup()
+    expect((await call('GET', '/api/admin/notifications', c.ana)).statusCode).toBe(403)
+    expect((await call('PUT', '/api/admin/notifications', c.ana, { url: HOOK })).statusCode).toBe(
+      403,
+    )
+    for (const bad of ['no es url', 'ftp://n8n.test/x', 'https://u:p@n8n.test/x'])
+      expect(
+        (await call('PUT', '/api/admin/notifications', c.admin, { url: bad })).statusCode,
+      ).toBe(400)
+    expect(
+      (await call('PUT', '/api/admin/notifications', c.admin, { enabled: true })).json().error,
+    ).toBe('url_required')
+    expect(
+      (await call('PUT', '/api/admin/notifications', c.admin, { timezone: 'Marte/Olimpo' }))
+        .statusCode,
+    ).toBe(400)
+  })
+
+  it('al activar se crea un secreto; nunca vuelve a mostrarse salvo al regenerarlo', async () => {
+    const { c } = await setup()
+    const saved = await enable(c.admin)
+    expect(saved).toMatchObject({ enabled: true, url: HOOK, hasSecret: true })
+    expect(saved.publicUrl).toBe('https://kanban.test') // solo el origen, sin ruta
+    expect(JSON.stringify(saved)).not.toMatch(/secret"\s*:\s*"/)
+    const first = (await call('GET', '/api/admin/notifications', c.admin)).json()
+    expect(first.secret).toBeUndefined()
+    const rotated = (await call('POST', '/api/admin/notifications/secret', c.admin)).json()
+    expect(rotated.secret).toHaveLength(43)
+    expect(built.delivery.checkSecret(rotated.secret)).toBe(true)
+    expect(built.delivery.checkSecret('otro')).toBe(false)
+  })
+
+  it('cada persona elige sus canales; WhatsApp exige un teléfono válido', async () => {
+    const { c } = await setup()
+    expect((await call('GET', '/api/notifications/channels', c.ana)).json().available).toBe(false)
+    await enable(c.admin)
+    expect((await prefs(c.ana, { whatsapp: true })).json().error).toBe('phone_required')
+    for (const bad of ['123', 'abc', '5512345678'])
+      expect((await prefs(c.ana, { phone: bad })).json().error).toBe('invalid_phone')
+    const ok = await prefs(c.ana, { phone: '+52 55 1234 5678', email: true, whatsapp: true })
+    expect(ok.json()).toMatchObject({
+      available: true,
+      phone: '+525512345678',
+      email: true,
+      whatsapp: true,
+    })
+    expect((await prefs(c.ana, { email: 'sí' })).statusCode).toBe(400)
+    expect((await call('PUT', '/api/me/notifications', undefined, {})).statusCode).toBe(401)
+  })
+
+  it('una mención se envía al webhook con firma de token, canales, enlace y teléfono', async () => {
+    const { c, ana } = await shared()
+    await prefs(c.ana, { phone: '+525512345678', email: true, whatsapp: true })
+    await push(c.admin, 'comments', [
+      comment('m1', `[@Ana](mention:${ana.id}) revisa el **banner**`),
+    ])
+    expect(outbox()).toHaveLength(2) // un envío por canal: si uno falla, el reintento no repite el otro
+    expect(await built.delivery.flush()).toBe(2)
+    expect(calls.map((c) => c.body.channels)).toEqual([['email'], ['whatsapp']])
+    const { url, headers: h, body } = calls[0]
+    expect(url).toBe(HOOK)
+    const secret = (
+      db.prepare("SELECT value FROM settings WHERE key = 'webhook_secret'").get() as {
+        value: string
+      }
+    ).value
+    expect(h.Authorization).toBe(`Bearer ${secret}`)
+    expect(body).toMatchObject({
+      event: 'notification',
+      type: 'mention',
+      channels: ['email'],
+      recipient: { name: 'ana@correo.com', email: 'ana@correo.com', phone: '+525512345678' },
+      actor: 'Admin',
+      board: { id: 'b1', title: 'Trabajo' },
+      card: { id: 'k1', title: 'Banner importador' },
+      excerpt: 'revisa el banner'.replace(/^/, '@Ana '),
+      url: 'https://kanban.test/b/b1',
+    })
+    expect(outbox().map((r) => r.status)).toEqual(['sent', 'sent'])
+    expect(await built.delivery.flush()).toBe(0) // ya enviado: no se repite
+  })
+
+  it('no encola si está apagado, si la persona no eligió canales o si el aviso se fundió', async () => {
+    const { c, ana } = await shared()
+    // sin canales elegidos
+    await push(c.admin, 'comments', [comment('m1', `[@Ana](mention:${ana.id}) uno`)])
+    expect(outbox()).toHaveLength(0)
+    // con canal: el primero se encola; los siguientes (fundidos) no
+    await prefs(c.ana, { email: true })
+    await call('POST', '/api/notifications/read', c.ana, { all: true }) // el aviso anterior ya está leído
+    await push(c.admin, 'comments', [comment('m2', `[@Ana](mention:${ana.id}) dos`)])
+    await push(c.admin, 'comments', [comment('m3', `[@Ana](mention:${ana.id}) tres`)])
+    expect(outbox()).toHaveLength(1)
+    // apagado
+    await call('PUT', '/api/admin/notifications', c.admin, { enabled: false })
+    db.exec('DELETE FROM outbox; DELETE FROM notifications')
+    await push(c.admin, 'cards', [card('k2', { assigneeId: ana.id })])
+    expect(outbox()).toHaveLength(0)
+    expect(await built.delivery.flush()).toBe(0)
+  })
+
+  it('reintenta con espera creciente y al agotarse queda como fallido; el admin puede reintentarlo', async () => {
+    const { c, ana } = await shared()
+    await prefs(c.ana, { email: true })
+    reply = () => new Response('boom', { status: 500 })
+    await push(c.admin, 'comments', [comment('m1', `[@Ana](mention:${ana.id}) hola`)])
+    await built.delivery.flush()
+    let row = outbox()[0]
+    expect(row).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      last_error: 'El webhook respondió 500.',
+    })
+    expect(Date.parse(row.next_attempt_at)).toBeGreaterThan(Date.now() + 30_000)
+    expect(await built.delivery.flush()).toBe(0) // aún no toca
+    for (let i = 0; i < 5; i++) {
+      db.prepare('UPDATE outbox SET next_attempt_at = ?').run(new Date(0).toISOString())
+      await built.delivery.flush()
+    }
+    row = outbox()[0]
+    expect(row).toMatchObject({ status: 'failed', attempts: 6 })
+    expect((await call('GET', '/api/admin/notifications', c.admin)).json().stats).toMatchObject({
+      pending: 0,
+      failed: 1,
+    })
+    reply = () => new Response('{}', { status: 200 })
+    await call('POST', '/api/admin/notifications/retry', c.admin)
+    await built.delivery.flush()
+    expect(outbox()[0].status).toBe('sent')
+  })
+
+  it('una caída de red también se reintenta y no rompe el guardado del cambio', async () => {
+    const { c, ana } = await shared()
+    await prefs(c.ana, { email: true })
+    reply = () => Promise.reject(new TypeError('fetch failed'))
+    const res = await push(c.admin, 'comments', [comment('m1', `[@Ana](mention:${ana.id}) hola`)])
+    expect(res.statusCode).toBe(200)
+    await built.delivery.flush()
+    expect(outbox()[0]).toMatchObject({ status: 'pending', attempts: 1 })
+    expect(outbox()[0].last_error).toContain('No se pudo conectar')
+  })
+
+  it('el envío de prueba usa ambos canales y informa si el webhook falla', async () => {
+    const { c } = await setup()
+    await enable(c.admin)
+    expect((await call('POST', '/api/admin/notifications/test', c.admin)).json()).toEqual({
+      ok: true,
+    })
+    expect(calls.map((c) => [c.body.event, c.body.channels])).toEqual([
+      ['test', ['email']],
+      ['test', ['whatsapp']],
+    ])
+    reply = () => new Response('no', { status: 404 })
+    const bad = await call('POST', '/api/admin/notifications/test', c.admin)
+    expect(bad.statusCode).toBe(502)
+    expect(bad.json().detail).toBe('El webhook respondió 404.')
+    expect((await call('POST', '/api/admin/notifications/test', c.ana)).statusCode).toBe(403)
+  })
+
+  it('el flujo de n8n se descarga como JSON importable, sin secretos', async () => {
+    const { c } = await setup()
+    await enable(c.admin)
+    const secret = (await call('POST', '/api/admin/notifications/secret', c.admin)).json().secret
+    expect((await call('GET', '/api/admin/notifications/workflow', c.ana)).statusCode).toBe(403)
+    const res = await call('GET', '/api/admin/notifications/workflow', c.admin)
+    expect(res.headers['content-disposition']).toContain('kanban-avisos-n8n.json')
+    expect(res.body).not.toContain(secret)
+    const flow = JSON.parse(res.body)
+    const names = flow.nodes.map((n: { name: string }) => n.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'Aviso del kanban',
+        'Preparar aviso',
+        'Correo no activo',
+        'WhatsApp no activo',
+        'Cada mañana',
+        'Pedir resumen',
+        'Enviar correo',
+        'Enviar WhatsApp',
+        '¿Por correo?',
+        '¿Por WhatsApp?',
+      ]),
+    )
+    // toda conexión apunta a un nodo que existe
+    for (const [from, out] of Object.entries<any>(flow.connections)) {
+      expect(names).toContain(from)
+      for (const branch of out.main) for (const l of branch) expect(names).toContain(l.node)
+    }
+    expect(new Set(names).size).toBe(names.length)
+    const digest = flow.nodes.find((n: { name: string }) => n.name === 'Pedir resumen')
+    expect(digest.parameters.url).toBe('https://kanban.test/api/integrations/digest')
+    expect(flow.active).toBe(false)
+    // responde al terminar de enviar (no antes): si falla un envío, el kanban reintenta
+    const hook = flow.nodes.find((n: { name: string }) => n.name === 'Aviso del kanban')
+    expect(hook.parameters.responseMode).toBe('lastNode')
+    expect(names).not.toContain('Responder 200')
+    // las dos salidas de cada filtro (true y false) llevan a un nodo
+    for (const f of ['¿Por correo?', '¿Por WhatsApp?'])
+      expect(flow.connections[f].main).toHaveLength(2)
+  })
+
+  describe('resumen diario', () => {
+    const ymd = (offset: number) => {
+      const d = new Date()
+      d.setUTCDate(d.getUTCDate() + offset)
+      return d.toISOString().slice(0, 10)
+    }
+    async function withCards() {
+      const s = await shared()
+      await call('PUT', '/api/admin/notifications', s.c.admin, { timezone: 'UTC' })
+      await prefs(s.c.admin, { email: true, digest: true })
+      await prefs(s.c.ana, { email: true, digest: false })
+      await push(s.c.admin, 'columns', [
+        {
+          id: 'c1',
+          boardId: 'b1',
+          title: 'Por hacer',
+          position: 'a0',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          updatedAt: '2000-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'cd',
+          boardId: 'b1',
+          title: 'Listo',
+          position: 'a1',
+          kind: 'done',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          updatedAt: '2000-01-01T00:00:00.000Z',
+        },
+      ])
+      await push(s.c.admin, 'cards', [
+        card('vieja', { title: 'Vieja', endDate: ymd(-3) }),
+        card('hoy', { title: 'Hoy', endDate: ymd(0) }),
+        card('manana', { title: 'Mañana', endDate: ymd(1) }),
+        card('lejos', { title: 'Lejos', endDate: ymd(9) }),
+        card('hecha', { title: 'Hecha', columnId: 'cd', endDate: ymd(-3) }),
+        card('de-ana', { title: 'De Ana', endDate: ymd(0), assigneeId: s.ana.id }),
+      ])
+      const secret = (await call('POST', '/api/admin/notifications/secret', s.c.admin)).json()
+        .secret
+      return { ...s, secret }
+    }
+    const digest = (token?: string) =>
+      built.app.inject({
+        method: 'GET',
+        url: '/api/integrations/digest',
+        headers: { host: HOST, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      })
+
+    it('exige el token del webhook', async () => {
+      const { secret } = await withCards()
+      expect((await digest()).statusCode).toBe(401)
+      expect((await digest('incorrecto')).statusCode).toBe(401)
+      expect((await digest(secret)).statusCode).toBe(200)
+      await built.app.inject({
+        method: 'PUT',
+        url: '/api/admin/notifications',
+        headers: headers((await login('admin@correo.com')).cookie),
+        payload: { enabled: false },
+      })
+      expect((await digest(secret)).statusCode).toBe(401) // apagado
+    })
+
+    it('trae solo a quien lo pidió, con sus tarjetas vencidas, de hoy y de mañana, y el texto listo', async () => {
+      const { secret } = await withCards()
+      const body = (await digest(secret)).json()
+      expect(body.date).toBe(ymd(0))
+      expect(body.users).toHaveLength(1) // Ana no lo pidió
+      const u = body.users[0]
+      expect(u.recipient.email).toBe('admin@correo.com')
+      expect(u.channels).toEqual(['email'])
+      expect(u.overdue.map((i: { title: string }) => i.title)).toEqual(['Vieja'])
+      // "De Ana" está asignada a otra persona; "Hecha" está en una columna Done; "Lejos" no urge
+      expect(u.today.map((i: { title: string }) => i.title)).toEqual(['Hoy'])
+      expect(u.tomorrow.map((i: { title: string }) => i.title)).toEqual(['Mañana'])
+      expect(u.subject).toBe('Hoy: 3 tarjetas con fecha')
+      expect(u.text).toContain('Vencidas (1)')
+      expect(u.text).toContain('• Vieja — Trabajo')
+      expect(u.text).not.toContain('Lejos')
+    })
+
+    it('respeta la zona horaria para decir cuál es "hoy"', async () => {
+      const { c, secret } = await withCards()
+      await call('PUT', '/api/admin/notifications', c.admin, { timezone: 'Pacific/Kiritimati' }) // UTC+14
+      const body = (await digest(secret)).json()
+      expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Kiritimati' }).format(
+        new Date(),
+      )
+      expect(body.date).toBe(d)
+    })
+  })
+})
+
+describe('entrega: utilidades', () => {
+  it('limpia teléfonos y URLs', async () => {
+    const { cleanPhone, cleanWebhookUrl } = await import('./delivery.ts')
+    expect(cleanPhone('+52 (55) 1234-5678')).toBe('+525512345678')
+    expect(cleanPhone('')).toBe('')
+    expect(cleanPhone(undefined)).toBe('')
+    expect(cleanPhone('5512345678')).toBeNull()
+    expect(cleanPhone(5512345678)).toBeNull()
+    expect(cleanWebhookUrl(' https://n8n.test/webhook/x ')).toBe('https://n8n.test/webhook/x')
+    expect(cleanWebhookUrl('javascript:alert(1)')).toBeNull()
+  })
+})
+
+describe('"me gusta" y respuestas', () => {
+  it('quien solo lee puede dar "me gusta" (a su nombre); nadie lo da por otra persona ni escribe', async () => {
+    await makeApp()
+    const owner = await addUser('dueno@correo.com')
+    const ana = await addUser('ana@correo.com')
+    const cOwner = (await login('dueno@correo.com')).cookie
+    const cAna = (await login('ana@correo.com')).cookie
+    const post = (cookie: string, table: string, rows: object[]) =>
+      built.app.inject({
+        method: 'POST',
+        url: `/api/sync/${table}`,
+        headers: headers(cookie),
+        payload: { rows },
+      })
+    const get = async (cookie: string, table: string) =>
+      (
+        await built.app.inject({
+          method: 'GET',
+          url: `/api/sync/${table}`,
+          headers: headers(cookie),
+        })
+      ).json().rows as { id: string; userId?: string }[]
+    const t = '2026-11-01T00:00:00.000Z'
+    await post(cOwner, 'boards', [{ ...board('b1', 'Trabajo') }])
+    await post(cOwner, 'comments', [
+      {
+        id: 'm1',
+        boardId: 'b1',
+        cardId: 'k1',
+        bodyMd: 'Hola',
+        authorId: owner.id,
+        createdAt: t,
+        updatedAt: t,
+      },
+    ])
+    await built.app.inject({
+      method: 'POST',
+      url: '/api/boards/b1/members',
+      headers: headers(cOwner),
+      payload: { email: 'ana@correo.com', role: 'viewer' },
+    })
+    const like = (id: string, userId: string) => ({
+      id,
+      boardId: 'b1',
+      cardId: 'k1',
+      commentId: 'm1',
+      userId,
+      createdAt: t,
+      updatedAt: t,
+    })
+    // el lector da "me gusta"
+    expect((await post(cAna, 'likes', [like('l1', ana.id)])).json().rejected).toBeUndefined()
+    expect((await get(cOwner, 'likes')).map((l) => l.userId)).toEqual([ana.id])
+    // pero no lo da por otra persona…
+    expect((await post(cAna, 'likes', [like('l2', owner.id)])).json().rejected).toEqual(['l2'])
+    // …ni escribe una respuesta
+    const reply = {
+      id: 'r1',
+      boardId: 'b1',
+      cardId: 'k1',
+      parentId: 'm1',
+      bodyMd: 'x',
+      createdAt: t,
+      updatedAt: t,
+    }
+    expect((await post(cAna, 'comments', [reply])).json().rejected).toEqual(['r1'])
+    // quien no tiene acceso al tablero tampoco
+    await addUser('beto@correo.com')
+    const cBeto = (await login('beto@correo.com')).cookie
+    expect(
+      (await post(cBeto, 'likes', [like('l3', findUserByEmail(db, 'beto@correo.com')!.id)])).json()
+        .rejected,
+    ).toEqual(['l3'])
+    // quitar el "me gusta" (borrado lógico) lo hace la misma persona
+    expect(
+      (await post(cAna, 'likes', [{ ...like('l1', ana.id), deletedAt: t }])).json().rejected,
+    ).toBeUndefined()
+    expect((await get(cOwner, 'likes'))[0]).toMatchObject({ deletedAt: t })
   })
 })

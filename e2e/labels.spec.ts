@@ -63,7 +63,7 @@ test.describe('etiquetas por tablero', () => {
       'data-color',
       'red',
     )
-    await page.getByRole('button', { name: /Mi tablero/ }).click()
+    await page.getByRole('button', { name: /^Mi tablero/ }).click()
     await expect(chipOf(card(page, 'Tarea del tablero 1'), 'Coppel')).toHaveAttribute(
       'data-color',
       'blue',

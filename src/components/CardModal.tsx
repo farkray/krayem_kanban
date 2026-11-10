@@ -14,6 +14,7 @@ import { Checklist } from './Checklist'
 import { LabelPicker } from './LabelPicker'
 import { Comments } from './Comments'
 import { Modal } from './Modal'
+import { MoveCard } from './MoveCard'
 import styles from './CardModal.module.css'
 
 interface Props {
@@ -34,7 +35,8 @@ export function CardModal({ cardId, onClose }: Props) {
   const [title, setTitle] = useState(card?.title ?? '')
   const [showDates, setShowDates] = useState(false)
   const [tab, setTab] = useState<'details' | 'updates'>('details')
-  const updatesCount = useComments(cardId).length
+  // Se cuentan las actualizaciones, no sus respuestas.
+  const updatesCount = useComments(cardId).filter((c) => !c.parentId).length
   const [dateError, setDateError] = useState<string | null>(null)
 
   // La descripción ya no existe como campo aparte: lo que había pasa a ser la primera actualización.
@@ -188,6 +190,7 @@ export function CardModal({ cardId, onClose }: Props) {
                       {dateError}
                     </p>
                   )}
+                  <MoveCard card={card} />
                 </section>
 
                 {people.length > 1 && (

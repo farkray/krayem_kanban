@@ -155,14 +155,16 @@ describe('modal de tarjeta', () => {
     const strong = within(dialog).getByText('mundo')
     expect(strong.tagName).toBe('STRONG')
 
-    await user.click(within(dialog).getByRole('button', { name: 'Editar' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Más acciones' }))
+    await user.click(within(dialog).getByRole('menuitem', { name: 'Editar' }))
     await user.clear(within(dialog).getByLabelText('Editar comentario'))
     await user.type(within(dialog).getByLabelText('Editar comentario'), 'Editado')
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }))
     expect(within(dialog).getByText('Editado')).toBeInTheDocument()
-    expect(within(dialog).getByText('(editado)')).toBeInTheDocument()
+    expect(within(dialog).getByText('(editada)')).toBeInTheDocument()
 
-    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Más acciones' }))
+    await user.click(within(dialog).getByRole('menuitem', { name: 'Eliminar' }))
     expect(within(dialog).queryByText('Editado')).not.toBeInTheDocument()
   })
 

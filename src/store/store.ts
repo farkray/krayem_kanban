@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
-import { canEditBoard, roleOf } from '../lib/access'
+import { canEditBoard, currentUserId, participantIds, roleOf } from '../lib/access'
 import { isConfigured } from '../lib/config'
 import { byPosition, positionAt, positionsFor } from '../lib/position'
 import {
@@ -26,6 +26,7 @@ import {
   type Data,
   type Label,
   type LabelColor,
+  type Like,
   type TableKey,
 } from '../lib/types'
 
@@ -93,6 +94,8 @@ interface Actions {
   renameColumn: (id: string, title: string) => boolean
   deleteColumn: (id: string, moveToId?: string) => boolean
   moveColumn: (id: string, index: number) => void
+  /** Reordena mis tableros: `index` es el lugar entre los tableros propios. */
+  moveBoard: (id: string, index: number) => void
   /** Cambia el tipo de columna (Estándar / Next / Doing). Falla si ya tiene más tarjetas que el límite. */
   setColumnKind: (id: string, kind: ColumnKind) => boolean
   // tarjetas
@@ -115,6 +118,8 @@ interface Actions {
   ) => boolean
   /** Devuelve false si la columna destino llegó a su límite (la tarjeta no se mueve). */
   moveCard: (id: string, toColumnId: string, index: number) => boolean
+  /** Pasa la tarjeta (con sus actualizaciones, lista y adjuntos) a una columna de otro tablero. */
+  moveCardToBoard: (id: string, toColumnId: string) => boolean
   deleteCard: (id: string) => void
   // etiquetas
   createLabel: (boardId: string, name: string, color: LabelColor) => string | null
@@ -147,6 +152,10 @@ interface Actions {
   removeChecklist: (cardId: string) => void
   // comentarios
   addComment: (cardId: string, bodyMd: string) => string | null
+  /** Responde a una actualización (si `parentId` ya es una respuesta, se cuelga de su actualización). */
+  addReply: (parentId: string, bodyMd: string) => string | null
+  /** Da o quita mi "me gusta". Puede hacerlo cualquiera que vea el tablero, aunque sea de solo lectura. */
+  toggleLike: (commentId: string) => void
   editComment: (id: string, bodyMd: string) => boolean
   deleteComment: (id: string) => void
   // toast
@@ -163,7 +172,11 @@ const emptyData = (): Data => ({
   attachments: [],
   items: [],
   comments: [],
+  likes: [],
 })
+
+/** Quien da "me gusta" cuando no hay cuentas (modo solo-local). */
+const LOCAL_USER = 'local'
 
 let toastSeq = 0
 let initPromise: Promise<void> | null = null
@@ -177,7 +190,7 @@ export const useStore = create<Store>((set, get) => {
     if (rows.length === 0) return
     if (track) {
       // Los hijos (ítems, comentarios, imágenes) llevan el tablero para saber con quién se comparten.
-      if (key === 'items' || key === 'comments' || key === 'attachments') {
+      if (key === 'items' || key === 'comments' || key === 'attachments' || key === 'likes') {
         const cards = get().cards
         rows = (rows as { cardId: string; boardId?: string }[]).map((r) =>
           r.boardId ? r : { ...r, boardId: cards.find((c) => c.id === r.cardId)?.boardId },
@@ -185,6 +198,8 @@ export const useStore = create<Store>((set, get) => {
       }
       // Tablero compartido como solo lectura: no se escribe (el servidor también lo rechaza).
       const blocked = (rows as { id: string; boardId?: string }[]).some((r) => {
+        // El "me gusta" es de cada quien: también lo da quien solo lee el tablero.
+        if (key === 'likes') return false
         const bid = key === 'boards' ? r.id : r.boardId
         // El tablero en sí (nombre, borrado) solo lo cambia su dueño; lo de dentro, también los editores.
         return !!bid && (key === 'boards' ? roleOf(bid) !== 'owner' : !canEditBoard(bid))
@@ -247,6 +262,7 @@ export const useStore = create<Store>((set, get) => {
       attachments: live(s.attachments).filter((a) => ids.has(a.cardId)),
       items: live(s.items).filter((i) => ids.has(i.cardId)),
       comments: live(s.comments).filter((c) => ids.has(c.cardId)),
+      likes: live(s.likes).filter((l) => ids.has(l.cardId)),
     }
   }
 
@@ -314,16 +330,19 @@ export const useStore = create<Store>((set, get) => {
   }
 
   async function load(): Promise<void> {
-    const [boards, labels, columns, cards, attachments, items, comments] = await Promise.all([
-      db.boards.toArray(),
-      db.labels.toArray(),
-      db.columns.toArray(),
-      db.cards.toArray(),
-      db.attachments.toArray(),
-      db.items.toArray(),
-      db.comments.toArray(),
-    ])
-    set({ boards, labels, columns, cards, attachments, items, comments, ready: true })
+    const [boards, labels, columns, cards, attachments, items, comments, likes] = await Promise.all(
+      [
+        db.boards.toArray(),
+        db.labels.toArray(),
+        db.columns.toArray(),
+        db.cards.toArray(),
+        db.attachments.toArray(),
+        db.items.toArray(),
+        db.comments.toArray(),
+        db.likes.toArray(),
+      ],
+    )
+    set({ boards, labels, columns, cards, attachments, items, comments, likes, ready: true })
     await get().migrateLabels()
     // Con nube configurada, el tablero inicial se crea tras la primera descarga (ver sync/engine).
     if (!isConfigured()) await get().seedIfEmpty()
@@ -366,6 +385,7 @@ export const useStore = create<Store>((set, get) => {
         attachments: s.attachments.filter(inBoard),
         items: s.items.filter(inBoard),
         comments: s.comments.filter(inBoard),
+        likes: s.likes.filter(inBoard),
       }
       set({
         boards: s.boards.filter((x) => !removed.boards.includes(x)),
@@ -375,6 +395,7 @@ export const useStore = create<Store>((set, get) => {
         attachments: s.attachments.filter((x) => !removed.attachments.includes(x)),
         items: s.items.filter((x) => !removed.items.includes(x)),
         comments: s.comments.filter((x) => !removed.comments.includes(x)),
+        likes: s.likes.filter((x) => !removed.likes.includes(x)),
       })
       await db.transaction('rw', [...db.tables], async () => {
         for (const k of TABLE_KEYS) {
@@ -539,6 +560,15 @@ export const useStore = create<Store>((set, get) => {
       return true
     },
 
+    moveBoard: (id, index) => {
+      const board = live(get().boards).find((b) => b.id === id)
+      if (!board || roleOf(id) !== 'owner') return
+      const mine = live(get().boards)
+        .filter((b) => b.id !== id && roleOf(b.id) === 'owner')
+        .sort(byPosition)
+      put('boards', [{ ...board, position: positionAt(mine, index), updatedAt: stamp() }])
+    },
+
     moveColumn: (id, index) => {
       const col = get().columns.find((c) => c.id === id)
       if (!col) return
@@ -623,6 +653,62 @@ export const useStore = create<Store>((set, get) => {
           updatedAt: stamp(),
         },
       ])
+      return true
+    },
+
+    moveCardToBoard: (id, toColumnId) => {
+      const st = get()
+      const card = live(st.cards).find((c) => c.id === id)
+      const col = live(st.columns).find((c) => c.id === toColumnId)
+      if (!card || !col) return false
+      if (col.boardId === card.boardId)
+        return get().moveCard(id, toColumnId, cardsOf(toColumnId).length)
+      const from = live(st.boards).find((b) => b.id === card.boardId)
+      const to = live(st.boards).find((b) => b.id === col.boardId)
+      // Mismo dueño y permiso de edición en los dos: así el servidor guarda todo bajo la misma cuenta.
+      if (!from || !to || (from.ownerId ?? null) !== (to.ownerId ?? null)) return false
+      if (!canEditBoard(from.id) || !canEditBoard(to.id)) return false
+      const siblings = cardsOf(toColumnId)
+      const limit = limitOf(col)
+      if (limit !== null && siblings.length >= limit) {
+        notifyFull(col)
+        return false
+      }
+
+      // Las etiquetas son de cada tablero: se usa la del mismo nombre o se crea igual en el destino.
+      const labelIds: string[] = []
+      for (const lid of card.labelIds ?? []) {
+        const src = live(get().labels).find((l) => l.id === lid)
+        if (!src) continue
+        const found = live(get().labels).find(
+          (l) => l.boardId === to.id && l.name.toLowerCase() === src.name.toLowerCase(),
+        )
+        const target = found?.id ?? get().createLabel(to.id, src.name, src.color)
+        if (target && !labelIds.includes(target)) labelIds.push(target)
+      }
+      // La persona asignada se conserva solo si también participa en el tablero destino.
+      const people = participantIds(to.id)
+      const keepAssignee = !!card.assigneeId && (!people || people.includes(card.assigneeId))
+
+      const ts = stamp()
+      const moved: Card = {
+        ...card,
+        columnId: toColumnId,
+        boardId: to.id,
+        position: positionAt(siblings, siblings.length),
+        labelIds: labelIds.length ? labelIds : undefined,
+        updatedAt: ts,
+      }
+      if (!labelIds.length) delete moved.labelIds
+      if (!keepAssignee) delete moved.assigneeId
+      put('cards', [moved])
+      const snap = cardSnapshot([id])
+      for (const k of ['items', 'comments', 'attachments', 'likes'] as const) {
+        const rows = snap[k]
+        if (rows?.length)
+          put(k, rows.map((r) => ({ ...r, boardId: to.id, updatedAt: ts })) as never)
+      }
+      notify(`Tarjeta movida a “${to.title}” · ${col.title}`)
       return true
     },
 
@@ -781,9 +867,45 @@ export const useStore = create<Store>((set, get) => {
     addComment: (cardId, bodyMd) => {
       const body = clean(bodyMd, LIMITS.comment)
       if (!body) return null
-      const comment: Comment = { ...base(), cardId, bodyMd: body }
+      const authorId = currentUserId() ?? undefined
+      const comment: Comment = {
+        ...base(),
+        cardId,
+        bodyMd: body,
+        ...(authorId ? { authorId } : {}),
+      }
       put('comments', [comment])
       return comment.id
+    },
+
+    addReply: (parentId, bodyMd) => {
+      const body = clean(bodyMd, LIMITS.comment)
+      const target = live(get().comments).find((c) => c.id === parentId)
+      if (!body || !target) return null
+      const rootId = target.parentId ?? target.id // las respuestas no se anidan: cuelgan de la actualización
+      const authorId = currentUserId() ?? undefined
+      const reply: Comment = {
+        ...base(),
+        cardId: target.cardId,
+        bodyMd: body,
+        parentId: rootId,
+        ...(authorId ? { authorId } : {}),
+      }
+      put('comments', [reply])
+      return reply.id
+    },
+
+    toggleLike: (commentId) => {
+      const c = live(get().comments).find((x) => x.id === commentId)
+      if (!c) return
+      const me = currentUserId() ?? LOCAL_USER
+      const mine = live(get().likes).filter((l) => l.commentId === commentId && l.userId === me)
+      if (mine.length > 0) {
+        markDeleted({ likes: mine }) // también si hubo duplicados por dos dispositivos
+        return
+      }
+      const like: Like = { ...base(), cardId: c.cardId, commentId, userId: me }
+      put('likes', [like])
     },
 
     editComment: (id, bodyMd) => {
@@ -798,8 +920,15 @@ export const useStore = create<Store>((set, get) => {
     deleteComment: (id) => {
       const c = live(get().comments).find((x) => x.id === id)
       if (!c) return
-      markDeleted({ comments: [c] })
-      notify('Comentario eliminado', () => restore({ comments: [c] }))
+      // Al borrar una actualización se van con ella sus respuestas y sus "me gusta".
+      const replies = live(get().comments).filter((x) => x.parentId === id)
+      const ids = new Set([id, ...replies.map((r) => r.id)])
+      const snap: Snapshot = {
+        comments: [c, ...replies],
+        likes: live(get().likes).filter((l) => ids.has(l.commentId)),
+      }
+      markDeleted(snap)
+      notify(c.parentId ? 'Respuesta eliminada' : 'Actualización eliminada', () => restore(snap))
     },
 
     dismissToast: () => set({ toast: null }),

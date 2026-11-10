@@ -64,6 +64,8 @@ interface Props {
   submitLabel: string
   onSubmit: (markdown: string) => boolean
   onCancel?: () => void
+  /** Enfoca el editor al abrirlo (cuando se abre a propósito, p. ej. al pulsar "Responder"). */
+  autoFocus?: boolean
 }
 
 /**
@@ -78,6 +80,7 @@ export function RichEditor({
   submitLabel,
   onSubmit,
   onCancel,
+  autoFocus = false,
 }: Props) {
   const [working, setWorking] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -144,6 +147,7 @@ export function RichEditor({
     ],
     content: decodeMentions(initial, people),
     contentType: 'markdown',
+    autofocus: autoFocus ? 'end' : false,
     editorProps: {
       attributes: {
         role: 'textbox',

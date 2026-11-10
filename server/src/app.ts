@@ -28,7 +28,10 @@ import {
 } from './auth.ts'
 import { createClock, isTable, transaction, type DB } from './db.ts'
 import { Hub } from './events.ts'
-import { Notifications, detect, type RowChange } from './notifications.ts'
+import { Notifications, detect, type NotificationView, type RowChange } from './notifications.ts'
+import { Delivery, cleanPhone, cleanWebhookUrl, validTimezone } from './delivery.ts'
+import { buildDigest } from './digest.ts'
+import { buildN8nWorkflow } from './n8nWorkflow.ts'
 
 export interface AppOptions {
   db: DB
@@ -37,11 +40,14 @@ export interface AppOptions {
   /** Cookie con atributo Secure (producción, detrás de HTTPS). Desactívalo solo en pruebas por http. */
   cookieSecure?: boolean
   logger?: boolean
+  /** Cliente HTTP para el webhook de avisos (se sustituye en pruebas). */
+  fetch?: typeof fetch
 }
 
 export interface BuiltApp {
   app: FastifyInstance
   hub: Hub
+  delivery: Delivery
 }
 
 const MAX_BLOB_BYTES = 20 * 1024 * 1024
@@ -91,6 +97,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
   })
   const hub = new Hub()
   const notifications = new Notifications(db)
+  const delivery = new Delivery(db, opts.fetch)
   const nextTs = createClock(db)
   const byEmail = new LoginLimiter(5)
   const byIp = new LoginLimiter(30)
@@ -356,7 +363,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
    * ¿Puede `userId` escribir esta fila y bajo qué dueño se guarda? Reglas:
    *  · tablero: solo su dueño (o cualquiera si es nuevo: queda a su nombre);
    *  · el resto: el dueño del tablero, o un miembro con rol editor;
-   *  · una fila ya existente no puede cambiar de tablero (nadie "roba" filas ajenas por id).
+   *  · una fila ya existente solo cambia de tablero dentro del mismo dueño (nadie "roba" filas ajenas por id).
    */
   const writeOwner = (
     userId: string,
@@ -364,6 +371,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
     row: Record<string, unknown>,
   ): string | null => {
     const id = String(row.id)
+    // Un "me gusta" solo lo escribe su dueño (nadie da "me gusta" en nombre de otra persona).
+    if (table === 'likes' && row.userId !== userId) return null
     const boardId = boardIdOf(table, row)
     const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]
     const mine = existing.find((e) => e.user_id === userId)
@@ -374,11 +383,21 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (board && board.user_id !== userId) {
       if (table === 'boards') return null
       const m = memberRole.get(boardId, userId) as { role: string } | undefined
-      if (!m || m.role !== 'editor') return null
+      // Editar exige ser editor; el "me gusta" lo puede dar también quien solo lee el tablero.
+      if (!m || (m.role !== 'editor' && !(table === 'likes' && m.role === 'viewer'))) return null
       owner = board.user_id
     }
     const target = existing.find((e) => e.user_id === owner)
-    if (target && target.board_id && target.board_id !== boardId) return null
+    if (target && target.board_id && target.board_id !== boardId) {
+      // Solo se permite pasar una fila a otro tablero del MISMO dueño, y si puedo editar el de origen.
+      if (table === 'boards') return null
+      const old = boardOwner.get(target.board_id) as { user_id: string } | undefined
+      if (!old || old.user_id !== owner) return null
+      if (old.user_id !== userId) {
+        const m = memberRole.get(target.board_id, userId) as { role: string } | undefined
+        if (m?.role !== 'editor') return null
+      }
+    }
     if (!target && existing.length > 0 && table !== 'boards') return null // id ya usado por otro dueño
     return owner
   }
@@ -387,6 +406,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const set = new Set([ownerId])
     if (boardId) for (const m of membersOf.all(boardId) as { user_id: string }[]) set.add(m.user_id)
     return [...set]
+  }
+
+  /** Entrega un aviso nuevo: en vivo a sus dispositivos y, si procede, a la cola del webhook. */
+  const emit = (userId: string, view: NotificationView) => {
+    hub.publishNotification(userId, view, notifications.list(userId, { limit: 1 }).unread)
+    delivery.enqueue(view, userId, notifications.titleOfBoard(view.boardId))
   }
 
   /** Aviso no ligado a una fila (accesos): guarda y empuja en vivo, sin romper la operación si falla. */
@@ -408,8 +433,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
         title: notifications.titleOfBoard(n.boardId),
         excerpt: n.excerpt,
       })
-      if (view)
-        hub.publishNotification(userId, view, notifications.list(userId, { limit: 1 }).unread)
+      if (view) emit(userId, view)
     } catch (e) {
       app.log.error(e)
     }
@@ -432,8 +456,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
           title,
           excerpt: d.excerpt,
         })
-        if (view)
-          hub.publishNotification(d.userId, view, notifications.list(d.userId, { limit: 1 }).unread)
+        if (view) emit(d.userId, view)
       }
     } catch (e) {
       app.log.error(e) // un fallo al avisar nunca debe impedir guardar el cambio
@@ -733,10 +756,161 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return { unread: notifications.list(user.id, { limit: 1 }).unread }
   })
 
+  /* ---------- entrega fuera de la app (webhook → n8n) ---------- */
+
+  const publicOrigin = (raw: unknown): string | null => {
+    if (raw === '' || raw === undefined) return ''
+    const u = cleanWebhookUrl(raw)
+    return u ? new URL(u).origin : null
+  }
+
+  const adminView = () => ({ ...delivery.settings(), stats: delivery.stats() })
+
+  app.get('/api/admin/notifications', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return adminView()
+  })
+
+  /** Guarda la URL del webhook, si está activo, la dirección pública y la zona horaria. */
+  app.put('/api/admin/notifications', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const b = (req.body ?? {}) as {
+      enabled?: unknown
+      url?: unknown
+      publicUrl?: unknown
+      timezone?: unknown
+    }
+    const patch: Parameters<Delivery['save']>[0] = {}
+    if (b.url !== undefined) {
+      if (b.url === '') patch.url = ''
+      else {
+        const url = cleanWebhookUrl(b.url)
+        if (!url) return reply.code(400).send({ error: 'invalid_url' })
+        patch.url = url
+      }
+    }
+    if (b.publicUrl !== undefined) {
+      const origin = publicOrigin(b.publicUrl)
+      if (origin === null) return reply.code(400).send({ error: 'invalid_public_url' })
+      patch.publicUrl = origin
+    }
+    if (b.timezone !== undefined) {
+      if (typeof b.timezone !== 'string' || !validTimezone(b.timezone))
+        return reply.code(400).send({ error: 'invalid_timezone' })
+      patch.timezone = b.timezone
+    }
+    if (b.enabled !== undefined) {
+      if (typeof b.enabled !== 'boolean') return reply.code(400).send({ error: 'bad_request' })
+      const url = patch.url ?? delivery.settings().url
+      if (b.enabled && !url) return reply.code(400).send({ error: 'url_required' })
+      if (b.enabled && !delivery.settings().hasSecret) delivery.rotateSecret()
+      patch.enabled = b.enabled
+    }
+    delivery.save(patch)
+    return adminView()
+  })
+
+  /** Genera un secreto nuevo (invalida el anterior). Se muestra una sola vez. */
+  app.post('/api/admin/notifications/secret', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return { secret: delivery.rotateSecret(), ...adminView() }
+  })
+
+  /** Envía un aviso de prueba al propio admin, con los dos canales, y dice cómo fue. */
+  app.post('/api/admin/notifications/test', async (req, reply) => {
+    const admin = requireAdmin(req, reply)
+    if (!admin) return
+    const now = new Date().toISOString()
+    const payload = delivery.buildPayload(
+      {
+        id: 'prueba',
+        type: 'test',
+        boardId: '',
+        cardId: null,
+        title: '',
+        excerpt: '',
+        count: 1,
+        actorName: 'El kanban',
+        createdAt: now,
+      },
+      admin.id,
+      'test',
+      ['email', 'whatsapp'],
+    )
+    if (!payload) return reply.code(404).send({ error: 'not_found' })
+    // Un envío por canal, como los avisos reales; se detiene en el primer fallo.
+    for (const channel of payload.channels) {
+      const error = await delivery.post({ ...payload, channels: [channel] })
+      if (error) return reply.code(502).send({ error: 'webhook_failed', detail: error })
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/admin/notifications/retry', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    delivery.retryFailed()
+    void delivery.flush()
+    return adminView()
+  })
+
+  /** Descarga el flujo de n8n (JSON importable), sin secretos. */
+  app.get('/api/admin/notifications/workflow', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    // Sin dirección pública guardada se usa la de esta misma petición (la que ve el admin).
+    const kanbanUrl = delivery.settings().publicUrl || `${req.protocol}://${req.hostname}`
+    const flow = buildN8nWorkflow({ kanbanUrl })
+    return reply
+      .header('Content-Type', 'application/json; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="kanban-avisos-n8n.json"')
+      .send(JSON.stringify(flow, null, 2))
+  })
+
+  /** ¿Se pueden elegir canales? (solo si el admin activó la entrega) */
+  app.get('/api/notifications/channels', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    return { available: delivery.settings().enabled, ...delivery.channelsOf(user.id) }
+  })
+
+  app.put('/api/me/notifications', async (req, reply) => {
+    const user = requireUser(req, reply)
+    if (!user) return
+    const b = (req.body ?? {}) as Record<string, unknown>
+    const phone = cleanPhone(b.phone)
+    if (phone === null) return reply.code(400).send({ error: 'invalid_phone' })
+    for (const k of ['email', 'whatsapp', 'digest'])
+      if (typeof b[k] !== 'boolean') return reply.code(400).send({ error: 'bad_request' })
+    if (b.whatsapp === true && phone === '')
+      return reply.code(400).send({ error: 'phone_required' })
+    delivery.setChannels(user.id, {
+      phone,
+      email: b.email as boolean,
+      whatsapp: b.whatsapp as boolean,
+      digest: b.digest as boolean,
+    })
+    return { available: delivery.settings().enabled, ...delivery.channelsOf(user.id) }
+  })
+
+  /** Resumen "Hoy" de todas las personas que lo pidieron; lo consulta n8n cada mañana (Bearer). */
+  app.get('/api/integrations/digest', async (req, reply) => {
+    const token = /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ''))?.[1] ?? ''
+    if (!delivery.settings().enabled || !delivery.checkSecret(token))
+      return reply.code(401).send({ error: 'unauthorized' })
+    return buildDigest(db, delivery)
+  })
+
   notifications.purge()
-  const purgeTimer = setInterval(() => notifications.purge(), 6 * 3_600_000)
+  delivery.purge()
+  delivery.start()
+  const purgeTimer = setInterval(() => {
+    notifications.purge()
+    delivery.purge()
+  }, 6 * 3_600_000)
   purgeTimer.unref()
-  app.addHook('onClose', async () => clearInterval(purgeTimer))
+  app.addHook('onClose', async () => {
+    clearInterval(purgeTimer)
+    delivery.stop()
+  })
 
   /* ---------- tiempo real (SSE) ---------- */
 
@@ -829,5 +1003,5 @@ export function buildApp(opts: AppOptions): BuiltApp {
     hub.closeAll()
   })
 
-  return { app, hub }
+  return { app, hub, delivery }
 }

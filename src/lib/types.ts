@@ -191,6 +191,22 @@ export interface Comment extends Base {
   boardId?: string
   bodyMd: string
   editedAt?: string
+  /** Quién la escribió (id de usuario). Ausente en las antiguas y en el modo solo-local. */
+  authorId?: string
+  /** Si es una respuesta, la actualización a la que responde (las respuestas no se anidan más). */
+  parentId?: string
+}
+
+/**
+ * "Me gusta" de una persona en una actualización. Es una fila aparte (no un campo de la
+ * actualización) para que dos personas puedan dar "me gusta" a la vez sin pisarse, y para que
+ * también puedan darlo quienes solo leen el tablero. Quitarlo es un borrado lógico.
+ */
+export interface Like extends Base {
+  cardId: string
+  boardId?: string
+  commentId: string
+  userId: string
 }
 
 export interface Data {
@@ -201,6 +217,7 @@ export interface Data {
   attachments: Attachment[]
   items: ChecklistItem[]
   comments: Comment[]
+  likes: Like[]
 }
 
 export type TableKey = keyof Data
@@ -214,6 +231,7 @@ export const TABLE_KEYS: TableKey[] = [
   'attachments',
   'items',
   'comments',
+  'likes',
 ]
 
 export const MAX_COLUMNS = 10

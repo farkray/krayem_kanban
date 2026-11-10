@@ -2,8 +2,10 @@
 
 Tablero Kanban en español, instalable (PWA), con guardado automático en tu propio servidor y funcionamiento sin conexión.
 
-- **Tableros, columnas (máx. 10) y tarjetas** con arrastrar y soltar (mouse, touch y teclado).
-- **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, lista de tareas opcional, feed de actualizaciones con editor de formato (Markdown) e imágenes (comprimidas en el navegador con WebAssembly).
+- **Tableros, columnas (máx. 10) y tarjetas** con arrastrar y soltar (mouse, touch y teclado). Los tableros se **reordenan** arrastrando su asa (⋮⋮), en la portada o en la barra lateral, y cada uno tiene su **color e icono** (10 × 10).
+- **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, persona asignada, lista de tareas opcional, y se puede **mover a otro tablero y columna** (Mover → Tablero → Columna) llevándose sus datos.
+- **Actualizaciones** estilo foro: editor de formato (Markdown) con menciones e imágenes (comprimidas en el navegador con WebAssembly), **respuestas**, **«Me gusta»** y «Ver más» en las largas.
+- **Centro de notificaciones** (campana): menciones, asignaciones y cambios de acceso. Opcionalmente **avisos por correo y WhatsApp** a través de un flujo de n8n que el administrador descarga desde el panel: [docs/notificaciones-n8n.md](docs/notificaciones-n8n.md).
 - **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - **Tableros privados o compartidos:** por defecto cada tablero es privado; el dueño puede compartirlo por correo con otras cuentas como **Editor** o **Solo lectura**.
 - **Búsqueda global** (`/` o `Cmd/Ctrl+K`), deshacer en todos los borrados.
@@ -39,7 +41,7 @@ La carpeta [server/](server/) es una API pequeña (Node 22 + Fastify + SQLite, s
 - **Cuentas:** correo + contraseña (scrypt), sesión en cookie HttpOnly de 30 días, límite de intentos de acceso y registro **desactivado** por defecto.
 - **Sincronización:** la app envía sus cambios (`POST /api/sync/:tabla`) y descarga por cursor; los demás dispositivos reciben los cambios en vivo por SSE (`/api/events`).
 - **Imágenes:** `PUT/GET /api/blobs/:id`; el servidor comprueba la firma del archivo (no confía en el tipo declarado).
-- **Compartir:** `board_members` (tablero, dueño, usuario, rol). Las filas se guardan a nombre del dueño y cada una indexa su `board_id`; el servidor decide en cada lectura/escritura quién las ve (`GET/POST /api/sync/*`, `GET /api/shares`, `POST /api/boards/:id/members`, `DELETE /api/boards/:id/members/:userId`) y en las imágenes (`/api/blobs/:id`). Solo el dueño cambia el tablero en sí; un editor escribe lo de dentro; un lector no escribe.
+- **Compartir:** `board_members` (tablero, dueño, usuario, rol). Las filas se guardan a nombre del dueño y cada una indexa su `board_id`; el servidor decide en cada lectura/escritura quién las ve (`GET/POST /api/sync/*`, `GET /api/shares`, `POST /api/boards/:id/members`, `DELETE /api/boards/:id/members/:userId`) y en las imágenes (`/api/blobs/:id`). Solo el dueño cambia el tablero en sí; un editor escribe lo de dentro (incluido pasar una tarjeta a otro tablero del mismo dueño); un lector no escribe, salvo dar «Me gusta».
 - **Datos:** un solo volumen (`/data`: `kanban.db` + `blobs/`). Respaldo diario incluido en el despliegue.
 - **Seguridad:** comprobación de origen (CSRF), sin CORS (todo mismo origen), hash de tokens de sesión en la base.
 
@@ -53,6 +55,8 @@ ADMIN_PASSWORD=una-contraseña-larga docker compose up --build
 npm ci --prefix server && npm run dev:server        # API en :3000
 echo 'VITE_API_URL=/api' > .env.local && npm run dev  # app en :5173 (proxy /api → :3000)
 ```
+
+Avisos fuera de la app: el servidor guarda una cola (`outbox`) y la envía por webhook (con secreto Bearer, reintentos con espera creciente) a n8n; se configura en **Panel de control → Avisos** y no requiere variables de entorno.
 
 Variables del servidor: `ADMIN_EMAIL` / `ADMIN_PASSWORD` (usuario inicial), `ALLOW_SIGNUP` (`false`), `COOKIE_SECURE` (`true`; solo `false` en pruebas por http), `DATA_DIR` (`./data`), `PORT` (`3000`).
 
