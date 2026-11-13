@@ -1,5 +1,6 @@
 import { db } from '../db/db'
 import { byPosition } from '../lib/position'
+import { cardInSub, linkIdsOf, newCardLabelsOf } from '../lib/types'
 import { setRoleResolver } from '../lib/access'
 import { flush, resetInit, resetStore, useStore } from './store'
 
@@ -707,6 +708,64 @@ describe('subtableros', () => {
     S().toast!.undo!()
     expect(boardOf(sub).deletedAt).toBeUndefined()
     expect(boardOf(a).deletedAt).toBeUndefined()
+  })
+
+  it('combina etiquetas: alguna (por defecto) o todas; sin repetir la misma combinación', () => {
+    const { a, c1, coppel, otro } = setup()
+    const maestria = S().createLabel(a, 'Maestría', 'green')!
+    const both = S().addCard(c1.id, 'Ambas')!
+    S().toggleCardLabel(both, coppel)
+    S().toggleCardLabel(both, maestria)
+    const visible = (subId: string) => {
+      const sub = boardOf(subId)
+      return S()
+        .cards.filter((c) => !c.deletedAt && c.boardId === a && cardInSub(sub, c))
+        .map((c) => c.title)
+        .sort()
+    }
+    const any = S().createSubboard(a, [coppel, maestria], 'Educación')!
+    expect(boardOf(any)).toMatchObject({ linkLabelIds: [coppel, maestria], linkLabelId: coppel })
+    expect(boardOf(any).linkMode).toBe('any')
+    expect(visible(any)).toEqual(['Ambas', 'De Coppel'])
+    const all = S().createSubboard(a, [coppel, maestria], 'Ambas etiquetas', 'all')!
+    expect(visible(all)).toEqual(['Ambas'])
+    // misma combinación y modo: no se repite; con otro modo o etiquetas, sí
+    expect(S().createSubboard(a, [maestria, coppel], 'x')).toBeNull()
+    expect(S().createSubboard(a, [coppel, otro], 'Otra')).not.toBeNull()
+    // una etiqueta que no es del tablero invalida la combinación
+    const b = S().createBoard('B')!
+    const ajena = S().createLabel(b, 'Ajena', 'red')!
+    expect(S().createSubboard(a, [coppel, ajena])).toBeNull()
+  })
+
+  it('la tarjeta creada en un subtablero combinado nace con las etiquetas que la dejan ahí', () => {
+    const { a, c1, coppel } = setup()
+    const maestria = S().createLabel(a, 'Maestría', 'green')!
+    const any = S().createSubboard(a, [coppel, maestria], 'Educación')!
+    const all = S().createSubboard(a, [coppel, maestria], 'Ambas', 'all')!
+    expect(newCardLabelsOf(boardOf(any))).toEqual([coppel]) // basta una
+    expect(newCardLabelsOf(boardOf(all))).toEqual([coppel, maestria]) // hacen falta todas
+    const t = S().addCard(c1.id, 'Nueva', newCardLabelsOf(boardOf(all)))!
+    expect(
+      cardInSub(
+        boardOf(all),
+        S().cards.find((c) => c.id === t)!,
+      ),
+    ).toBe(true)
+  })
+
+  it('borrar una de las etiquetas de la combinación deja el subtablero con las demás', () => {
+    const { a, coppel, otro } = setup()
+    const sub = S().createSubboard(a, [coppel, otro], 'Mezcla')!
+    S().deleteLabel(otro)
+    expect(boardOf(sub).deletedAt).toBeUndefined()
+    expect(linkIdsOf(boardOf(sub))).toEqual([coppel])
+    S().toast!.undo!()
+    expect(linkIdsOf(boardOf(sub))).toEqual([coppel, otro])
+    // y si era la única, se va con ella
+    const solo = S().createSubboard(a, [otro], 'Solo')!
+    S().deleteLabel(otro)
+    expect(boardOf(solo).deletedAt).toBeDefined()
   })
 
   it('reordena subtableros entre hermanos sin mezclarlos con los de primer nivel', () => {

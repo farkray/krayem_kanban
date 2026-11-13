@@ -92,7 +92,7 @@ function Item({
             <span className={styles.itemTitle}>{b.title}</span>
             <span className={styles.itemMeta}>
               {depth > 0
-                ? `${pluralize(b.cardCount, 'tarjeta', 'tarjetas')}${b.linkLabel ? ` · ${b.linkLabel.name}` : ''}`
+                ? `${pluralize(b.cardCount, 'tarjeta', 'tarjetas')}${b.linkLabels.length ? ` · ${b.linkLabels.join(', ')}` : ''}`
                 : `${pluralize(b.columnCount, 'columna', 'columnas')} · ${pluralize(b.cardCount, 'tarjeta', 'tarjetas')}`}
             </span>
             {b.sharedBy && depth === 0 && (

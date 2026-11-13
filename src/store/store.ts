@@ -17,6 +17,7 @@ import {
   type BoardColor,
   type BoardIconName,
   LABEL_COLORS,
+  linkIdsOf,
   type Attachment,
   type Card,
   type ChecklistItem,
@@ -85,8 +86,16 @@ interface Actions {
   applyRemote: <K extends TableKey>(key: K, rows: Data[K]) => void
   // tableros
   createBoard: (title: string) => string | null
-  /** Crea un subtablero de `parentId` que muestra las tarjetas con la etiqueta `labelId`. */
-  createSubboard: (parentId: string, labelId: string, title?: string) => string | null
+  /**
+   * Crea un subtablero de `parentId` que muestra las tarjetas con la etiqueta `labelIds` (una o
+   * varias; con varias, `mode` dice si basta una (`any`) o hacen falta todas (`all`)).
+   */
+  createSubboard: (
+    parentId: string,
+    labelIds: string | string[],
+    title?: string,
+    mode?: 'any' | 'all',
+  ) => string | null
   renameBoard: (id: string, title: string) => boolean
   /** Cambia el color y/o el icono del tablero (solo el dueño; los demás no pueden escribir el tablero). */
   setBoardAppearance: (id: string, look: { color?: BoardColor; icon?: BoardIconName }) => boolean
@@ -102,8 +111,8 @@ interface Actions {
   setColumnKind: (id: string, kind: ColumnKind) => boolean
   // tarjetas
   /** Devuelve null si el título es inválido o la columna llegó a su límite. */
-  /** Con `labelId` la tarjeta nace con esa etiqueta (así entra a un subtablero al crearla ahí). */
-  addCard: (columnId: string, title: string, labelId?: string) => string | null
+  /** Con `labelIds` la tarjeta nace con esas etiquetas (así entra a un subtablero al crearla ahí). */
+  addCard: (columnId: string, title: string, labelIds?: string | string[]) => string | null
   updateCard: (
     id: string,
     patch: Partial<
@@ -474,23 +483,30 @@ export const useStore = create<Store>((set, get) => {
       return board.id
     },
 
-    createSubboard: (parentId, labelId, title) => {
+    createSubboard: (parentId, labelIds, title, mode = 'any') => {
       const s = get()
       const parent = live(s.boards).find((b) => b.id === parentId)
-      const label = live(s.labels).find((l) => l.id === labelId)
-      // Un solo nivel; la etiqueta es del padre; una etiqueta, un subtablero; solo el dueño crea.
+      const ids = [...new Set([labelIds].flat())]
+      const found = ids.map((id) => live(s.labels).find((l) => l.id === id))
+      // Un solo nivel; las etiquetas son del padre; solo el dueño crea.
       if (!parent || parent.parentId || roleOf(parentId) !== 'owner') return null
-      if (!label || label.boardId !== parentId) return null
+      if (ids.length === 0 || found.some((l) => !l || l.boardId !== parentId)) return null
       const kids = live(s.boards).filter((b) => b.parentId === parentId)
-      if (kids.some((b) => b.linkLabelId === labelId)) return null
-      const t = clean(title ?? label.name, LIMITS.board)
+      // Misma combinación (y modo) que otro subtablero: sería una vista repetida.
+      const key = (xs: string[]) => [...xs].sort().join('|')
+      const same = (b: Board) =>
+        key(linkIdsOf(b)) === key(ids) && (ids.length === 1 || (b.linkMode ?? 'any') === mode)
+      if (kids.some(same)) return null
+      const t = clean(title ?? found.map((l) => l!.name).join(', '), LIMITS.board)
       if (!t) return null
       const sub: Board = {
         ...base(),
         title: t,
         position: positionAt(kids.sort(byPosition), kids.length),
         parentId,
-        linkLabelId: labelId,
+        linkLabelIds: ids,
+        linkLabelId: ids[0],
+        ...(ids.length > 1 ? { linkMode: mode } : {}),
         color: parent.color,
         icon: parent.icon,
       }
@@ -645,7 +661,7 @@ export const useStore = create<Store>((set, get) => {
 
     /* ---------- tarjetas ---------- */
 
-    addCard: (columnId, title, labelId) => {
+    addCard: (columnId, title, labelIds) => {
       const t = clean(title, LIMITS.card)
       const col = live(get().columns).find((c) => c.id === columnId)
       if (!t || !col) return null
@@ -654,15 +670,15 @@ export const useStore = create<Store>((set, get) => {
         return null
       }
       const cards = cardsOf(columnId)
+      const liveLabels = live(get().labels)
+      const initial = [labelIds ?? []].flat().filter((id) => liveLabels.some((l) => l.id === id))
       const card: Card = {
         ...base(),
         boardId: col.boardId,
         columnId,
         title: t,
         position: positionAt(cards, cards.length),
-        ...(labelId && live(get().labels).some((l) => l.id === labelId)
-          ? { labelIds: [labelId] }
-          : {}),
+        ...(initial.length ? { labelIds: initial } : {}),
       }
       put('cards', [card])
       return card.id
@@ -822,19 +838,37 @@ export const useStore = create<Store>((set, get) => {
       if (!l) return
       // Las tarjetas conservan el id; al mostrarse se ignoran las etiquetas eliminadas (y "Deshacer" las recupera).
       // Si la etiqueta vincula un subtablero, el subtablero (y sus subetiquetas) se va con ella.
-      const subs = live(get().boards).filter((b) => b.linkLabelId === id)
+      // Si vincula varias etiquetas, el subtablero sigue con las demás y solo pierde esta.
+      const linked = live(get().boards).filter((b) => linkIdsOf(b).includes(id))
+      const subs = linked.filter((b) => linkIdsOf(b).length === 1)
+      const trimmed = linked.filter((b) => linkIdsOf(b).length > 1)
       const subIds = new Set(subs.map((b) => b.id))
       const snap: Snapshot = {
         labels: [l, ...live(get().labels).filter((x) => subIds.has(x.boardId ?? ''))],
         ...(subs.length ? { boards: subs } : {}),
       }
       markDeleted(snap)
+      if (trimmed.length)
+        put(
+          'boards',
+          trimmed.map((b) => {
+            const rest = linkIdsOf(b).filter((x) => x !== id)
+            return { ...b, linkLabelIds: rest, linkLabelId: rest[0], updatedAt: stamp() }
+          }),
+        )
       set((s) => ({ labelFilter: s.labelFilter.filter((f) => f !== id) }))
       notify(
         subs.length
           ? `Etiqueta “${l.name}” y su subtablero eliminados`
           : `Etiqueta “${l.name}” eliminada`,
-        () => restore(snap),
+        () => {
+          restore(snap)
+          if (trimmed.length)
+            put(
+              'boards',
+              trimmed.map((b) => ({ ...b, updatedAt: stamp() })),
+            )
+        },
       )
     },
 

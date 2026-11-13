@@ -42,8 +42,8 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   const labels = (card.labelIds ?? [])
     .flatMap((id) => labelIndex.get(id) ?? [])
     .filter((l) =>
-      view?.linkLabelId
-        ? l.id === view.linkLabelId || l.boardId === view.boardId // subtablero: su etiqueta y subetiquetas
+      view?.linkLabelIds
+        ? view.linkLabelIds.includes(l.id) || l.boardId === view.boardId // subtablero: sus etiquetas y subetiquetas
         : !l.boardId || l.boardId === card.boardId,
     )
   const attachments = useAttachmentIndex()

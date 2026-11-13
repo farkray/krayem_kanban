@@ -124,8 +124,36 @@ export interface Board extends Base {
    * las tarjetas con la etiqueta `linkLabelId`. No tiene columnas ni tarjetas propias.
    */
   parentId?: string
+  /** Etiquetas que lo vinculan (una o varias). `linkLabelId` es la primera, para clientes antiguos. */
+  linkLabelIds?: string[]
   linkLabelId?: string
+  /** `any` (por defecto): tarjetas con alguna de las etiquetas; `all`: con todas. */
+  linkMode?: 'any' | 'all'
 }
+
+/** Etiquetas que vinculan un subtablero (vacío si no lo es). */
+export const linkIdsOf = (b: { linkLabelIds?: string[]; linkLabelId?: string }): string[] =>
+  b.linkLabelIds?.length ? b.linkLabelIds : b.linkLabelId ? [b.linkLabelId] : []
+
+/** ¿La tarjeta se muestra en este subtablero? */
+export const cardInSub = (
+  b: { linkLabelIds?: string[]; linkLabelId?: string; linkMode?: 'any' | 'all' },
+  c: { labelIds?: string[] },
+): boolean => {
+  const ids = linkIdsOf(b)
+  if (ids.length === 0) return false
+  const have = c.labelIds ?? []
+  return b.linkMode === 'all'
+    ? ids.every((i) => have.includes(i))
+    : ids.some((i) => have.includes(i))
+}
+
+/** Etiquetas que lleva una tarjeta nueva creada en el subtablero (para que se quede ahí). */
+export const newCardLabelsOf = (b: {
+  linkLabelIds?: string[]
+  linkLabelId?: string
+  linkMode?: 'any' | 'all'
+}): string[] => (b.linkMode === 'all' ? linkIdsOf(b) : linkIdsOf(b).slice(0, 1))
 
 /** Tablero del que salen las columnas y las tarjetas: el padre si es subtablero, o él mismo. */
 export const sourceBoardId = (b: { id: string; parentId?: string }): string => b.parentId ?? b.id

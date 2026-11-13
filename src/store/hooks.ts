@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { byPosition } from '../lib/position'
 import { displayName } from '../lib/people'
-import type { Comment } from '../lib/types'
+import { cardInSub, linkIdsOf, type Comment } from '../lib/types'
 import { useAccess } from '../sync/access'
 import { useAuth } from '../sync/auth'
 import { useStore } from './store'
@@ -151,7 +151,8 @@ export interface BoardSummary {
   memberCount: number
   /** Si es subtablero: el tablero del que cuelga y la etiqueta que lo vincula. */
   parentId?: string
-  linkLabel?: { name: string; color: string }
+  /** Etiquetas que lo vinculan (nombres, para mostrarlas). */
+  linkLabels: string[]
   /** Cuántos subtableros tiene. */
   subCount: number
 }
@@ -168,10 +169,8 @@ export function useBoardSummaries(): BoardSummary[] {
     const colCount = new Map<string, number>()
     for (const c of live(columns)) colCount.set(c.boardId, (colCount.get(c.boardId) ?? 0) + 1)
     const cardCount = new Map<string, number>()
-    const labelCount = new Map<string, number>() // tarjetas por etiqueta (para los subtableros)
     for (const c of live(cards)) {
       cardCount.set(c.boardId, (cardCount.get(c.boardId) ?? 0) + 1)
-      for (const l of c.labelIds ?? []) labelCount.set(l, (labelCount.get(l) ?? 0) + 1)
     }
     const ids = new Set(boards.map((b) => b.id))
     const labelById = new Map(live(labels).map((l) => [l.id, l]))
@@ -186,7 +185,7 @@ export function useBoardSummaries(): BoardSummary[] {
           const foreign = !!b.ownerId && !!me && b.ownerId !== me
           const sourceId = b.parentId ?? b.id
           const s = shared.find((x) => x.boardId === sourceId)
-          const link = b.linkLabelId ? labelById.get(b.linkLabelId) : undefined
+          const linkNames = linkIdsOf(b).flatMap((id) => labelById.get(id)?.name ?? [])
           return {
             id: b.id,
             title: b.title,
@@ -194,7 +193,7 @@ export function useBoardSummaries(): BoardSummary[] {
             icon: b.icon,
             columnCount: colCount.get(sourceId) ?? 0,
             cardCount: b.parentId
-              ? (labelCount.get(b.linkLabelId ?? '') ?? 0)
+              ? live(cards).filter((c) => c.boardId === b.parentId && cardInSub(b, c)).length
               : (cardCount.get(b.id) ?? 0),
             sharedBy: foreign
               ? {
@@ -205,7 +204,7 @@ export function useBoardSummaries(): BoardSummary[] {
             memberCount:
               foreign || b.parentId ? 0 : members.filter((m) => m.boardId === b.id).length,
             parentId: b.parentId,
-            linkLabel: link ? { name: link.name, color: link.color } : undefined,
+            linkLabels: linkNames,
             subCount: subCount.get(b.id) ?? 0,
           }
         })

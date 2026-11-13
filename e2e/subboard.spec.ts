@@ -31,7 +31,7 @@ test('un subtablero se crea con una etiqueta, se ve sangrado y mueve las tarjeta
   // crear el subtablero
   await page.getByRole('button', { name: 'Crear subtablero' }).click()
   const dlg = page.getByRole('dialog', { name: 'Crear subtablero' })
-  await expect(dlg.getByRole('radio', { name: 'Etiqueta Coppel' })).toBeChecked()
+  await expect(dlg.getByRole('checkbox', { name: 'Etiqueta Coppel' })).toBeChecked()
   await dlg.getByRole('button', { name: 'Crear subtablero' }).click()
 
   // está dentro del subtablero: mismas columnas, solo la tarjeta etiquetada
@@ -80,7 +80,7 @@ test('las subetiquetas solo existen en el subtablero y ahí no se ven las genera
   await page.getByRole('button', { name: 'Crear subtablero' }).click()
   await page
     .getByRole('dialog', { name: 'Crear subtablero' })
-    .getByRole('radio', { name: 'Etiqueta Coppel' })
+    .getByRole('checkbox', { name: 'Etiqueta Coppel' })
     .check()
   await page
     .getByRole('dialog', { name: 'Crear subtablero' })
@@ -140,4 +140,57 @@ test('subtablero accesible', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Coppel' })).toBeVisible()
   await settle()
   expect(await scan()).toEqual([])
+})
+
+test('un subtablero puede combinar varias etiquetas (alguna o todas)', async ({ page }) => {
+  await openFirstBoard(page)
+  for (const [title, labels] of [
+    ['Anáhuac', ['Anáhuac']],
+    ['UPAEP', ['UPAEP']],
+    ['Otra', ['Otra']],
+    ['Anáhuac maestría', ['Anáhuac', 'Maestría']],
+  ] as const) {
+    await addCard(page, 'Por hacer', title)
+    await card(column(page, 'Por hacer'), title).first().click()
+    for (const l of labels) {
+      const dlg = detail(page)
+      const toggle = dlg
+        .getByRole('button', { name: /Agregar etiqueta|\+ Etiqueta|Ocultar/ })
+        .first()
+      if ((await toggle.textContent())?.includes('Ocultar') === false) await toggle.click()
+      const box = dlg.getByRole('checkbox', { name: `Etiqueta ${l}` })
+      if (await box.count()) await box.check()
+      else {
+        const field = dlg.getByLabel('Nombre de la etiqueta')
+        if (!(await field.isVisible()))
+          await dlg.getByRole('button', { name: '+ Crear etiqueta' }).click()
+        await field.fill(l)
+        await dlg.getByRole('button', { name: 'Crear etiqueta' }).click()
+      }
+      await expect(dlg.getByRole('button', { name: `Quitar etiqueta ${l}` })).toBeVisible()
+    }
+    await page.keyboard.press('Escape')
+  }
+
+  await page.getByRole('button', { name: 'Crear subtablero' }).click()
+  const dlg = page.getByRole('dialog', { name: 'Crear subtablero' })
+  await dlg.getByRole('checkbox', { name: 'Etiqueta Anáhuac' }).check()
+  await dlg.getByRole('checkbox', { name: 'Etiqueta UPAEP' }).check()
+  await dlg.getByRole('checkbox', { name: 'Etiqueta Maestría' }).check()
+  await dlg.getByLabel('Nombre del subtablero').fill('Educación')
+  await dlg.getByRole('radio', { name: 'Alguna de las etiquetas' }).check()
+  await dlg.getByRole('button', { name: 'Crear subtablero' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Educación' })).toBeVisible()
+  const col = column(page, 'Por hacer')
+  await expect(card(col, 'Anáhuac').first()).toBeVisible()
+  await expect(card(col, 'UPAEP')).toBeVisible()
+  await expect(card(col, 'Anáhuac maestría')).toBeVisible()
+  await expect(card(col, 'Otra')).toHaveCount(0)
+  await expect(page.getByText(/alguna de estas etiquetas/)).toBeVisible()
+  await expect(
+    side(page)
+      .getByRole('list', { name: 'Subtableros de Mi tablero' })
+      .getByText(/Anáhuac, UPAEP, Maestría/),
+  ).toBeVisible()
 })

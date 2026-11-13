@@ -11,7 +11,7 @@ import { PwaPrompts } from './components/PwaPrompts'
 import { Sidebar } from './components/Sidebar'
 import { Toast } from './components/Toast'
 import { Topbar } from './components/Topbar'
-import { ViewBoardContext } from './lib/ViewBoard'
+import { ViewBoardContext, viewOf } from './lib/ViewBoard'
 import { ADMIN_PATH, boardPath, useRoute } from './lib/route'
 import { useMediaQuery, WIDE_QUERY } from './lib/useMediaQuery'
 import type { SearchResult } from './lib/search'
@@ -199,9 +199,7 @@ export default function App() {
       </div>
       {openCardId && (
         <Suspense fallback={null}>
-          <ViewBoardContext.Provider
-            value={active ? { boardId: active.id, linkLabelId: active.linkLabelId ?? null } : null}
-          >
+          <ViewBoardContext.Provider value={active ? viewOf(active) : null}>
             <CardModal cardId={openCardId} onClose={closeCard} />
           </ViewBoardContext.Provider>
         </Suspense>
