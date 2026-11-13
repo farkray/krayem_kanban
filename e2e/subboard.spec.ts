@@ -68,30 +68,42 @@ test('un subtablero se crea con una etiqueta, se ve sangrado y mueve las tarjeta
   await expect(card(column(page, 'Por hacer'), 'De otro')).toBeVisible()
 })
 
-test('las subetiquetas solo existen en el subtablero', async ({ page }) => {
+test('las subetiquetas solo existen en el subtablero y ahí no se ven las generales', async ({
+  page,
+}) => {
   await openFirstBoard(page)
   await addCard(page, 'Por hacer', 'Tarea')
   await card(column(page, 'Por hacer'), 'Tarea').click()
   await createLabel(detail(page), 'Coppel')
+  await createLabel(detail(page), 'General')
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Crear subtablero' }).click()
+  await page
+    .getByRole('dialog', { name: 'Crear subtablero' })
+    .getByRole('radio', { name: 'Etiqueta Coppel' })
+    .check()
   await page
     .getByRole('dialog', { name: 'Crear subtablero' })
     .getByRole('button', { name: 'Crear subtablero' })
     .click()
   await expect(page.getByRole('heading', { level: 1, name: 'Coppel' })).toBeVisible()
 
+  // en el subtablero: su etiqueta (fija) y sus subetiquetas; las generales no aparecen
+  await expect(card(column(page, 'Por hacer'), 'Tarea').getByText('General')).toHaveCount(0)
   await card(column(page, 'Por hacer'), 'Tarea').click()
+  await expect(detail(page).getByRole('button', { name: 'Quitar etiqueta General' })).toHaveCount(0)
   await createLabel(detail(page), 'Urgente')
   await expect(detail(page).getByRole('button', { name: 'Quitar etiqueta Coppel' })).toHaveCount(0) // la que vincula no se quita
+  await expect(detail(page).getByRole('checkbox', { name: 'Etiqueta General' })).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(card(column(page, 'Por hacer'), 'Tarea').getByText('Urgente')).toBeVisible()
 
-  // en el tablero principal no se ve ni se ofrece
+  // en el tablero principal no se ve ni se ofrece la subetiqueta
   await side(page)
     .getByRole('button', { name: /^Mi tablero/ })
     .first()
     .click()
+  await expect(card(column(page, 'Por hacer'), 'Tarea').getByText('General')).toBeVisible()
   await expect(card(column(page, 'Por hacer'), 'Tarea').getByText('Urgente')).toHaveCount(0)
   await card(column(page, 'Por hacer'), 'Tarea').click()
   await expect(detail(page).getByRole('button', { name: 'Quitar etiqueta Urgente' })).toHaveCount(0)

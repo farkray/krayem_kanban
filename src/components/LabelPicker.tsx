@@ -109,7 +109,8 @@ export function LabelPicker({
   const linkId = subId ? view?.linkLabelId : null // la que vincula el subtablero no se quita
   const ownLabels = useLabels(home)
   const parentLabels = useLabels(boardId)
-  const labels = subId ? [...parentLabels, ...ownLabels] : parentLabels
+  // Dentro de un subtablero solo se ofrecen sus subetiquetas; las generales se usan en el principal.
+  const labels = subId ? ownLabels : parentLabels
   const index = useLabelIndex()
   const createLabel = useStore((s) => s.createLabel)
   const updateLabel = useStore((s) => s.updateLabel)
@@ -123,7 +124,11 @@ export function LabelPicker({
 
   const assigned = labelIds
     .flatMap((id) => index.get(id) ?? [])
-    .filter((l) => !l.boardId || l.boardId === boardId || l.boardId === subId)
+    .filter((l) =>
+      subId
+        ? l.id === linkId || l.boardId === subId // en el subtablero: la que lo vincula y las suyas
+        : !l.boardId || l.boardId === boardId,
+    )
   const showForm = editing !== null || (open && labels.length === 0)
   const editingLabel = editing && editing !== 'new' ? index.get(editing) : undefined
   const taken = (except?: string) =>
@@ -167,7 +172,9 @@ export function LabelPicker({
             <>
               {labels.length === 0 && editing === null && (
                 <p className={styles.hint}>
-                  Crea tu primera etiqueta: por ejemplo, el nombre de una empresa con su color.
+                  {subId
+                    ? 'Crea tu primera subetiqueta: solo se verá en este subtablero.'
+                    : 'Crea tu primera etiqueta: por ejemplo, el nombre de una empresa con su color.'}
                 </p>
               )}
               <LabelForm

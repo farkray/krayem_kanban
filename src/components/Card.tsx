@@ -41,7 +41,11 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   // Las subetiquetas solo se ven dentro de su subtablero.
   const labels = (card.labelIds ?? [])
     .flatMap((id) => labelIndex.get(id) ?? [])
-    .filter((l) => !l.boardId || l.boardId === card.boardId || l.boardId === view?.boardId)
+    .filter((l) =>
+      view?.linkLabelId
+        ? l.id === view.linkLabelId || l.boardId === view.boardId // subtablero: su etiqueta y subetiquetas
+        : !l.boardId || l.boardId === card.boardId,
+    )
   const attachments = useAttachmentIndex()
   const cover = card.coverAttachmentId ? attachments.get(card.coverAttachmentId) : undefined
   const coverUrl = useAttachmentUrl(cover)
