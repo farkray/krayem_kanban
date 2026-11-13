@@ -56,6 +56,9 @@ function Tile({
           {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}
           {pluralize(b.cardCount, 'tarjeta', 'tarjetas')}
         </span>
+        {b.subCount > 0 && (
+          <span className={styles.meta}>{pluralize(b.subCount, 'subtablero', 'subtableros')}</span>
+        )}
       </button>
       {sortable && (
         <button
@@ -77,6 +80,8 @@ function Tile({
 
 export function HomeView({ boards, onOpen, onCreate, onMove }: Props) {
   const [creating, setCreating] = useState(false)
+  // La portada lista los tableros de primer nivel; los subtableros se abren desde la barra lateral.
+  boards = boards.filter((b) => !b.parentId)
   const mine = boards.filter((b) => !b.sharedBy)
   const canSort = !!onMove && mine.length > 1
   const sensors = useSensors(

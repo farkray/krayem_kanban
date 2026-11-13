@@ -4,6 +4,7 @@ Tablero Kanban en español, instalable (PWA), con guardado automático en tu pro
 
 - **Tableros, columnas (máx. 10) y tarjetas** con arrastrar y soltar (mouse, touch y teclado). Los tableros se **reordenan** arrastrando su asa (⋮⋮), en la portada o en la barra lateral, y cada uno tiene su **color e icono** (10 × 10).
 - **Tarjeta:** fechas de inicio/final opcionales, etiquetas de color, persona asignada, lista de tareas opcional, y se puede **mover a otro tablero y columna** (Mover → Tablero → Columna) llevándose sus datos.
+- **Subtableros:** desde un tablero, «Crear subtablero» eligiendo una etiqueta (p. ej. «Coppel»). Es una vista del tablero principal con **sus mismas columnas** y solo las tarjetas con esa etiqueta: mover una tarjeta ahí la mueve también en el principal. Hereda los miembros del principal, se ve sangrado bajo él en la barra lateral y puede tener **subetiquetas** que solo existen ahí.
 - **Actualizaciones** estilo foro: editor de formato (Markdown) con menciones e imágenes (comprimidas en el navegador con WebAssembly), **respuestas**, **«Me gusta»** y «Ver más» en las largas.
 - **Centro de notificaciones** (campana): menciones, asignaciones y cambios de acceso. Opcionalmente **avisos por correo y WhatsApp** a través de un flujo de n8n que el administrador descarga desde el panel: [docs/notificaciones-n8n.md](docs/notificaciones-n8n.md).
 - **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).

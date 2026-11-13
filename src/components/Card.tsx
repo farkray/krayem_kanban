@@ -7,6 +7,7 @@ import { LabelChip } from './LabelChip'
 import { useAttachmentIndex, useLabelIndex } from '../store/hooks'
 import { useAttachmentUrl } from '../store/useAttachmentUrl'
 import { useCanEdit } from '../lib/CanEdit'
+import { useViewBoard } from '../lib/ViewBoard'
 import { displayName } from '../lib/people'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
@@ -36,7 +37,11 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   const range = dateRangeLabel(card.startDate, card.endDate)
   const due = dueState(card.endDate, finished)
   const labelIndex = useLabelIndex()
-  const labels = (card.labelIds ?? []).flatMap((id) => labelIndex.get(id) ?? [])
+  const view = useViewBoard()
+  // Las subetiquetas solo se ven dentro de su subtablero.
+  const labels = (card.labelIds ?? [])
+    .flatMap((id) => labelIndex.get(id) ?? [])
+    .filter((l) => !l.boardId || l.boardId === card.boardId || l.boardId === view?.boardId)
   const attachments = useAttachmentIndex()
   const cover = card.coverAttachmentId ? attachments.get(card.coverAttachmentId) : undefined
   const coverUrl = useAttachmentUrl(cover)

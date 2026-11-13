@@ -119,7 +119,16 @@ export interface Board extends Base {
   icon?: BoardIconName // ausente = tablero
   /** Dueño del tablero: lo pone el servidor al descargar. Ausente = tablero propio creado aquí. */
   ownerId?: string
+  /**
+   * Subtablero: es una vista del tablero `parentId` (mismas columnas y miembros) que muestra solo
+   * las tarjetas con la etiqueta `linkLabelId`. No tiene columnas ni tarjetas propias.
+   */
+  parentId?: string
+  linkLabelId?: string
 }
+
+/** Tablero del que salen las columnas y las tarjetas: el padre si es subtablero, o él mismo. */
+export const sourceBoardId = (b: { id: string; parentId?: string }): string => b.parentId ?? b.id
 
 /** Tipo de columna: define el límite de tarjetas simultáneas (regla WIP). */
 export const COLUMN_KINDS = ['standard', 'next', 'doing', 'done'] as const

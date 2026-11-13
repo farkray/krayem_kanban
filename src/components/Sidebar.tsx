@@ -52,14 +52,21 @@ interface Props {
 
 function Item({
   board: b,
-  active,
+  activeId,
   sortable,
   onSelect,
+  subs,
+  canSortSubs,
+  depth = 0,
 }: {
   board: BoardSummary
-  active: boolean
+  activeId: string | null
   sortable: boolean
-  onSelect: () => void
+  onSelect: (id: string) => void
+  /** Subtableros de este tablero (se muestran sangrados debajo). */
+  subs: BoardSummary[]
+  canSortSubs: boolean
+  depth?: number
 }) {
   const s = useSortable({ id: b.id, disabled: !sortable })
   return (
@@ -68,44 +75,70 @@ function Item({
       style={{ transform: CSS.Transform.toString(s.transform), transition: s.transition }}
       className={`${styles.row} ${s.isDragging ? styles.dragging : ''}`}
     >
-      <button
-        type="button"
-        className={styles.item}
-        aria-current={active ? 'page' : undefined}
-        onClick={onSelect}
-      >
-        <BoardTile className={styles.boardIcon} color={b.color} icon={b.icon} size={16} />
-        <span className={styles.itemText}>
-          <span className={styles.itemTitle}>{b.title}</span>
-          <span className={styles.itemMeta}>
-            {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}
-            {pluralize(b.cardCount, 'tarjeta', 'tarjetas')}
-          </span>
-          {b.sharedBy && (
-            <span className={styles.itemMeta}>
-              De {b.sharedBy.name} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
-            </span>
-          )}
-          {b.memberCount > 0 && (
-            <span className={styles.itemMeta}>
-              Compartido con {pluralize(b.memberCount, 'persona', 'personas')}
-            </span>
-          )}
-        </span>
-      </button>
-      {sortable && (
+      <div className={styles.line}>
         <button
           type="button"
-          ref={s.setActivatorNodeRef}
-          className={styles.grip}
-          aria-label={`Mover tablero ${b.title}`}
-          title="Arrastra para cambiar el orden"
-          {...s.attributes}
-          aria-roledescription="tablero que se puede mover"
-          {...s.listeners}
+          className={`${styles.item} ${depth > 0 ? styles.sub : ''}`}
+          aria-current={b.id === activeId ? 'page' : undefined}
+          onClick={() => onSelect(b.id)}
         >
-          <GripIcon width={16} height={16} />
+          <BoardTile
+            className={depth > 0 ? styles.subIcon : styles.boardIcon}
+            color={b.color}
+            icon={b.icon}
+            size={depth > 0 ? 14 : 16}
+          />
+          <span className={styles.itemText}>
+            <span className={styles.itemTitle}>{b.title}</span>
+            <span className={styles.itemMeta}>
+              {depth > 0
+                ? `${pluralize(b.cardCount, 'tarjeta', 'tarjetas')}${b.linkLabel ? ` · ${b.linkLabel.name}` : ''}`
+                : `${pluralize(b.columnCount, 'columna', 'columnas')} · ${pluralize(b.cardCount, 'tarjeta', 'tarjetas')}`}
+            </span>
+            {b.sharedBy && depth === 0 && (
+              <span className={styles.itemMeta}>
+                De {b.sharedBy.name} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
+              </span>
+            )}
+            {b.memberCount > 0 && (
+              <span className={styles.itemMeta}>
+                Compartido con {pluralize(b.memberCount, 'persona', 'personas')}
+              </span>
+            )}
+          </span>
         </button>
+        {sortable && (
+          <button
+            type="button"
+            ref={s.setActivatorNodeRef}
+            className={styles.grip}
+            aria-label={`Mover tablero ${b.title}`}
+            title="Arrastra para cambiar el orden"
+            {...s.attributes}
+            aria-roledescription="tablero que se puede mover"
+            {...s.listeners}
+          >
+            <GripIcon width={16} height={16} />
+          </button>
+        )}
+      </div>
+      {subs.length > 0 && (
+        <SortableContext items={subs.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+          <ul className={styles.children} aria-label={`Subtableros de ${b.title}`}>
+            {subs.map((x) => (
+              <Item
+                key={x.id}
+                board={x}
+                activeId={activeId}
+                sortable={canSortSubs}
+                onSelect={onSelect}
+                subs={[]}
+                canSortSubs={false}
+                depth={depth + 1}
+              />
+            ))}
+          </ul>
+        </SortableContext>
       )}
     </li>
   )
@@ -122,8 +155,10 @@ export function Sidebar({
   account,
 }: Props) {
   const [creating, setCreating] = useState(false)
-  const mine = boards.filter((b) => !b.sharedBy)
-  const sharedWithMe = boards.filter((b) => b.sharedBy)
+  const top = boards.filter((b) => !b.parentId)
+  const mine = top.filter((b) => !b.sharedBy)
+  const sharedWithMe = top.filter((b) => b.sharedBy)
+  const subsOf = (id: string) => boards.filter((b) => b.parentId === id)
 
   const canSort = !!onMove && mine.length > 1
   const sensors = useSensors(
@@ -134,20 +169,30 @@ export function Sidebar({
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
     }),
   )
+  // Solo se reordena entre hermanos: los de primer nivel entre sí, o los subtableros de un mismo padre.
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
-    const to = mine.findIndex((b) => b.id === over.id)
+    const a = boards.find((b) => b.id === active.id)
+    const o = boards.find((b) => b.id === over.id)
+    if (!a || !o || a.parentId !== o.parentId) return
+    const siblings = a.parentId ? subsOf(a.parentId) : mine
+    const to = siblings.findIndex((b) => b.id === over.id)
     if (to >= 0) onMove?.(String(active.id), to)
   }
-  const renderItem = (b: BoardSummary, sortable = false) => (
-    <Item
-      key={b.id}
-      board={b}
-      active={b.id === activeId}
-      sortable={sortable}
-      onSelect={() => onSelect(b.id)}
-    />
-  )
+  const renderItem = (b: BoardSummary, sortable = false) => {
+    const subs = subsOf(b.id)
+    return (
+      <Item
+        key={b.id}
+        board={b}
+        activeId={activeId}
+        sortable={sortable}
+        onSelect={onSelect}
+        subs={subs}
+        canSortSubs={!!onMove && !b.sharedBy && subs.length > 1}
+      />
+    )
+  }
 
   return (
     <aside className={`${styles.sidebar} ${drawer ? styles.drawer : ''}`} aria-label="Tableros">

@@ -58,6 +58,8 @@ export const useAccess = create<AccessState>(() => ({
 /** Rol en un tablero: dueño (propio o sin cuentas), editor o solo lectura. */
 function resolve(boardId: string): Role {
   const board = useStore.getState().boards.find((b) => b.id === boardId)
+  // Un subtablero comparte miembros y permisos con su padre.
+  if (board?.parentId) return resolve(board.parentId)
   const me = useAuth.getState().userId
   if (!board?.ownerId || !me || board.ownerId === me) return 'owner'
   // Ajeno y sin permiso conocido (p. ej. aún sin descargar la lista): lo más seguro es solo lectura.
@@ -119,7 +121,10 @@ export async function refreshAccess(): Promise<void> {
   const keep = new Set(data.shared.map((s) => s.boardId))
   const lost = useStore
     .getState()
-    .boards.filter((b) => b.ownerId && b.ownerId !== me && !keep.has(b.id))
+    .boards.filter(
+      (b) =>
+        b.ownerId && b.ownerId !== me && !keep.has(b.id) && !(b.parentId && keep.has(b.parentId)),
+    )
     .map((b) => b.id)
   await useStore.getState().purgeBoards(lost)
 }
@@ -157,7 +162,8 @@ export interface BoardAccess {
 }
 
 /** Acceso a un tablero, reactivo (se actualiza al cambiar permisos). */
-export function useBoardAccess(boardId: string | null | undefined): BoardAccess {
+export function useBoardAccess(viewId: string | null | undefined): BoardAccess {
+  const boardId = useStore((s) => s.boards.find((b) => b.id === viewId)?.parentId) ?? viewId
   const ownerId = useStore((s) => s.boards.find((b) => b.id === boardId)?.ownerId)
   const me = useAuth((s) => s.userId)
   const shared = useAccess((s) => s.shared)
