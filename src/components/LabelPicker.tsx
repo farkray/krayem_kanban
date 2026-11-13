@@ -106,7 +106,7 @@ export function LabelPicker({
   const viewParent = useStore((s) => s.boards.find((b) => b.id === view?.boardId)?.parentId)
   const subId = view && viewParent === boardId ? view.boardId : null
   const home = subId ?? boardId // dónde se crean las etiquetas nuevas
-  const linkId = subId ? view?.linkLabelId : null // la que vincula el subtablero no se quita
+  const linkIds = subId ? (view?.linkLabelIds ?? []) : [] // las que vinculan el subtablero no se quitan
   const ownLabels = useLabels(home)
   const parentLabels = useLabels(boardId)
   // Dentro de un subtablero solo se ofrecen sus subetiquetas; las generales se usan en el principal.
@@ -126,7 +126,7 @@ export function LabelPicker({
     .flatMap((id) => index.get(id) ?? [])
     .filter((l) =>
       subId
-        ? l.id === linkId || l.boardId === subId // en el subtablero: la que lo vincula y las suyas
+        ? linkIds.includes(l.id) || l.boardId === subId // en el subtablero: la que lo vincula y las suyas
         : !l.boardId || l.boardId === boardId,
     )
   const showForm = editing !== null || (open && labels.length === 0)
@@ -143,7 +143,7 @@ export function LabelPicker({
           <LabelChip
             key={l.id}
             label={l}
-            onRemove={l.id === linkId ? undefined : () => toggle(l.id)}
+            onRemove={linkIds.includes(l.id) ? undefined : () => toggle(l.id)}
           />
         ))}
         <button
@@ -210,7 +210,7 @@ export function LabelPicker({
                       <input
                         type="checkbox"
                         checked={labelIds.includes(l.id)}
-                        disabled={l.id === linkId}
+                        disabled={linkIds.includes(l.id)}
                         onChange={() => toggle(l.id)}
                         aria-label={`Etiqueta ${l.name}`}
                       />

@@ -65,7 +65,7 @@ export function Column({
   const canEdit = useCanEdit()
   // En un subtablero las columnas son las del padre: se ven, pero solo se cambian allá.
   const view = useViewBoard()
-  const canEditColumns = canEdit && !view?.linkLabelId
+  const canEditColumns = canEdit && !view?.linkLabelIds
   const kind = kindOf(column)
   const limit = limitOf(column)
   const full = limit !== null && total >= limit
@@ -200,7 +200,9 @@ export function Column({
             placeholder="Título de la tarjeta"
             maxLength={LIMITS.card}
             keepOpen
-            onSubmit={(t) => addCard(column.id, t, view?.linkLabelId ?? undefined)}
+            onSubmit={(t) =>
+              addCard(column.id, t, view?.linkLabelIds ? view.newCardLabelIds : undefined)
+            }
             onCancel={() => setAdding(false)}
           />
         ) : (

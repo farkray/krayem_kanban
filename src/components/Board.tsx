@@ -22,7 +22,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { CanEditContext } from '../lib/CanEdit'
-import { ViewBoardContext } from '../lib/ViewBoard'
+import { ViewBoardContext, viewOf } from '../lib/ViewBoard'
 import { displayName } from '../lib/people'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
@@ -32,6 +32,8 @@ import {
   LIMITS,
   limitOf,
   sourceBoardId,
+  linkIdsOf,
+  cardInSub,
   type Board as BoardModel,
 } from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -67,15 +69,14 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
   const sourceId = sourceBoardId(board)
   const isSub = !!board.parentId
   const parent = useBoards().find((b) => b.id === board.parentId)
-  const linkLabel = useLabelIndex().get(board.linkLabelId ?? '')
+  const labelIndexAll = useLabelIndex()
+  const linkLabels = linkIdsOf(board).flatMap((id) => labelIndexAll.get(id) ?? [])
   const columns = useColumns(sourceId)
   const allCards = useBoardCards(sourceId)
   const cards = useMemo(
-    () =>
-      isSub
-        ? allCards.filter((c) => (c.labelIds ?? []).includes(board.linkLabelId ?? ''))
-        : allCards,
-    [allCards, isSub, board.linkLabelId],
+    () => (isSub ? allCards.filter((c) => cardInSub(board, c)) : allCards),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allCards, isSub, board.linkLabelIds, board.linkLabelId, board.linkMode],
   )
   const stats = useCardStats()
   const labelIndex = useLabelIndex()
@@ -250,9 +251,7 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
 
   return (
     <CanEditContext.Provider value={access.canEdit}>
-      <ViewBoardContext.Provider
-        value={{ boardId: board.id, linkLabelId: board.linkLabelId ?? null }}
-      >
+      <ViewBoardContext.Provider value={viewOf(board)}>
         <div className={styles.board}>
           <div className={styles.head}>
             <BoardAppearance board={board} editable={access.isOwner} className={styles.tile} />
@@ -353,8 +352,16 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
               ) : (
                 'otro tablero'
               )}{' '}
-              · muestra las tarjetas con la etiqueta {linkLabel && <LabelChip label={linkLabel} />}.
-              Las columnas y los miembros son los del tablero principal.
+              · muestra las tarjetas con{' '}
+              {linkLabels.length > 1
+                ? board.linkMode === 'all'
+                  ? 'todas estas etiquetas:'
+                  : 'alguna de estas etiquetas:'
+                : 'la etiqueta'}{' '}
+              {linkLabels.map((l) => (
+                <LabelChip key={l.id} label={l} />
+              ))}
+              . Las columnas y los miembros son los del tablero principal.
             </p>
           )}
 
