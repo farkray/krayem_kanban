@@ -15,8 +15,7 @@ export function FilterMenu({ boardId }: { boardId: string | null }) {
   // En un subtablero: las etiquetas del principal y las propias; las personas son las del principal.
   const parentId = useStore((s) => s.boards.find((b) => b.id === boardId)?.parentId)
   const own = useLabels(boardId)
-  const fromParent = useLabels(parentId)
-  const labels = parentId ? [...fromParent, ...own] : own
+  const labels = own // en un subtablero, solo sus subetiquetas
   const people = useParticipants(parentId ?? boardId)
   const me = useAuth((s) => s.userId)
   const assignees = useStore((s) => s.assigneeFilter)
