@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useCanEdit } from '../lib/CanEdit'
+import { useViewBoard } from '../lib/ViewBoard'
 import { pluralize } from '../lib/format'
 import {
   COLUMN_KIND_NAMES,
@@ -62,6 +63,9 @@ export function Column({
   const addCard = useStore((s) => s.addCard)
   const setColumnKind = useStore((s) => s.setColumnKind)
   const canEdit = useCanEdit()
+  // En un subtablero las columnas son las del padre: se ven, pero solo se cambian allá.
+  const view = useViewBoard()
+  const canEditColumns = canEdit && !view?.linkLabelId
   const kind = kindOf(column)
   const limit = limitOf(column)
   const full = limit !== null && total >= limit
@@ -74,7 +78,7 @@ export function Column({
   const sortable = useSortable({
     id: `col:${column.id}`,
     data: { type: 'column', columnId: column.id },
-    disabled: !canEdit,
+    disabled: !canEditColumns,
   })
   // Recién creada: se lleva a la vista (el tablero se desplaza en horizontal) y se avisa al tablero.
   useEffect(() => {
@@ -102,7 +106,7 @@ export function Column({
       aria-label={column.title}
     >
       <header className={styles.header}>
-        {canEdit && (
+        {canEditColumns && (
           <button
             type="button"
             ref={sortable.setActivatorNodeRef}
@@ -134,8 +138,8 @@ export function Column({
               <button
                 type="button"
                 className={styles.titleBtn}
-                onClick={() => canEdit && setRenaming(true)}
-                title={canEdit ? 'Renombrar' : undefined}
+                onClick={() => canEditColumns && setRenaming(true)}
+                title={canEditColumns ? 'Renombrar' : undefined}
               >
                 {column.title}
               </button>
@@ -157,10 +161,10 @@ export function Column({
             )}
           </span>
         </div>
-        {canEdit && (
+        {canEditColumns && (
           <ColumnKindMenu column={column} onChange={(k) => setColumnKind(column.id, k)} />
         )}
-        {canEdit && (
+        {canEditColumns && (
           <button
             type="button"
             className={styles.delete}
@@ -196,7 +200,7 @@ export function Column({
             placeholder="Título de la tarjeta"
             maxLength={LIMITS.card}
             keepOpen
-            onSubmit={(t) => addCard(column.id, t)}
+            onSubmit={(t) => addCard(column.id, t, view?.linkLabelId ?? undefined)}
             onCancel={() => setAdding(false)}
           />
         ) : (

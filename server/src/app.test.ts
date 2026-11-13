@@ -735,6 +735,43 @@ describe('tableros compartidos', () => {
     expect(mine.find((r) => r.id === 'k2')?.title).toBe('privada')
   })
 
+  it('un subtablero hereda los miembros de su padre y no se comparte aparte', async () => {
+    const { c } = await setup()
+    const lbl = (id: string, boardId: string) => ({
+      id,
+      boardId,
+      name: id,
+      color: 'blue',
+      createdAt: '2026-11-01T00:00:00.000Z',
+      updatedAt: '2000-01-01T00:00:00.000Z',
+    })
+    await push(c.owner, 'boards', [board('b1')])
+    await push(c.owner, 'boards', [{ ...board('s1'), parentId: 'b1', linkLabelId: 'l1' }])
+    await push(c.owner, 'labels', [lbl('l1', 'b1'), lbl('x1', 's1')])
+    // sin compartir, nadie lo ve
+    expect(ids(await pull(c.ana, 'boards'))).toEqual([])
+    // al compartir el padre, el invitado recibe también el subtablero y sus subetiquetas
+    await share(c.owner, 'b1', 'ana@correo.com', 'editor')
+    expect(ids(await pull(c.ana, 'boards')).sort()).toEqual(['b1', 's1'])
+    expect(ids(await pull(c.ana, 'labels')).sort()).toEqual(['l1', 'x1'])
+    expect(ids(await pull(c.beto, 'boards'))).toEqual([])
+    // el editor crea subetiquetas, pero no toca el subtablero en sí
+    expect((await push(c.ana, 'labels', [lbl('x2', 's1')])).json().rejected).toBeUndefined()
+    expect(
+      (await push(c.ana, 'boards', [{ ...board('s1'), title: 'x', parentId: 'b1' }])).json()
+        .rejected,
+    ).toEqual(['s1'])
+    // nadie cuelga un subtablero de un tablero ajeno, ni de otro subtablero
+    expect(
+      (await push(c.beto, 'boards', [{ ...board('s9'), parentId: 'b1' }])).json().rejected,
+    ).toEqual(['s9'])
+    expect(
+      (await push(c.owner, 'boards', [{ ...board('s8'), parentId: 's1' }])).json().rejected,
+    ).toEqual(['s8'])
+    // el subtablero no se comparte aparte
+    expect((await share(c.owner, 's1', 'beto@correo.com', 'viewer')).statusCode).not.toBe(201)
+  })
+
   it('una tarjeta pasa a otro tablero solo dentro del mismo dueño y con permiso de edición en ambos', async () => {
     const { c } = await setup()
     await push(c.owner, 'boards', [board('b1'), board('b2'), board('b3')])

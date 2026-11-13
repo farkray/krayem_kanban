@@ -67,6 +67,37 @@
   position: relative;
 }
 
+.line {
+  position: relative;
+}
+
+/* Subtableros: sangrados bajo su tablero, con una guía a la izquierda */
+.children {
+  margin: 2px 0 var(--space-1) 22px;
+  padding: 0 0 0 var(--space-2);
+  border-left: 2px solid var(--color-border);
+  list-style: none;
+}
+
+.sub {
+  padding-block: 6px;
+}
+
+.subIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    180deg,
+    var(--tile-from, var(--brand-from)),
+    var(--tile-to, var(--brand-to))
+  );
+  color: var(--color-on-accent);
+}
+
 .dragging {
   z-index: 2;
   opacity: 0.85;
@@ -90,7 +121,7 @@
   transform: translateY(-50%);
 }
 
-.row:hover .grip,
+.line:hover .grip,
 .grip:focus-visible {
   opacity: 1;
 }

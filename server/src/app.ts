@@ -351,12 +351,32 @@ export function buildApp(opts: AppOptions): BuiltApp {
   const memberRole = db.prepare('SELECT role FROM board_members WHERE board_id = ? AND user_id = ?')
   const membersOf = db.prepare('SELECT user_id FROM board_members WHERE board_id = ?')
 
-  /** Tablero al que pertenece una fila (los hijos antiguos sin boardId se resuelven por la fila existente). */
+  const boardRow = db.prepare("SELECT data FROM rows WHERE tbl = 'boards' AND id = ? LIMIT 1")
+  const validId = (v: unknown): v is string => typeof v === 'string' && ID_RE.test(v)
+
+  /** Tablero padre de un subtablero (los subtableros comparten miembros y permisos con su padre). */
+  const parentOf = (boardId: string): string | null => {
+    const r = boardRow.get(boardId) as { data: string } | undefined
+    if (!r) return null
+    try {
+      const p = (JSON.parse(r.data) as { parentId?: unknown }).parentId
+      return validId(p) ? p : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Tablero al que pertenece una fila para permisos y envío: el de arriba si es un subtablero
+   * (o algo suyo, como una subetiqueta). Los hijos antiguos sin boardId se resuelven por la fila existente.
+   */
   const boardIdOf = (table: string, row: Record<string, unknown>): string | null =>
     table === 'boards'
-      ? String(row.id)
-      : typeof row.boardId === 'string' && ID_RE.test(row.boardId)
-        ? row.boardId
+      ? validId(row.parentId)
+        ? row.parentId
+        : String(row.id)
+      : validId(row.boardId)
+        ? (parentOf(row.boardId) ?? row.boardId)
         : null
 
   /**
@@ -374,6 +394,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
     // Un "me gusta" solo lo escribe su dueño (nadie da "me gusta" en nombre de otra persona).
     if (table === 'likes' && row.userId !== userId) return null
     const boardId = boardIdOf(table, row)
+    // Un subtablero cuelga de un tablero de primer nivel (un solo nivel de profundidad).
+    if (table === 'boards' && boardId !== id && parentOf(boardId as string)) return null
     const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]
     const mine = existing.find((e) => e.user_id === userId)
 
@@ -667,6 +689,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   const ownBoard = (userId: string, boardId: string) =>
     ID_RE.test(boardId) &&
+    !parentOf(boardId) && // un subtablero no se comparte aparte: usa los miembros de su padre
     (boardOwner.get(boardId) as { user_id: string } | undefined)?.user_id === userId
 
   app.post('/api/boards/:id/members', async (req, reply) => {

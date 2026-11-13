@@ -11,6 +11,7 @@ import { PwaPrompts } from './components/PwaPrompts'
 import { Sidebar } from './components/Sidebar'
 import { Toast } from './components/Toast'
 import { Topbar } from './components/Topbar'
+import { ViewBoardContext } from './lib/ViewBoard'
 import { ADMIN_PATH, boardPath, useRoute } from './lib/route'
 import { useMediaQuery, WIDE_QUERY } from './lib/useMediaQuery'
 import type { SearchResult } from './lib/search'
@@ -189,6 +190,7 @@ export default function App() {
               board={active}
               onOpenCard={setOpenCardId}
               onDeleted={() => navigate('/')}
+              onOpenBoard={openBoard}
             />
           ) : (
             <HomeView boards={summaries} onOpen={openBoard} onCreate={create} onMove={moveBoard} />
@@ -197,7 +199,11 @@ export default function App() {
       </div>
       {openCardId && (
         <Suspense fallback={null}>
-          <CardModal cardId={openCardId} onClose={closeCard} />
+          <ViewBoardContext.Provider
+            value={active ? { boardId: active.id, linkLabelId: active.linkLabelId ?? null } : null}
+          >
+            <CardModal cardId={openCardId} onClose={closeCard} />
+          </ViewBoardContext.Provider>
         </Suspense>
       )}
       <Toast />

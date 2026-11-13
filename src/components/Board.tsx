@@ -22,6 +22,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { CanEditContext } from '../lib/CanEdit'
+import { ViewBoardContext } from '../lib/ViewBoard'
 import { displayName } from '../lib/people'
 import { announcements, screenReaderInstructions } from '../lib/dndA11y'
 import { pluralize } from '../lib/format'
@@ -30,10 +31,11 @@ import {
   DEFAULT_COLUMN_TITLE,
   LIMITS,
   limitOf,
+  sourceBoardId,
   type Board as BoardModel,
 } from '../lib/types'
 import { useMediaQuery } from '../lib/useMediaQuery'
-import { useBoardCards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
+import { useBoardCards, useBoards, useCardStats, useColumns, useLabelIndex } from '../store/hooks'
 import { useStore } from '../store/store'
 import { removeMember, useBoardAccess, useParticipants } from '../sync/access'
 import { useAuth } from '../sync/auth'
@@ -42,6 +44,7 @@ import { BoardAppearance } from './BoardAppearance'
 import { CardOverlay } from './Card'
 import { Column, ColumnOverlay } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
+import { CreateSubboard } from './CreateSubboard'
 import { MembersButton } from './MembersButton'
 import { ShareDialog } from './ShareDialog'
 import { ShareIcon, TrashIcon } from './Icons'
@@ -53,20 +56,34 @@ interface Props {
   board: BoardModel
   onOpenCard: (id: string) => void
   onDeleted: () => void
+  /** Abre otro tablero (el padre de un subtablero, o uno recién creado). */
+  onOpenBoard: (id: string) => void
 }
 
 type Active = { type: 'card' | 'column'; id: string } | null
 
-export function Board({ board, onOpenCard, onDeleted }: Props) {
-  const columns = useColumns(board.id)
-  const cards = useBoardCards(board.id)
+export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
+  // Un subtablero toma columnas y tarjetas de su padre; solo muestra las que llevan su etiqueta.
+  const sourceId = sourceBoardId(board)
+  const isSub = !!board.parentId
+  const parent = useBoards().find((b) => b.id === board.parentId)
+  const linkLabel = useLabelIndex().get(board.linkLabelId ?? '')
+  const columns = useColumns(sourceId)
+  const allCards = useBoardCards(sourceId)
+  const cards = useMemo(
+    () =>
+      isSub
+        ? allCards.filter((c) => (c.labelIds ?? []).includes(board.linkLabelId ?? ''))
+        : allCards,
+    [allCards, isSub, board.linkLabelId],
+  )
   const stats = useCardStats()
   const labelIndex = useLabelIndex()
   const labelFilter = useStore((s) => s.labelFilter)
   const setLabelFilter = useStore((s) => s.setLabelFilter)
   const assigneeFilter = useStore((s) => s.assigneeFilter)
   const setAssigneeFilter = useStore((s) => s.setAssigneeFilter)
-  const people = useParticipants(board.id)
+  const people = useParticipants(sourceId)
   // Los filtros son de un tablero (etiquetas y personas): al cambiar de tablero se limpian.
   useEffect(() => {
     setLabelFilter([])
@@ -83,6 +100,7 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
   const me = useAuth((s) => s.userId)
   const signedIn = useAuth((s) => s.status === 'signedIn')
   const [sharing, setSharing] = useState(false)
+  const [creatingSub, setCreatingSub] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
@@ -111,9 +129,10 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
 
   const totalByColumn = useMemo(() => {
     const map = new Map<string, number>()
-    for (const c of cards) map.set(c.columnId, (map.get(c.columnId) ?? 0) + 1)
+    // El límite de una columna cuenta TODAS las tarjetas del tablero, también las de otros subtableros.
+    for (const c of allCards) map.set(c.columnId, (map.get(c.columnId) ?? 0) + 1)
     return map
-  }, [cards])
+  }, [allCards])
 
   const sensors = useSensors(
     // Mouse: arranca al mover 6 px (un clic sigue abriendo la tarjeta).
@@ -231,232 +250,290 @@ export function Board({ board, onOpenCard, onDeleted }: Props) {
 
   return (
     <CanEditContext.Provider value={access.canEdit}>
-      <div className={styles.board}>
-        <div className={styles.head}>
-          <BoardAppearance board={board} editable={access.isOwner} className={styles.tile} />
-          {renaming ? (
-            <InlineInput
-              className={styles.titleInput}
-              initial={board.title}
-              label="Nombre del tablero"
-              maxLength={LIMITS.board}
-              submitOnBlur
-              onSubmit={(t) => {
-                renameBoard(board.id, t)
-                setRenaming(false)
-              }}
-              onCancel={() => setRenaming(false)}
-            />
-          ) : (
-            <h1 className={styles.title}>
+      <ViewBoardContext.Provider
+        value={{ boardId: board.id, linkLabelId: board.linkLabelId ?? null }}
+      >
+        <div className={styles.board}>
+          <div className={styles.head}>
+            <BoardAppearance board={board} editable={access.isOwner} className={styles.tile} />
+            {renaming ? (
+              <InlineInput
+                className={styles.titleInput}
+                initial={board.title}
+                label="Nombre del tablero"
+                maxLength={LIMITS.board}
+                submitOnBlur
+                onSubmit={(t) => {
+                  renameBoard(board.id, t)
+                  setRenaming(false)
+                }}
+                onCancel={() => setRenaming(false)}
+              />
+            ) : (
+              <h1 className={styles.title}>
+                <button
+                  type="button"
+                  className={styles.titleBtn}
+                  onClick={() => access.isOwner && setRenaming(true)}
+                  title={access.isOwner ? 'Renombrar tablero' : undefined}
+                >
+                  {board.title}
+                </button>
+              </h1>
+            )}
+            {access.isOwner && (
               <button
                 type="button"
-                className={styles.titleBtn}
-                onClick={() => access.isOwner && setRenaming(true)}
-                title={access.isOwner ? 'Renombrar tablero' : undefined}
+                className={styles.delete}
+                aria-label="Eliminar tablero"
+                onClick={() => setConfirmDelete(true)}
               >
-                {board.title}
-              </button>
-            </h1>
-          )}
-          {access.isOwner && (
-            <button
-              type="button"
-              className={styles.delete}
-              aria-label="Eliminar tablero"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <TrashIcon width={16} height={16} />
-            </button>
-          )}
-          <div className={styles.headAction}>
-            <MembersButton
-              boardId={board.id}
-              onManage={access.isOwner && signedIn ? () => setSharing(true) : undefined}
-            />
-            {access.isOwner && signedIn && (
-              <button type="button" className={styles.shareBtn} onClick={() => setSharing(true)}>
-                <ShareIcon width={16} height={16} />
-                {access.members.length > 0 ? `Compartido · ${access.members.length}` : 'Compartir'}
+                <TrashIcon width={16} height={16} />
               </button>
             )}
-            {!access.isOwner && (
-              <>
-                <span className={styles.sharedBy}>
-                  De {access.ownerName ?? 'otra persona'} ·{' '}
-                  {access.canEdit ? 'Editor' : 'Solo lectura'}
-                </span>
-                <button type="button" className={styles.shareBtn} onClick={() => setLeaving(true)}>
-                  Salir del tablero
-                </button>
-              </>
-            )}
-            {access.canEdit && (
-              <AddColumn
-                count={columns.length}
-                onAdd={() => setNewColumnId(addColumn(board.id, DEFAULT_COLUMN_TITLE))}
+            <div className={styles.headAction}>
+              <MembersButton
+                boardId={sourceId}
+                onManage={access.isOwner && signedIn && !isSub ? () => setSharing(true) : undefined}
               />
-            )}
-          </div>
-        </div>
-
-        {filtering && (
-          <div className={styles.filterBar} role="status">
-            <span className={styles.filterLabel}>Filtrando por:</span>
-            {labelFilter
-              .flatMap((id) => labelIndex.get(id) ?? [])
-              .map((l) => (
-                <LabelChip
-                  key={l.id}
-                  label={l}
-                  onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
-                />
-              ))}
-            {assigneeFilter.map((id) => {
-              const p = people.find((x) => x.userId === id)
-              const name =
-                id === ASSIGNEE_NONE
-                  ? 'Sin asignar'
-                  : p
-                    ? p.userId === me
-                      ? 'Yo'
-                      : displayName(p)
-                    : null
-              return name ? (
+              {access.isOwner && !isSub && (
                 <button
-                  key={id}
                   type="button"
-                  className={styles.clearFilter}
-                  aria-label={`Quitar filtro: ${name}`}
-                  onClick={() => setAssigneeFilter(assigneeFilter.filter((f) => f !== id))}
+                  className={styles.shareBtn}
+                  onClick={() => setCreatingSub(true)}
                 >
-                  {name} ×
+                  Crear subtablero
                 </button>
-              ) : null
-            })}
-            <button
-              type="button"
-              className={styles.clearFilter}
-              onClick={() => {
-                setLabelFilter([])
-                setAssigneeFilter([])
+              )}
+              {access.isOwner && signedIn && !isSub && (
+                <button type="button" className={styles.shareBtn} onClick={() => setSharing(true)}>
+                  <ShareIcon width={16} height={16} />
+                  {access.members.length > 0
+                    ? `Compartido · ${access.members.length}`
+                    : 'Compartir'}
+                </button>
+              )}
+              {!access.isOwner && (
+                <>
+                  <span className={styles.sharedBy}>
+                    De {access.ownerName ?? 'otra persona'} ·{' '}
+                    {access.canEdit ? 'Editor' : 'Solo lectura'}
+                  </span>
+                  {!isSub && (
+                    <button
+                      type="button"
+                      className={styles.shareBtn}
+                      onClick={() => setLeaving(true)}
+                    >
+                      Salir del tablero
+                    </button>
+                  )}
+                </>
+              )}
+              {access.canEdit && !isSub && (
+                <AddColumn
+                  count={columns.length}
+                  onAdd={() => setNewColumnId(addColumn(board.id, DEFAULT_COLUMN_TITLE))}
+                />
+              )}
+            </div>
+          </div>
+
+          {isSub && (
+            <p className={styles.subnote}>
+              Subtablero de{' '}
+              {parent ? (
+                <button
+                  type="button"
+                  className={styles.parentLink}
+                  onClick={() => onOpenBoard(parent.id)}
+                >
+                  {parent.title}
+                </button>
+              ) : (
+                'otro tablero'
+              )}{' '}
+              · muestra las tarjetas con la etiqueta {linkLabel && <LabelChip label={linkLabel} />}.
+              Las columnas y los miembros son los del tablero principal.
+            </p>
+          )}
+
+          {filtering && (
+            <div className={styles.filterBar} role="status">
+              <span className={styles.filterLabel}>Filtrando por:</span>
+              {labelFilter
+                .flatMap((id) => labelIndex.get(id) ?? [])
+                .map((l) => (
+                  <LabelChip
+                    key={l.id}
+                    label={l}
+                    onRemove={() => setLabelFilter(labelFilter.filter((f) => f !== l.id))}
+                  />
+                ))}
+              {assigneeFilter.map((id) => {
+                const p = people.find((x) => x.userId === id)
+                const name =
+                  id === ASSIGNEE_NONE
+                    ? 'Sin asignar'
+                    : p
+                      ? p.userId === me
+                        ? 'Yo'
+                        : displayName(p)
+                      : null
+                return name ? (
+                  <button
+                    key={id}
+                    type="button"
+                    className={styles.clearFilter}
+                    aria-label={`Quitar filtro: ${name}`}
+                    onClick={() => setAssigneeFilter(assigneeFilter.filter((f) => f !== id))}
+                  >
+                    {name} ×
+                  </button>
+                ) : null
+              })}
+              <button
+                type="button"
+                className={styles.clearFilter}
+                onClick={() => {
+                  setLabelFilter([])
+                  setAssigneeFilter([])
+                }}
+              >
+                Limpiar filtro
+              </button>
+            </div>
+          )}
+
+          <DndContext
+            accessibility={{ announcements: announce, screenReaderInstructions }}
+            sensors={access.canEdit ? sensors : []}
+            collisionDetection={collision}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => {
+              setActive(null)
+              setOverColumn(null)
+            }}
+          >
+            <div className={`${styles.columns} ${active ? styles.dragging : ''}`}>
+              <SortableContext
+                items={columns.map((c) => `col:${c.id}`)}
+                strategy={horizontalListSortingStrategy}
+              >
+                {columns.map((col, idx) => (
+                  <Column
+                    key={col.id}
+                    column={col}
+                    siblings={columns}
+                    cards={cardsByColumn.get(col.id) ?? []}
+                    total={totalByColumn.get(col.id) ?? 0}
+                    counts={totalByColumn}
+                    stats={stats}
+                    isLast={col.id === lastColumnId}
+                    startRenaming={col.id === newColumnId}
+                    onRenameStarted={() => setNewColumnId(null)}
+                    dropTarget={active?.type === 'card' && overColumn === col.id}
+                    blocked={
+                      active?.type === 'card' &&
+                      activeCard?.columnId !== col.id &&
+                      limitOf(col) !== null &&
+                      (totalByColumn.get(col.id) ?? 0) >= (limitOf(col) ?? 0)
+                    }
+                    tone={
+                      columns.length > 1
+                        ? idx === 0
+                          ? 'start'
+                          : col.id === lastColumnId
+                            ? 'done'
+                            : 'progress'
+                        : 'start'
+                    }
+                    onOpenCard={onOpenCard}
+                  />
+                ))}
+              </SortableContext>
+            </div>
+            <DragOverlay
+              dropAnimation={
+                reducedMotion ? null : { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+              }
+            >
+              {activeCard && (
+                <CardOverlay
+                  card={activeCard}
+                  stats={stats.get(activeCard.id)}
+                  finished={activeCard.columnId === lastColumnId}
+                  done={columns.find((c) => c.id === activeCard.columnId)?.kind === 'done'}
+                />
+              )}
+              {activeColumn && (
+                <ColumnOverlay
+                  column={activeColumn}
+                  count={cardsByColumn.get(activeColumn.id)?.length ?? 0}
+                />
+              )}
+            </DragOverlay>
+          </DndContext>
+
+          {confirmDelete && (
+            <ConfirmDialog
+              title={`Eliminar “${board.title}”`}
+              confirmLabel={isSub ? 'Eliminar subtablero' : 'Eliminar tablero'}
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={() => {
+                deleteBoard(board.id)
+                setConfirmDelete(false)
+                onDeleted()
               }}
             >
-              Limpiar filtro
-            </button>
-          </div>
-        )}
-
-        <DndContext
-          accessibility={{ announcements: announce, screenReaderInstructions }}
-          sensors={access.canEdit ? sensors : []}
-          collisionDetection={collision}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => {
-            setActive(null)
-            setOverColumn(null)
-          }}
-        >
-          <div className={`${styles.columns} ${active ? styles.dragging : ''}`}>
-            <SortableContext
-              items={columns.map((c) => `col:${c.id}`)}
-              strategy={horizontalListSortingStrategy}
+              {isSub ? (
+                <p>
+                  Solo se elimina esta vista y sus subetiquetas; las tarjetas siguen en “
+                  {parent?.title}”. Podrás deshacerlo durante unos segundos.
+                </p>
+              ) : (
+                <p>
+                  Se eliminarán {pluralize(columns.length, 'columna', 'columnas')} y{' '}
+                  {pluralize(cards.length, 'tarjeta', 'tarjetas')}. Podrás deshacerlo durante unos
+                  segundos.
+                </p>
+              )}
+            </ConfirmDialog>
+          )}
+          {creatingSub && (
+            <CreateSubboard
+              parentId={board.id}
+              parentTitle={board.title}
+              onClose={() => setCreatingSub(false)}
+              onCreated={(id) => {
+                setCreatingSub(false)
+                onOpenBoard(id)
+              }}
+            />
+          )}
+          {sharing && (
+            <ShareDialog boardId={board.id} title={board.title} onClose={() => setSharing(false)} />
+          )}
+          {leaving && (
+            <ConfirmDialog
+              title={`Salir de “${board.title}”`}
+              confirmLabel="Salir del tablero"
+              onCancel={() => setLeaving(false)}
+              onConfirm={async () => {
+                setLeaving(false)
+                if (me && !(await removeMember(board.id, me))) onDeleted()
+              }}
             >
-              {columns.map((col, idx) => (
-                <Column
-                  key={col.id}
-                  column={col}
-                  siblings={columns}
-                  cards={cardsByColumn.get(col.id) ?? []}
-                  total={totalByColumn.get(col.id) ?? 0}
-                  counts={totalByColumn}
-                  stats={stats}
-                  isLast={col.id === lastColumnId}
-                  startRenaming={col.id === newColumnId}
-                  onRenameStarted={() => setNewColumnId(null)}
-                  dropTarget={active?.type === 'card' && overColumn === col.id}
-                  blocked={
-                    active?.type === 'card' &&
-                    activeCard?.columnId !== col.id &&
-                    limitOf(col) !== null &&
-                    (totalByColumn.get(col.id) ?? 0) >= (limitOf(col) ?? 0)
-                  }
-                  tone={
-                    columns.length > 1
-                      ? idx === 0
-                        ? 'start'
-                        : col.id === lastColumnId
-                          ? 'done'
-                          : 'progress'
-                      : 'start'
-                  }
-                  onOpenCard={onOpenCard}
-                />
-              ))}
-            </SortableContext>
-          </div>
-          <DragOverlay
-            dropAnimation={
-              reducedMotion ? null : { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
-            }
-          >
-            {activeCard && (
-              <CardOverlay
-                card={activeCard}
-                stats={stats.get(activeCard.id)}
-                finished={activeCard.columnId === lastColumnId}
-                done={columns.find((c) => c.id === activeCard.columnId)?.kind === 'done'}
-              />
-            )}
-            {activeColumn && (
-              <ColumnOverlay
-                column={activeColumn}
-                count={cardsByColumn.get(activeColumn.id)?.length ?? 0}
-              />
-            )}
-          </DragOverlay>
-        </DndContext>
-
-        {confirmDelete && (
-          <ConfirmDialog
-            title={`Eliminar “${board.title}”`}
-            confirmLabel="Eliminar tablero"
-            onCancel={() => setConfirmDelete(false)}
-            onConfirm={() => {
-              deleteBoard(board.id)
-              setConfirmDelete(false)
-              onDeleted()
-            }}
-          >
-            <p>
-              Se eliminarán {pluralize(columns.length, 'columna', 'columnas')} y{' '}
-              {pluralize(cards.length, 'tarjeta', 'tarjetas')}. Podrás deshacerlo durante unos
-              segundos.
-            </p>
-          </ConfirmDialog>
-        )}
-        {sharing && (
-          <ShareDialog boardId={board.id} title={board.title} onClose={() => setSharing(false)} />
-        )}
-        {leaving && (
-          <ConfirmDialog
-            title={`Salir de “${board.title}”`}
-            confirmLabel="Salir del tablero"
-            onCancel={() => setLeaving(false)}
-            onConfirm={async () => {
-              setLeaving(false)
-              if (me && !(await removeMember(board.id, me))) onDeleted()
-            }}
-          >
-            <p>
-              Dejarás de ver este tablero. {access.ownerName ?? 'Su dueño'} puede volver a
-              invitarte.
-            </p>
-          </ConfirmDialog>
-        )}
-      </div>
+              <p>
+                Dejarás de ver este tablero. {access.ownerName ?? 'Su dueño'} puede volver a
+                invitarte.
+              </p>
+            </ConfirmDialog>
+          )}
+        </div>
+      </ViewBoardContext.Provider>
     </CanEditContext.Provider>
   )
 }

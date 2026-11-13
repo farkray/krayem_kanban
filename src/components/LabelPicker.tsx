@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useViewBoard } from '../lib/ViewBoard'
 import { LABEL_COLORS, LABEL_COLOR_NAMES, LIMITS, type Label, type LabelColor } from '../lib/types'
 import { useLabelIndex, useLabels } from '../store/hooks'
 import { useStore } from '../store/store'
@@ -100,7 +101,15 @@ export function LabelPicker({
   boardId: string
   labelIds: string[]
 }) {
-  const labels = useLabels(boardId)
+  // Dentro de un subtablero de este tablero también hay subetiquetas: se crean y se ven solo ahí.
+  const view = useViewBoard()
+  const viewParent = useStore((s) => s.boards.find((b) => b.id === view?.boardId)?.parentId)
+  const subId = view && viewParent === boardId ? view.boardId : null
+  const home = subId ?? boardId // dónde se crean las etiquetas nuevas
+  const linkId = subId ? view?.linkLabelId : null // la que vincula el subtablero no se quita
+  const ownLabels = useLabels(home)
+  const parentLabels = useLabels(boardId)
+  const labels = subId ? [...parentLabels, ...ownLabels] : parentLabels
   const index = useLabelIndex()
   const createLabel = useStore((s) => s.createLabel)
   const updateLabel = useStore((s) => s.updateLabel)
@@ -112,11 +121,13 @@ export function LabelPicker({
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [limitNote, setLimitNote] = useState(false)
 
-  const assigned = labelIds.flatMap((id) => index.get(id) ?? [])
+  const assigned = labelIds
+    .flatMap((id) => index.get(id) ?? [])
+    .filter((l) => !l.boardId || l.boardId === boardId || l.boardId === subId)
   const showForm = editing !== null || (open && labels.length === 0)
   const editingLabel = editing && editing !== 'new' ? index.get(editing) : undefined
   const taken = (except?: string) =>
-    labels.filter((l) => l.id !== except).map((l) => l.name.toLowerCase())
+    ownLabels.filter((l) => l.id !== except).map((l) => l.name.toLowerCase())
 
   const toggle = (id: string) => setLimitNote(!toggleCardLabel(cardId, id))
 
@@ -124,7 +135,11 @@ export function LabelPicker({
     <div className={styles.picker}>
       <div className={styles.assigned}>
         {assigned.map((l) => (
-          <LabelChip key={l.id} label={l} onRemove={() => toggle(l.id)} />
+          <LabelChip
+            key={l.id}
+            label={l}
+            onRemove={l.id === linkId ? undefined : () => toggle(l.id)}
+          />
         ))}
         <button
           type="button"
@@ -159,12 +174,12 @@ export function LabelPicker({
                 key={editing ?? 'new'}
                 initial={editingLabel}
                 taken={taken(editingLabel?.id)}
-                suggested={LABEL_COLORS[labels.length % LABEL_COLORS.length]}
+                suggested={LABEL_COLORS[ownLabels.length % LABEL_COLORS.length]}
                 onCancel={() => setEditing(null)}
                 onSubmit={(name, color) => {
                   if (editingLabel) updateLabel(editingLabel.id, { name, color })
                   else {
-                    const id = createLabel(boardId, name, color)
+                    const id = createLabel(home, name, color)
                     if (id) toggleCardLabel(cardId, id) // la etiqueta nueva queda puesta en esta tarjeta
                   }
                   setEditing(null)
@@ -188,23 +203,29 @@ export function LabelPicker({
                       <input
                         type="checkbox"
                         checked={labelIds.includes(l.id)}
+                        disabled={l.id === linkId}
                         onChange={() => toggle(l.id)}
                         aria-label={`Etiqueta ${l.name}`}
                       />
                       <LabelChip label={l} />
+                      {subId && l.boardId === subId && (
+                        <span className={styles.hint}>solo en este subtablero</span>
+                      )}
                     </label>
-                    <button
-                      type="button"
-                      className={styles.edit}
-                      aria-label={`Editar etiqueta ${l.name}`}
-                      onClick={() => setEditing(l.id)}
-                    >
-                      Editar
-                    </button>
+                    {l.boardId === home && (
+                      <button
+                        type="button"
+                        className={styles.edit}
+                        aria-label={`Editar etiqueta ${l.name}`}
+                        onClick={() => setEditing(l.id)}
+                      >
+                        Editar
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
-              {labels.length < LIMITS.labels && (
+              {ownLabels.length < LIMITS.labels && (
                 <button type="button" className={styles.link} onClick={() => setEditing('new')}>
                   + Crear etiqueta
                 </button>

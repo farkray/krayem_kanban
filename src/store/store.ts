@@ -85,6 +85,8 @@ interface Actions {
   applyRemote: <K extends TableKey>(key: K, rows: Data[K]) => void
   // tableros
   createBoard: (title: string) => string | null
+  /** Crea un subtablero de `parentId` que muestra las tarjetas con la etiqueta `labelId`. */
+  createSubboard: (parentId: string, labelId: string, title?: string) => string | null
   renameBoard: (id: string, title: string) => boolean
   /** Cambia el color y/o el icono del tablero (solo el dueño; los demás no pueden escribir el tablero). */
   setBoardAppearance: (id: string, look: { color?: BoardColor; icon?: BoardIconName }) => boolean
@@ -100,7 +102,8 @@ interface Actions {
   setColumnKind: (id: string, kind: ColumnKind) => boolean
   // tarjetas
   /** Devuelve null si el título es inválido o la columna llegó a su límite. */
-  addCard: (columnId: string, title: string) => string | null
+  /** Con `labelId` la tarjeta nace con esa etiqueta (así entra a un subtablero al crearla ahí). */
+  addCard: (columnId: string, title: string, labelId?: string) => string | null
   updateCard: (
     id: string,
     patch: Partial<
@@ -276,6 +279,10 @@ export const useStore = create<Store>((set, get) => {
    * Si una tarjeta apunta a una etiqueta de otro tablero, se cambia por la del mismo nombre en el
    * suyo (si existe) o se quita la referencia.
    */
+  /** Tablero padre de un subtablero (si `boardId` lo es). */
+  const subOf = (boardId: string): string | undefined =>
+    get().boards.find((b) => b.id === boardId && !b.deletedAt)?.parentId
+
   const repairLabelRefs = () => {
     const st = get()
     const labels = live(st.labels)
@@ -287,7 +294,8 @@ export const useStore = create<Store>((set, get) => {
       const next: string[] = []
       for (const id of c.labelIds) {
         const l = byId.get(id)
-        if (!l || !l.boardId || l.boardId === c.boardId) {
+        // Las subetiquetas (de un subtablero de este tablero) también son válidas aquí.
+        if (!l || !l.boardId || l.boardId === c.boardId || subOf(l.boardId) === c.boardId) {
           next.push(id)
           continue
         }
@@ -412,7 +420,7 @@ export const useStore = create<Store>((set, get) => {
       const legacy = live(st.labels).filter((l) => !l.boardId)
       const mine = live(st.boards)
         // Solo los tableros propios (el servidor marca también los míos con ownerId = yo)
-        .filter((b) => roleOf(b.id) === 'owner')
+        .filter((b) => roleOf(b.id) === 'owner' && !b.parentId)
         .sort(byPosition)
       // Siempre se revisa que las tarjetas solo apunten a etiquetas de SU tablero.
       repairLabelRefs()
@@ -448,7 +456,9 @@ export const useStore = create<Store>((set, get) => {
     createBoard: (title) => {
       const t = clean(title, LIMITS.board)
       if (!t) return null
-      const boards = live(get().boards).sort(byPosition)
+      const boards = live(get().boards)
+        .filter((b) => !b.parentId)
+        .sort(byPosition)
       const board: Board = { ...base(), title: t, position: positionAt(boards, boards.length) }
       const keys = positionsFor(DEFAULT_COLUMNS.length)
       const columns: Column[] = DEFAULT_COLUMNS.map((name, i) => ({
@@ -462,6 +472,32 @@ export const useStore = create<Store>((set, get) => {
       put('boards', [board])
       put('columns', columns)
       return board.id
+    },
+
+    createSubboard: (parentId, labelId, title) => {
+      const s = get()
+      const parent = live(s.boards).find((b) => b.id === parentId)
+      const label = live(s.labels).find((l) => l.id === labelId)
+      // Un solo nivel; la etiqueta es del padre; una etiqueta, un subtablero; solo el dueño crea.
+      if (!parent || parent.parentId || roleOf(parentId) !== 'owner') return null
+      if (!label || label.boardId !== parentId) return null
+      const kids = live(s.boards).filter((b) => b.parentId === parentId)
+      if (kids.some((b) => b.linkLabelId === labelId)) return null
+      const t = clean(title ?? label.name, LIMITS.board)
+      if (!t) return null
+      const sub: Board = {
+        ...base(),
+        title: t,
+        position: positionAt(kids.sort(byPosition), kids.length),
+        parentId,
+        linkLabelId: labelId,
+        color: parent.color,
+        icon: parent.icon,
+      }
+      if (!sub.color) delete sub.color
+      if (!sub.icon) delete sub.icon
+      put('boards', [sub])
+      return sub.id
     },
 
     renameBoard: (id, title) => {
@@ -487,12 +523,25 @@ export const useStore = create<Store>((set, get) => {
       const s = get()
       const board = live(s.boards).find((b) => b.id === id)
       if (!board) return
+      // Un subtablero es solo una vista: al borrarlo se van él y sus subetiquetas, no las tarjetas.
+      if (board.parentId) {
+        const snap: Snapshot = {
+          boards: [board],
+          labels: live(s.labels).filter((l) => l.boardId === id),
+        }
+        markDeleted(snap)
+        notify(`Subtablero “${board.title}” eliminado`, () => restore(snap))
+        return
+      }
       const cardIds = live(s.cards)
         .filter((c) => c.boardId === id)
         .map((c) => c.id)
+      const kids = live(s.boards).filter((b) => b.parentId === id)
+      const kidIds = new Set(kids.map((b) => b.id))
       const snap: Snapshot = {
-        boards: [board],
+        boards: [board, ...kids],
         columns: live(s.columns).filter((c) => c.boardId === id),
+        labels: live(s.labels).filter((l) => kidIds.has(l.boardId ?? '')),
         ...cardSnapshot(cardIds),
       }
       markDeleted(snap)
@@ -563,8 +612,9 @@ export const useStore = create<Store>((set, get) => {
     moveBoard: (id, index) => {
       const board = live(get().boards).find((b) => b.id === id)
       if (!board || roleOf(id) !== 'owner') return
+      // Se ordena entre sus hermanos: los tableros de primer nivel, o los subtableros del mismo padre.
       const mine = live(get().boards)
-        .filter((b) => b.id !== id && roleOf(b.id) === 'owner')
+        .filter((b) => b.id !== id && roleOf(b.id) === 'owner' && b.parentId === board.parentId)
         .sort(byPosition)
       put('boards', [{ ...board, position: positionAt(mine, index), updatedAt: stamp() }])
     },
@@ -595,7 +645,7 @@ export const useStore = create<Store>((set, get) => {
 
     /* ---------- tarjetas ---------- */
 
-    addCard: (columnId, title) => {
+    addCard: (columnId, title, labelId) => {
       const t = clean(title, LIMITS.card)
       const col = live(get().columns).find((c) => c.id === columnId)
       if (!t || !col) return null
@@ -610,6 +660,9 @@ export const useStore = create<Store>((set, get) => {
         columnId,
         title: t,
         position: positionAt(cards, cards.length),
+        ...(labelId && live(get().labels).some((l) => l.id === labelId)
+          ? { labelIds: [labelId] }
+          : {}),
       }
       put('cards', [card])
       return card.id
@@ -666,7 +719,8 @@ export const useStore = create<Store>((set, get) => {
       const from = live(st.boards).find((b) => b.id === card.boardId)
       const to = live(st.boards).find((b) => b.id === col.boardId)
       // Mismo dueño y permiso de edición en los dos: así el servidor guarda todo bajo la misma cuenta.
-      if (!from || !to || (from.ownerId ?? null) !== (to.ownerId ?? null)) return false
+      if (!from || !to || to.parentId || (from.ownerId ?? null) !== (to.ownerId ?? null))
+        return false
       if (!canEditBoard(from.id) || !canEditBoard(to.id)) return false
       const siblings = cardsOf(toColumnId)
       const limit = limitOf(col)
@@ -679,7 +733,8 @@ export const useStore = create<Store>((set, get) => {
       const labelIds: string[] = []
       for (const lid of card.labelIds ?? []) {
         const src = live(get().labels).find((l) => l.id === lid)
-        if (!src) continue
+        // Las subetiquetas solo viven en su subtablero: no viajan a otro tablero.
+        if (!src || src.boardId !== card.boardId) continue
         const found = live(get().labels).find(
           (l) => l.boardId === to.id && l.name.toLowerCase() === src.name.toLowerCase(),
         )
@@ -766,15 +821,28 @@ export const useStore = create<Store>((set, get) => {
       const l = live(get().labels).find((x) => x.id === id)
       if (!l) return
       // Las tarjetas conservan el id; al mostrarse se ignoran las etiquetas eliminadas (y "Deshacer" las recupera).
-      markDeleted({ labels: [l] })
+      // Si la etiqueta vincula un subtablero, el subtablero (y sus subetiquetas) se va con ella.
+      const subs = live(get().boards).filter((b) => b.linkLabelId === id)
+      const subIds = new Set(subs.map((b) => b.id))
+      const snap: Snapshot = {
+        labels: [l, ...live(get().labels).filter((x) => subIds.has(x.boardId ?? ''))],
+        ...(subs.length ? { boards: subs } : {}),
+      }
+      markDeleted(snap)
       set((s) => ({ labelFilter: s.labelFilter.filter((f) => f !== id) }))
-      notify(`Etiqueta “${l.name}” eliminada`, () => restore({ labels: [l] }))
+      notify(
+        subs.length
+          ? `Etiqueta “${l.name}” y su subtablero eliminados`
+          : `Etiqueta “${l.name}” eliminada`,
+        () => restore(snap),
+      )
     },
 
     toggleCardLabel: (cardId, labelId) => {
       const c = live(get().cards).find((x) => x.id === cardId)
       const l = live(get().labels).find((x) => x.id === labelId)
-      if (!c || !l || l.boardId !== c.boardId) return false
+      if (!c || !l || (l.boardId !== c.boardId && subOf(l.boardId ?? '') !== c.boardId))
+        return false
       const current = (c.labelIds ?? []).filter((id) => live(get().labels).some((x) => x.id === id))
       const has = current.includes(labelId)
       if (!has && current.length >= LIMITS.cardLabels) return false

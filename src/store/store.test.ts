@@ -624,3 +624,102 @@ describe('tipo Done y asignación', () => {
     expect(S().cards.find((c) => c.id === card)).not.toHaveProperty('assigneeId')
   })
 })
+
+describe('subtableros', () => {
+  const setup = () => {
+    const a = S().createBoard('Proyecto')!
+    const [c1, c2] = liveCols(a)
+    const coppel = S().createLabel(a, 'Coppel', 'blue')!
+    const otro = S().createLabel(a, 'Otro', 'red')!
+    const t1 = S().addCard(c1.id, 'De Coppel')!
+    const t2 = S().addCard(c1.id, 'De otro')!
+    S().toggleCardLabel(t1, coppel)
+    S().toggleCardLabel(t2, otro)
+    return { a, c1, c2, coppel, otro, t1, t2 }
+  }
+  const boardOf = (id: string) => S().boards.find((b) => b.id === id)!
+
+  it('se crea con una etiqueta del padre; una etiqueta, un subtablero; un solo nivel', () => {
+    const { a, coppel, otro } = setup()
+    const sub = S().createSubboard(a, coppel)!
+    expect(boardOf(sub)).toMatchObject({ parentId: a, linkLabelId: coppel, title: 'Coppel' })
+    expect(liveCols(sub)).toHaveLength(0) // no tiene columnas propias
+    expect(S().createSubboard(a, coppel)).toBeNull() // ya existe
+    expect(S().createSubboard(sub, otro)).toBeNull() // un subtablero no tiene subtableros
+    const ajena = S().createBoard('Otro')!
+    expect(S().createSubboard(ajena, coppel)).toBeNull() // la etiqueta debe ser del padre
+  })
+
+  it('las tarjetas son las del padre: mover una cambia en ambos y crear ahí pone la etiqueta', () => {
+    const { a, c1, c2, coppel, t1 } = setup()
+    const sub = S().createSubboard(a, coppel)!
+    expect(S().moveCard(t1, c2.id, 0)).toBe(true)
+    expect(S().cards.find((c) => c.id === t1)).toMatchObject({ boardId: a, columnId: c2.id })
+    const nueva = S().addCard(c1.id, 'Nueva', coppel)!
+    expect(S().cards.find((c) => c.id === nueva)).toMatchObject({ boardId: a, labelIds: [coppel] })
+    expect(boardOf(sub).parentId).toBe(a)
+  })
+
+  it('las subetiquetas viven en el subtablero y se pueden poner a tarjetas del padre', () => {
+    const { a, coppel, t1 } = setup()
+    const sub = S().createSubboard(a, coppel)!
+    const urgente = S().createLabel(sub, 'Urgente', 'red')!
+    expect(S().toggleCardLabel(t1, urgente)).toBe(true)
+    expect(S().cards.find((c) => c.id === t1)?.labelIds).toEqual([coppel, urgente])
+    // una subetiqueta de otro subtablero no sirve para una tarjeta de otro tablero
+    const b = S().createBoard('B')!
+    const tb = S().addCard(liveCols(b)[0].id, 'x')!
+    expect(S().toggleCardLabel(tb, urgente)).toBe(false)
+  })
+
+  it('al pasar la tarjeta a otro tablero, las subetiquetas no viajan', () => {
+    const { a, coppel, t1 } = setup()
+    const sub = S().createSubboard(a, coppel)!
+    const urgente = S().createLabel(sub, 'Urgente', 'red')!
+    S().toggleCardLabel(t1, urgente)
+    const b = S().createBoard('B')!
+    expect(S().moveCardToBoard(t1, liveCols(b)[0].id)).toBe(true)
+    const names = (S().cards.find((c) => c.id === t1)?.labelIds ?? []).map(
+      (id) => S().labels.find((l) => l.id === id)?.name,
+    )
+    expect(names).toEqual(['Coppel'])
+    expect(S().moveCardToBoard(t1, liveCols(a)[0].id)).toBe(true)
+  })
+
+  it('borrar el subtablero no toca las tarjetas; borrar el padre o la etiqueta se lo lleva, con deshacer', () => {
+    const { a, coppel, t1 } = setup()
+    const sub = S().createSubboard(a, coppel)!
+    const urgente = S().createLabel(sub, 'Urgente', 'red')!
+    S().deleteBoard(sub)
+    expect(boardOf(sub).deletedAt).toBeDefined()
+    expect(S().labels.find((l) => l.id === urgente)?.deletedAt).toBeDefined()
+    expect(S().cards.find((c) => c.id === t1)?.deletedAt).toBeUndefined()
+    S().toast!.undo!()
+    expect(boardOf(sub).deletedAt).toBeUndefined()
+
+    S().deleteLabel(coppel) // la etiqueta vinculada se lleva el subtablero
+    expect(boardOf(sub).deletedAt).toBeDefined()
+    S().toast!.undo!()
+    expect(boardOf(sub).deletedAt).toBeUndefined()
+
+    S().deleteBoard(a) // el padre se lleva a sus subtableros
+    expect(boardOf(sub).deletedAt).toBeDefined()
+    S().toast!.undo!()
+    expect(boardOf(sub).deletedAt).toBeUndefined()
+    expect(boardOf(a).deletedAt).toBeUndefined()
+  })
+
+  it('reordena subtableros entre hermanos sin mezclarlos con los de primer nivel', () => {
+    const { a, coppel, otro } = setup()
+    const s1 = S().createSubboard(a, coppel)!
+    const s2 = S().createSubboard(a, otro)!
+    const order = () =>
+      S()
+        .boards.filter((b) => b.parentId === a && !b.deletedAt)
+        .sort((x, y) => (x.position < y.position ? -1 : 1))
+        .map((b) => b.id)
+    expect(order()).toEqual([s1, s2])
+    S().moveBoard(s2, 0)
+    expect(order()).toEqual([s2, s1])
+  })
+})

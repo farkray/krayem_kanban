@@ -12,8 +12,12 @@ import styles from './FilterMenu.module.css'
 
 /** Botón "Filtros": filtra las tarjetas del tablero por etiqueta (cualquiera de las marcadas). */
 export function FilterMenu({ boardId }: { boardId: string | null }) {
-  const labels = useLabels(boardId)
-  const people = useParticipants(boardId)
+  // En un subtablero: las etiquetas del principal y las propias; las personas son las del principal.
+  const parentId = useStore((s) => s.boards.find((b) => b.id === boardId)?.parentId)
+  const own = useLabels(boardId)
+  const fromParent = useLabels(parentId)
+  const labels = parentId ? [...fromParent, ...own] : own
+  const people = useParticipants(parentId ?? boardId)
   const me = useAuth((s) => s.userId)
   const assignees = useStore((s) => s.assigneeFilter)
   const setAssignees = useStore((s) => s.setAssigneeFilter)

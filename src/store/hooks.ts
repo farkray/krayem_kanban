@@ -149,12 +149,18 @@ export interface BoardSummary {
   sharedBy?: { name: string; role: 'editor' | 'viewer' }
   /** Mi tablero, compartido con otras personas. */
   memberCount: number
+  /** Si es subtablero: el tablero del que cuelga y la etiqueta que lo vincula. */
+  parentId?: string
+  linkLabel?: { name: string; color: string }
+  /** Cuántos subtableros tiene. */
+  subCount: number
 }
 
 export function useBoardSummaries(): BoardSummary[] {
   const boards = useBoards()
   const columns = useStore((s) => s.columns)
   const cards = useStore((s) => s.cards)
+  const labels = useStore((s) => s.labels)
   const shared = useAccess((s) => s.shared)
   const members = useAccess((s) => s.members)
   const me = useAuth((s) => s.userId)
@@ -162,27 +168,49 @@ export function useBoardSummaries(): BoardSummary[] {
     const colCount = new Map<string, number>()
     for (const c of live(columns)) colCount.set(c.boardId, (colCount.get(c.boardId) ?? 0) + 1)
     const cardCount = new Map<string, number>()
-    for (const c of live(cards)) cardCount.set(c.boardId, (cardCount.get(c.boardId) ?? 0) + 1)
-    return boards.map((b) => {
-      const foreign = !!b.ownerId && !!me && b.ownerId !== me
-      const s = shared.find((x) => x.boardId === b.id)
-      return {
-        id: b.id,
-        title: b.title,
-        color: b.color,
-        icon: b.icon,
-        columnCount: colCount.get(b.id) ?? 0,
-        cardCount: cardCount.get(b.id) ?? 0,
-        sharedBy: foreign
-          ? {
-              name: s ? displayName({ email: s.ownerEmail, alias: s.ownerAlias }) : '',
-              role: s?.role ?? 'viewer',
-            }
-          : undefined,
-        memberCount: foreign ? 0 : members.filter((m) => m.boardId === b.id).length,
-      }
-    })
-  }, [boards, columns, cards, shared, members, me])
+    const labelCount = new Map<string, number>() // tarjetas por etiqueta (para los subtableros)
+    for (const c of live(cards)) {
+      cardCount.set(c.boardId, (cardCount.get(c.boardId) ?? 0) + 1)
+      for (const l of c.labelIds ?? []) labelCount.set(l, (labelCount.get(l) ?? 0) + 1)
+    }
+    const ids = new Set(boards.map((b) => b.id))
+    const labelById = new Map(live(labels).map((l) => [l.id, l]))
+    const subCount = new Map<string, number>()
+    for (const b of boards)
+      if (b.parentId) subCount.set(b.parentId, (subCount.get(b.parentId) ?? 0) + 1)
+    return (
+      boards
+        // Un subtablero sin su padre en este dispositivo no se muestra (no tendría de dónde sacar nada).
+        .filter((b) => !b.parentId || ids.has(b.parentId))
+        .map((b) => {
+          const foreign = !!b.ownerId && !!me && b.ownerId !== me
+          const sourceId = b.parentId ?? b.id
+          const s = shared.find((x) => x.boardId === sourceId)
+          const link = b.linkLabelId ? labelById.get(b.linkLabelId) : undefined
+          return {
+            id: b.id,
+            title: b.title,
+            color: b.color,
+            icon: b.icon,
+            columnCount: colCount.get(sourceId) ?? 0,
+            cardCount: b.parentId
+              ? (labelCount.get(b.linkLabelId ?? '') ?? 0)
+              : (cardCount.get(b.id) ?? 0),
+            sharedBy: foreign
+              ? {
+                  name: s ? displayName({ email: s.ownerEmail, alias: s.ownerAlias }) : '',
+                  role: s?.role ?? 'viewer',
+                }
+              : undefined,
+            memberCount:
+              foreign || b.parentId ? 0 : members.filter((m) => m.boardId === b.id).length,
+            parentId: b.parentId,
+            linkLabel: link ? { name: link.name, color: link.color } : undefined,
+            subCount: subCount.get(b.id) ?? 0,
+          }
+        })
+    )
+  }, [boards, columns, cards, labels, shared, members, me])
 }
 
 export function useAttachments(cardId: string) {

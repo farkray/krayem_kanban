@@ -19,7 +19,10 @@ export function MoveCard({ card }: { card: Card }) {
   const targets = useMemo(
     () =>
       boards.filter(
-        (b) => b.id !== card.boardId && (b.ownerId ?? null) === (current?.ownerId ?? null),
+        (b) =>
+          !b.parentId &&
+          b.id !== card.boardId &&
+          (b.ownerId ?? null) === (current?.ownerId ?? null),
       ),
     [boards, card.boardId, current?.ownerId],
   )
