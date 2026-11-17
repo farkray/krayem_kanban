@@ -24,8 +24,8 @@
   --color-sidebar: rgba(255, 255, 255, 0.5);
   --color-column: #f6f9f8;
   --color-card: #e7edeb; /* gris verdoso: destaca sobre la columna */
-  --color-card-border: rgb(var(--ink) / 0.18);
-  --color-card-border-hover: rgb(var(--ink) / 0.34);
+  --color-card-border: rgb(var(--ink) / 0.28);
+  --color-card-border-hover: rgb(var(--ink) / 0.45);
   --color-card-done: #f2f6f5; /* finalizadas: prácticamente el fondo de la columna */
   --color-card-done-border: rgb(var(--ink) / 0.14);
   --color-text-done: #566a6f; /* gris de apoyo: AA, sin pasar de ahí */
@@ -38,6 +38,7 @@
   --color-selected: rgb(var(--ink) / 0.14);
   --color-chip: rgba(255, 255, 255, 0.78); /* chips sobre la tarjeta */
   --color-border: rgb(var(--ink) / 0.12);
+  --color-field-border: rgb(var(--ink) / 0.5); /* borde de campos: ≥ 3:1 (WCAG 1.4.11) */
   --color-scrim: rgba(14, 32, 38, 0.4);
 
   /* Texto */
@@ -189,8 +190,8 @@
     --color-sidebar: rgba(17, 27, 31, 0.5);
     --color-column: #131d21;
     --color-card: #1f2d33; /* un escalón por encima de la columna */
-    --color-card-border: rgb(var(--ink) / 0.1);
-    --color-card-border-hover: rgb(var(--ink) / 0.22);
+    --color-card-border: rgb(var(--ink) / 0.2);
+    --color-card-border-hover: rgb(var(--ink) / 0.34);
     --color-card-done: #141e22;
     --color-card-done-border: rgb(var(--ink) / 0.13);
     --color-text-done: #8ea2a7;
@@ -203,6 +204,7 @@
     --color-selected: rgb(var(--ink) / 0.14);
     --color-chip: rgba(255, 255, 255, 0.08);
     --color-border: rgb(var(--ink) / 0.1);
+    --color-field-border: rgb(var(--ink) / 0.42);
     --color-scrim: rgba(0, 8, 10, 0.6);
 
     --color-text: #e6f0f1;

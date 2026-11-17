@@ -19,7 +19,7 @@
 .header {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* con título de varias líneas, los controles quedan arriba */
   gap: var(--space-2);
   padding: var(--space-4) var(--space-3) var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
@@ -46,9 +46,11 @@
   font-weight: 600;
   text-align: left;
   cursor: text;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* El título completo se ve siempre: si no cabe, baja de renglón (nunca se corta con "…") */
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .count {
@@ -225,7 +227,7 @@
   width: 20px;
   height: 36px;
   color: var(--color-text-muted);
-  opacity: 0.65;
+  opacity: 0.9; /* el agarre se ve siempre: ≥ 3:1 sobre la columna */
   cursor: grab;
 }
 
