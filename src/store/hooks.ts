@@ -247,8 +247,22 @@ export function useLabelIndex() {
   return useMemo(() => new Map(live(labels).map((l) => [l.id, l])), [labels])
 }
 
-/** Notas generales de un tablero (vacío si aún no hay). */
-export function useNote(boardId: string | null | undefined) {
+/** Notas de un tablero: primero las fijadas (en el orden en que se fijaron), luego las demás (la más nueva arriba). */
+export function useNotes(boardId: string | null | undefined) {
   const notes = useStore((s) => s.notes)
-  return notes.find((n) => n.boardId === boardId && !n.deletedAt)?.bodyMd ?? ''
+  return useMemo(() => {
+    const mine = live(notes).filter((n) => n.boardId === boardId)
+    const pinned = mine
+      .filter((n) => n.pinned)
+      .sort((a, b) => (a.pinnedAt ?? '').localeCompare(b.pinnedAt ?? ''))
+    // Misma marca de tiempo (milisegundo): la que se agregó después va primero
+    const order = new Map(mine.map((n, i) => [n.id, i]))
+    const others = mine
+      .filter((n) => !n.pinned)
+      .sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0),
+      )
+    return { pinned, others }
+  }, [notes, boardId])
 }

@@ -246,13 +246,16 @@ export interface Like extends Base {
   userId: string
 }
 
-/** Notas generales del tablero (Markdown): enlaces, acuerdos… Una por tablero, con id `note-<id del tablero>`. */
+/**
+ * Nota general del tablero (Markdown): enlaces, acuerdos… Un tablero tiene varias, como tarjetas.
+ * Las fijadas van arriba, en el orden en que se fijaron (`pinnedAt`).
+ */
 export interface Note extends Base {
   boardId: string
   bodyMd: string
+  pinned?: boolean
+  pinnedAt?: string
 }
-
-export const noteIdOf = (boardId: string) => `note-${boardId}`
 
 export interface Data {
   boards: Board[]

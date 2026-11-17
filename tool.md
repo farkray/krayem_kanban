@@ -370,10 +370,13 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - En la interfaz, un invitado no ve «Nuevo tablero» (portada y barra lateral) ni «Crear subtablero»; no se le siembra un tablero inicial; si no le han compartido nada, la portada se lo explica.
 - Lo hace cumplir el **servidor**: rechaza cualquier escritura de un invitado sobre un tablero que no exista ya (crear tableros) o sobre filas sin tablero. Si a alguien con tableros propios se le da el rol de invitado, conserva y sigue editando los que ya tenía; solo deja de poder crear nuevos.
 
-## 24. Notas del tablero (implementado)
+## 24. Notas del tablero (implementado, estilo Google Keep)
 
-- Cada tablero tiene un panel lateral de **notas generales** (Markdown) para dejar lo que todos necesitan a la mano: p. ej. el enlace de la carpeta de Google Drive, acuerdos o accesos. Se abre y se cierra con el botón **Notas** del encabezado del tablero (o la X del panel) y se recuerda abierto entre visitas.
-- Se escribe con **Escribir / Editar notas** (Markdown: enlaces `[texto](url)`, listas, negritas; los enlaces sueltos son clicables y abren en pestaña nueva) y se guarda con **Guardar** (Ctrl/Cmd+Enter); Escape cancela.
-- Es compartido: lo que escribe el dueño o un **editor** lo ve todo el tablero en vivo; un **lector** las ve pero no las edita. En un subtablero se muestran las notas del tablero de origen. Eliminar el tablero se lleva sus notas (y «Deshacer» las devuelve).
-- En pantallas anchas el panel se acomoda a la izquierda del tablero; en teléfono se abre encima, casi a pantalla completa.
-- Datos: una fila por tablero en la tabla `notes` (`id = note-<id del tablero>`), sincronizada como el resto; hasta 20 000 caracteres.
+- Cada tablero tiene un panel lateral de **notas**: botón **Notas** en el encabezado (o la X del panel); se recuerda abierto entre visitas. Referencia de interfaz: Google Keep.
+- **Cada nota es una tarjeta.** «Tomar una nota…» crea una; las tarjetas muestran el texto con su formato, los enlaces (p. ej. una carpeta de Google Drive) son clicables y la más nueva queda arriba.
+- **Editar en el sitio:** botón de lápiz o doble clic sobre la tarjeta. El editor muestra el formato ya aplicado y responde a atajos: **Ctrl/Cmd+B** negrita, **+I** cursiva, **+K** enlace, **+Shift+S** tachado, **+Shift+8 / 7 / 9** viñetas, numerada y tareas, **+E** código. Se **guarda sola** mientras escribes; **Listo**, **Esc** o **Ctrl/Cmd+Enter** vuelven al modo tarjetas. Una nota que se deja vacía no se conserva.
+- **Fijar:** el pin sube la nota a «Fijadas»; **la primera que se fija queda arriba y así sucesivamente** (orden de fijado); quitar el pin la devuelve a «Otras». Las fijadas llevan borde de acento y el botón queda marcado (no dependen solo del color).
+- **Eliminar:** con aviso «Deshacer» (10 s).
+- **Permisos:** el dueño y los **editores** crean, editan, fijan y eliminan (en vivo para todos los miembros); un **lector** solo las ve. En un subtablero se muestran las del tablero de origen; eliminar el tablero se lleva sus notas.
+- Pantallas anchas: el panel se acomoda a la izquierda del tablero; teléfono: se abre encima, casi a pantalla completa.
+- Datos: tabla `notes` (`bodyMd`, `pinned`, `pinnedAt`), sincronizada como el resto; hasta 20 000 caracteres por nota. La nota única de la versión anterior se conserva como una tarjeta más.

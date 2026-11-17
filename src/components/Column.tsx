@@ -134,7 +134,7 @@ export function Column({
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <h3 className={styles.title}>
+            <h2 className={styles.title}>
               <button
                 type="button"
                 className={styles.titleBtn}
@@ -143,7 +143,7 @@ export function Column({
               >
                 {column.title}
               </button>
-            </h3>
+            </h2>
           )}
           <span className={styles.count}>
             <span className={`${styles.dot} ${styles[tone]}`} aria-hidden="true" />
@@ -241,7 +241,7 @@ export function ColumnOverlay({ column, count }: { column: ColumnModel; count: n
     <section className={`${styles.column} ${styles.lifted}`}>
       <header className={styles.header}>
         <div className={styles.headText}>
-          <h3 className={styles.title}>{column.title}</h3>
+          <h2 className={styles.title}>{column.title}</h2>
           <span className={styles.count}>{pluralize(count, 'tarjeta', 'tarjetas')}</span>
         </div>
       </header>

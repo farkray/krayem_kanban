@@ -8,7 +8,6 @@ import {
   DEFAULT_COLUMNS,
   LIMITS,
   MAX_COLUMNS,
-  noteIdOf,
   TABLE_KEYS,
   COLUMN_KIND_NAMES,
   limitOf,
@@ -102,8 +101,13 @@ interface Actions {
   /** Cambia el color y/o el icono del tablero (solo el dueño; los demás no pueden escribir el tablero). */
   setBoardAppearance: (id: string, look: { color?: BoardColor; icon?: BoardIconName }) => boolean
   deleteBoard: (id: string) => void
-  /** Guarda las notas generales del tablero (Markdown). Devuelve false si no cabe o no se puede editar. */
-  saveNote: (boardId: string, bodyMd: string) => boolean
+  // notas del tablero (como tarjetas)
+  addNote: (boardId: string, bodyMd?: string) => string | null
+  updateNote: (id: string, bodyMd: string) => boolean
+  /** Fija o quita de fijadas. Las fijadas quedan arriba en el orden en que se fijaron. */
+  togglePinNote: (id: string) => void
+  /** `silent`: sin aviso de "Deshacer" (p. ej. una nota que se dejó vacía). */
+  deleteNote: (id: string, silent?: boolean) => void
   // columnas
   addColumn: (boardId: string, title: string) => string | null
   renameColumn: (id: string, title: string) => boolean
@@ -547,18 +551,46 @@ export const useStore = create<Store>((set, get) => {
       return true
     },
 
-    saveNote: (boardId, bodyMd) => {
-      if (bodyMd.length > LIMITS.note) return false
-      if (!live(get().boards).some((b) => b.id === boardId)) return false
-      const id = noteIdOf(boardId)
-      const existing = get().notes.find((n) => n.id === id)
-      const ts = stamp()
-      const note: Note = existing
-        ? { ...existing, bodyMd, updatedAt: ts }
-        : { id, boardId, bodyMd, createdAt: ts, updatedAt: ts }
-      delete note.deletedAt
+    addNote: (boardId, bodyMd = '') => {
+      if (bodyMd.length > LIMITS.note) return null
+      if (!live(get().boards).some((b) => b.id === boardId)) return null
+      const note: Note = { ...base(), boardId, bodyMd }
       put('notes', [note])
+      return note.id
+    },
+
+    updateNote: (id, bodyMd) => {
+      const n = live(get().notes).find((x) => x.id === id)
+      if (!n || bodyMd.length > LIMITS.note) return false
+      if (n.bodyMd === bodyMd) return true
+      put('notes', [{ ...n, bodyMd, updatedAt: stamp() }])
       return true
+    },
+
+    togglePinNote: (id) => {
+      const n = live(get().notes).find((x) => x.id === id)
+      if (!n) return
+      const ts = stamp()
+      const next: Note = { ...n, updatedAt: ts }
+      if (n.pinned) {
+        next.pinned = false
+        delete next.pinnedAt
+      } else {
+        next.pinned = true
+        // Marca estrictamente creciente: dos fijados seguidos conservan su orden aunque caigan en el mismo milisegundo
+        const last = live(get().notes)
+          .filter((x) => x.boardId === n.boardId && x.pinnedAt)
+          .reduce((m, x) => (x.pinnedAt! > m ? x.pinnedAt! : m), '')
+        next.pinnedAt = last && last >= ts ? new Date(Date.parse(last) + 1).toISOString() : ts
+      }
+      put('notes', [next])
+    },
+
+    deleteNote: (id, silent = false) => {
+      const n = live(get().notes).find((x) => x.id === id)
+      if (!n) return
+      markDeleted({ notes: [n] })
+      if (!silent) notify('Nota eliminada', () => restore({ notes: [n] }))
     },
 
     deleteBoard: (id) => {

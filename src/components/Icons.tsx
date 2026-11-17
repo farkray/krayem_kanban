@@ -218,3 +218,15 @@ export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Svg>
 )
+
+export const PinIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v6" />
+  </Svg>
+)
+
+export const EditIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />
+  </Svg>
+)

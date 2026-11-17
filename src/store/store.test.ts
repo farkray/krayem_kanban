@@ -1,7 +1,9 @@
 import { db } from '../db/db'
 import { byPosition } from '../lib/position'
 import { cardInSub, linkIdsOf, newCardLabelsOf } from '../lib/types'
+import { act, renderHook } from '@testing-library/react'
 import { setGuestMode, setRoleResolver } from '../lib/access'
+import { useNotes } from './hooks'
 import { flush, resetInit, resetStore, useStore } from './store'
 
 const S = () => useStore.getState()
@@ -805,50 +807,74 @@ describe('cuenta de invitado', () => {
   })
 })
 
-describe('notas del tablero', () => {
+describe('notas del tablero (como tarjetas)', () => {
   afterEach(() => setRoleResolver(null))
+  const live = () => S().notes.filter((n) => !n.deletedAt)
 
-  it('crea y actualiza la nota única del tablero (id determinista) y respeta el límite', () => {
+  it('crea notas (varias por tablero), las edita y respeta el límite', () => {
     const b = S().createBoard('X')!
-    expect(S().saveNote(b, 'https://drive.google.com/abc')).toBe(true)
-    expect(S().notes).toHaveLength(1)
-    expect(S().notes[0]).toMatchObject({
-      id: `note-${b}`,
-      boardId: b,
-      bodyMd: 'https://drive.google.com/abc',
-    })
-    expect(S().saveNote(b, 'otra')).toBe(true)
-    expect(S().notes).toHaveLength(1) // se actualiza, no se duplica
-    expect(S().notes[0].bodyMd).toBe('otra')
-    expect(S().saveNote(b, 'x'.repeat(20001))).toBe(false)
-    expect(S().saveNote('no-existe', 'hola')).toBe(false)
+    const n1 = S().addNote(b, 'https://drive.google.com/abc')!
+    const n2 = S().addNote(b)!
+    expect(live()).toHaveLength(2)
+    expect(S().updateNote(n2, 'otra')).toBe(true)
+    expect(live().find((n) => n.id === n2)?.bodyMd).toBe('otra')
+    expect(S().updateNote(n1, 'x'.repeat(20001))).toBe(false)
+    expect(S().addNote('no-existe', 'hola')).toBeNull()
+    expect(S().updateNote('no-existe', 'hola')).toBe(false)
   })
 
-  it('en solo lectura no se guarda; un editor sí', () => {
+  it('fijar: la primera que se fija queda arriba y así sucesivamente; desfijar la baja', () => {
+    const b = S().createBoard('X')!
+    const [a, c, d] = ['A', 'B', 'C'].map((t) => S().addNote(b, t)!)
+    const { result } = renderHook(() => useNotes(b))
+    expect(result.current.pinned).toHaveLength(0)
+    // sin fijar: la más nueva arriba
+    expect(result.current.others.map((n) => n.bodyMd)).toEqual(['C', 'B', 'A'])
+    act(() => S().togglePinNote(c))
+    act(() => S().togglePinNote(d))
+    act(() => S().togglePinNote(a))
+    expect(result.current.pinned.map((n) => n.bodyMd)).toEqual(['B', 'C', 'A']) // orden en que se fijaron
+    expect(result.current.others).toHaveLength(0)
+    act(() => S().togglePinNote(d)) // se quita de fijadas
+    expect(result.current.pinned.map((n) => n.bodyMd)).toEqual(['B', 'A'])
+    expect(result.current.others.map((n) => n.bodyMd)).toEqual(['C'])
+    expect(live().find((n) => n.id === d)?.pinnedAt).toBeUndefined()
+  })
+
+  it('eliminar se puede deshacer (y vuelve a su lugar fijado); silencioso no avisa', () => {
+    const b = S().createBoard('X')!
+    const n = S().addNote(b, 'nota')!
+    S().togglePinNote(n)
+    S().deleteNote(n)
+    expect(live()).toHaveLength(0)
+    S().toast!.undo!()
+    expect(live()[0]).toMatchObject({ id: n, pinned: true })
+    const antes = S().toast?.id
+    S().deleteNote(n, true)
+    expect(S().toast?.id).toBe(antes)
+  })
+
+  it('en solo lectura no se escribe; un editor sí', () => {
     const b = S().createBoard('X')!
     setRoleResolver(() => 'viewer')
-    S().saveNote(b, 'no')
-    expect(S().notes).toHaveLength(0)
+    S().addNote(b, 'no')
+    expect(live()).toHaveLength(0)
     setRoleResolver(() => 'editor')
-    S().saveNote(b, 'sí')
-    expect(S().notes.map((n) => n.bodyMd)).toEqual(['sí'])
+    S().addNote(b, 'sí')
+    expect(live().map((n) => n.bodyMd)).toEqual(['sí'])
   })
 
-  it('eliminar el tablero se lleva sus notas y deshacer las devuelve', () => {
-    const b = S().createBoard('X')!
-    S().saveNote(b, 'nota')
-    S().deleteBoard(b)
-    expect(S().notes[0].deletedAt).toBeTruthy()
-    S().toast!.undo!()
-    expect(S().notes[0].deletedAt).toBeUndefined()
-  })
-
-  it('purgeBoards borra también las notas del dispositivo', async () => {
+  it('eliminar el tablero se lleva sus notas y deshacer las devuelve; purgeBoards las borra del dispositivo', async () => {
     const a = S().createBoard('A')!
-    S().createBoard('B')
-    S().saveNote(a, 'nota')
+    const c = S().createBoard('C')!
+    S().addNote(a, 'nota a')
+    S().addNote(c, 'nota c')
+    S().deleteBoard(a)
+    expect(S().notes.find((n) => n.boardId === a)?.deletedAt).toBeTruthy()
+    S().toast!.undo!()
+    expect(S().notes.find((n) => n.boardId === a)?.deletedAt).toBeUndefined()
     await S().purgeBoards([a])
-    expect(S().notes).toHaveLength(0)
-    expect(await db.notes.count()).toBe(0)
+    expect(S().notes.map((n) => n.boardId)).toEqual([c])
+    expect(await db.notes.count()).toBe(1)
   })
 })
