@@ -393,6 +393,17 @@ describe('tipo de columna y límites (WIP)', () => {
     expect(liveCards(doing.id)).toHaveLength(2)
   })
 
+  it('color del encabezado: elegir, quitar y rechazar valores fuera de la paleta', () => {
+    const { todo } = setup()
+    const col = () => S().columns.find((c) => c.id === todo.id)!
+    expect(S().setColumnColor(todo.id, 'mint')).toBe(true)
+    expect(col().headerColor).toBe('mint')
+    expect(S().setColumnColor(todo.id, 'rojo' as never)).toBe(false)
+    expect(col().headerColor).toBe('mint')
+    expect(S().setColumnColor(todo.id, null)).toBe(true)
+    expect(col().headerColor).toBeUndefined()
+  })
+
   it('Next admite 4 y una columna estándar no tiene límite', () => {
     const { todo, done } = setup()
     expect(S().setColumnKind(todo.id, 'next')).toBe(true)

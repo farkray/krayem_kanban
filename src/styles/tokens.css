@@ -23,6 +23,13 @@
   --color-surface-glass: rgba(250, 253, 252, 0.74); /* barra superior */
   --color-sidebar: rgba(255, 255, 255, 0.5);
   --color-column: #f6f9f8;
+  /* Encabezados de columna: tonos claros; el texto negro (--color-text) rinde ≥ 12:1 sobre todos */
+  --head-sky: #d6e8fb;
+  --head-mint: #d3f0e1;
+  --head-sun: #fbeeb8;
+  --head-peach: #fbdcc4;
+  --head-rose: #f9d6e2;
+  --head-lilac: #e3dafa;
   --color-card: #e7edeb; /* gris verdoso: destaca sobre la columna */
   --color-card-border: rgb(var(--ink) / 0.28);
   --color-card-border-hover: rgb(var(--ink) / 0.45);
@@ -189,6 +196,12 @@
     --color-surface-glass: rgba(17, 27, 31, 0.74);
     --color-sidebar: rgba(17, 27, 31, 0.5);
     --color-column: #131d21;
+    --head-sky: #223c57;
+    --head-mint: #1f4636;
+    --head-sun: #4a4018;
+    --head-peach: #50301b;
+    --head-rose: #502536;
+    --head-lilac: #38305a;
     --color-card: #1f2d33; /* un escalón por encima de la columna */
     --color-card-border: rgb(var(--ink) / 0.2);
     --color-card-border-hover: rgb(var(--ink) / 0.34);

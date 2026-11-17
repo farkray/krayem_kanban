@@ -8,6 +8,7 @@ import { pluralize } from '../lib/format'
 import {
   COLUMN_KIND_NAMES,
   LIMITS,
+  headerColorOf,
   kindOf,
   limitOf,
   type Card as CardModel,
@@ -62,6 +63,7 @@ export function Column({
   const deleteColumn = useStore((s) => s.deleteColumn)
   const addCard = useStore((s) => s.addCard)
   const setColumnKind = useStore((s) => s.setColumnKind)
+  const setColumnColor = useStore((s) => s.setColumnColor)
   const canEdit = useCanEdit()
   // En un subtablero las columnas son las del padre: se ven, pero solo se cambian allá.
   const view = useViewBoard()
@@ -105,7 +107,7 @@ export function Column({
       className={`${styles.column} ${sortable.isDragging ? styles.dragging : ''} ${dropTarget ? (blocked ? styles.dropBlocked : styles.dropTarget) : ''}`}
       aria-label={column.title}
     >
-      <header className={styles.header}>
+      <header className={styles.header} data-color={headerColorOf(column) ?? undefined}>
         {canEditColumns && (
           <button
             type="button"
@@ -162,7 +164,11 @@ export function Column({
           </span>
         </div>
         {canEditColumns && (
-          <ColumnKindMenu column={column} onChange={(k) => setColumnKind(column.id, k)} />
+          <ColumnKindMenu
+            column={column}
+            onChange={(k) => setColumnKind(column.id, k)}
+            onColor={(c) => setColumnColor(column.id, c)}
+          />
         )}
         {canEditColumns && (
           <button
@@ -239,7 +245,7 @@ export function Column({
 export function ColumnOverlay({ column, count }: { column: ColumnModel; count: number }) {
   return (
     <section className={`${styles.column} ${styles.lifted}`}>
-      <header className={styles.header}>
+      <header className={styles.header} data-color={headerColorOf(column) ?? undefined}>
         <div className={styles.headText}>
           <h2 className={styles.title}>{column.title}</h2>
           <span className={styles.count}>{pluralize(count, 'tarjeta', 'tarjetas')}</span>

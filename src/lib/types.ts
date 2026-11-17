@@ -180,11 +180,28 @@ export const WIP_LIMITS: Record<ColumnKind, number | null> = {
 export const kindOf = (c: { kind?: ColumnKind }): ColumnKind => c.kind ?? 'standard'
 export const limitOf = (c: { kind?: ColumnKind }): number | null => WIP_LIMITS[kindOf(c)]
 
+/** Tonos claros para el encabezado de una columna (tokens.css: --head-<color>). Texto siempre legible. */
+export const HEADER_COLORS = ['sky', 'mint', 'sun', 'peach', 'rose', 'lilac'] as const
+export type HeaderColor = (typeof HEADER_COLORS)[number]
+export const HEADER_COLOR_NAMES: Record<HeaderColor, string> = {
+  sky: 'Cielo',
+  mint: 'Menta',
+  sun: 'Sol',
+  peach: 'Durazno',
+  rose: 'Rosa',
+  lilac: 'Lila',
+}
+export const headerColorOf = (c: { headerColor?: string }): HeaderColor | null =>
+  (HEADER_COLORS as readonly string[]).includes(c.headerColor ?? '')
+    ? (c.headerColor as HeaderColor)
+    : null
+
 export interface Column extends Base {
   boardId: string
   title: string
   position: string
   kind?: ColumnKind // ausente = estándar
+  headerColor?: HeaderColor // ausente = sin color
 }
 
 export interface Card extends Base {

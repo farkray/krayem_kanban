@@ -23,6 +23,8 @@ import {
   type ChecklistItem,
   type Column,
   type ColumnKind,
+  type HeaderColor,
+  HEADER_COLORS,
   type Comment,
   type Data,
   type Label,
@@ -117,6 +119,8 @@ interface Actions {
   moveBoard: (id: string, index: number) => void
   /** Cambia el tipo de columna (Estándar / Next / Doing). Falla si ya tiene más tarjetas que el límite. */
   setColumnKind: (id: string, kind: ColumnKind) => boolean
+  /** Color del encabezado de la columna (null = sin color). */
+  setColumnColor: (id: string, color: HeaderColor | null) => boolean
   // tarjetas
   /** Devuelve null si el título es inválido o la columna llegó a su límite. */
   /** Con `labelIds` la tarjeta nace con esas etiquetas (así entra a un subtablero al crearla ahí). */
@@ -714,6 +718,17 @@ export const useStore = create<Store>((set, get) => {
       const next: Column = { ...col, updatedAt: stamp() }
       if (kind === 'standard') delete next.kind
       else next.kind = kind
+      put('columns', [next])
+      return true
+    },
+
+    setColumnColor: (id, color) => {
+      const col = live(get().columns).find((c) => c.id === id)
+      if (!col) return false
+      if (color !== null && !(HEADER_COLORS as readonly string[]).includes(color)) return false
+      const next: Column = { ...col, updatedAt: stamp() }
+      if (color === null) delete next.headerColor
+      else next.headerColor = color
       put('columns', [next])
       return true
     },

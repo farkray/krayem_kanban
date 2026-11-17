@@ -23,7 +23,22 @@
   gap: var(--space-2);
   padding: var(--space-4) var(--space-3) var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
+
+/* Encabezado con color: fondo claro; título y controles conservan el color de texto normal */
+.header[data-color] {
+  background: var(--head);
+}
+.header[data-color] .count {
+  color: var(--color-text);
+}
+.header[data-color='sky'] { --head: var(--head-sky); }
+.header[data-color='mint'] { --head: var(--head-mint); }
+.header[data-color='sun'] { --head: var(--head-sun); }
+.header[data-color='peach'] { --head: var(--head-peach); }
+.header[data-color='rose'] { --head: var(--head-rose); }
+.header[data-color='lilac'] { --head: var(--head-lilac); }
 
 .headText {
   flex: 1;

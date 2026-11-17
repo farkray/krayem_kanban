@@ -2,8 +2,12 @@ import { useEffect, useId, useRef, useState } from 'react'
 import {
   COLUMN_KINDS,
   COLUMN_KIND_NAMES,
+  HEADER_COLORS,
+  HEADER_COLOR_NAMES,
   WIP_LIMITS,
+  headerColorOf,
   kindOf,
+  type HeaderColor,
   type Column,
   type ColumnKind,
 } from '../lib/types'
@@ -20,14 +24,16 @@ const HELP: Record<ColumnKind, string> = {
 interface Props {
   column: Column
   onChange: (kind: ColumnKind) => boolean
+  onColor?: (color: HeaderColor | null) => void
 }
 
 /** Botón de la columna que abre las opciones de tipo (radios): Estándar, Next o Doing. */
-export function ColumnKindMenu({ column, onChange }: Props) {
+export function ColumnKindMenu({ column, onChange, onColor }: Props) {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const name = useId()
   const kind = kindOf(column)
+  const color = headerColorOf(column)
 
   useEffect(() => {
     if (!open) return
@@ -85,6 +91,37 @@ export function ColumnKindMenu({ column, onChange }: Props) {
               </span>
             </label>
           ))}
+          {onColor && (
+            <div role="radiogroup" aria-labelledby={`${name}-c`} className={styles.colors}>
+              <span id={`${name}-c`} className={styles.legend}>
+                Color del encabezado
+              </span>
+              <div className={styles.swatches}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={color === null}
+                  aria-label="Sin color"
+                  title="Sin color"
+                  className={`${styles.swatch} ${styles.none}`}
+                  onClick={() => onColor(null)}
+                />
+                {HEADER_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={color === c}
+                    aria-label={HEADER_COLOR_NAMES[c]}
+                    title={HEADER_COLOR_NAMES[c]}
+                    className={styles.swatch}
+                    style={{ background: `var(--head-${c})` }}
+                    onClick={() => onColor(c)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
