@@ -29,6 +29,8 @@ interface Props {
   boards: BoardSummary[]
   onOpen: (id: string) => void
   onCreate: (title: string) => void
+  /** false = cuenta de invitado: no se pueden crear tableros. */
+  canCreate?: boolean
   /** Mueve uno de mis tableros al lugar `index` entre los míos. */
   onMove?: (id: string, index: number) => void
 }
@@ -78,7 +80,7 @@ function Tile({
   )
 }
 
-export function HomeView({ boards, onOpen, onCreate, onMove }: Props) {
+export function HomeView({ boards, onOpen, onCreate, canCreate = true, onMove }: Props) {
   const [creating, setCreating] = useState(false)
   // La portada lista los tableros de primer nivel; los subtableros se abren desde la barra lateral.
   boards = boards.filter((b) => !b.parentId)
@@ -104,7 +106,11 @@ export function HomeView({ boards, onOpen, onCreate, onMove }: Props) {
     <div className={styles.home}>
       <h1 className={styles.title}>Mis tableros</h1>
       {boards.length === 0 && (
-        <p className={styles.hint}>Aún no tienes tableros. Crea el primero.</p>
+        <p className={styles.hint}>
+          {canCreate
+            ? 'Aún no tienes tableros. Crea el primero.'
+            : 'Aún no te han compartido ningún tablero. Cuando alguien te invite a uno, aparecerá aquí.'}
+        </p>
       )}
       <DndContext
         sensors={sensors}
@@ -125,7 +131,7 @@ export function HomeView({ boards, onOpen, onCreate, onMove }: Props) {
                 onOpen={() => onOpen(b.id)}
               />
             ))}
-            {creating ? (
+            {!canCreate ? null : creating ? (
               <div className={styles.tile}>
                 <InlineInput
                   label="Nombre del tablero"

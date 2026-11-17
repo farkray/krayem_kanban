@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
-import { canEditBoard, currentUserId, participantIds, roleOf } from '../lib/access'
+import { canEditBoard, currentUserId, isGuestMode, participantIds, roleOf } from '../lib/access'
 import { isConfigured } from '../lib/config'
 import { byPosition, positionAt, positionsFor } from '../lib/position'
 import {
@@ -377,6 +377,7 @@ export const useStore = create<Store>((set, get) => {
 
     seedIfEmpty: async () => {
       await flush() // asegura que lo ya descargado esté en memoria
+      if (isGuestMode()) return // un invitado no crea tableros (no se marca como sembrado)
       if (await db.meta.get('seeded')) return
       // Se cuentan también los borrados lógicos: si hubo tableros alguna vez, no se resiembra.
       if (get().boards.length === 0) get().createBoard('Mi tablero')
@@ -465,6 +466,10 @@ export const useStore = create<Store>((set, get) => {
     createBoard: (title) => {
       const t = clean(title, LIMITS.board)
       if (!t) return null
+      if (isGuestMode()) {
+        notify('Tu cuenta es de invitado: solo puedes participar en los tableros que te compartan.')
+        return null
+      }
       const boards = live(get().boards)
         .filter((b) => !b.parentId)
         .sort(byPosition)
@@ -488,8 +493,8 @@ export const useStore = create<Store>((set, get) => {
       const parent = live(s.boards).find((b) => b.id === parentId)
       const ids = [...new Set([labelIds].flat())]
       const found = ids.map((id) => live(s.labels).find((l) => l.id === id))
-      // Un solo nivel; las etiquetas son del padre; solo el dueño crea.
-      if (!parent || parent.parentId || roleOf(parentId) !== 'owner') return null
+      // Un solo nivel; las etiquetas son del padre; solo el dueño crea (y un invitado no crea tableros).
+      if (!parent || parent.parentId || roleOf(parentId) !== 'owner' || isGuestMode()) return null
       if (ids.length === 0 || found.some((l) => !l || l.boardId !== parentId)) return null
       const kids = live(s.boards).filter((b) => b.parentId === parentId)
       // Misma combinación (y modo) que otro subtablero: sería una vista repetida.

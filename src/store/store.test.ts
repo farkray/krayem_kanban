@@ -1,7 +1,7 @@
 import { db } from '../db/db'
 import { byPosition } from '../lib/position'
 import { cardInSub, linkIdsOf, newCardLabelsOf } from '../lib/types'
-import { setRoleResolver } from '../lib/access'
+import { setGuestMode, setRoleResolver } from '../lib/access'
 import { flush, resetInit, resetStore, useStore } from './store'
 
 const S = () => useStore.getState()
@@ -780,5 +780,27 @@ describe('subtableros', () => {
     expect(order()).toEqual([s1, s2])
     S().moveBoard(s2, 0)
     expect(order()).toEqual([s2, s1])
+  })
+})
+
+describe('cuenta de invitado', () => {
+  afterEach(() => setGuestMode(false))
+
+  it('un invitado no crea tableros ni subtableros y se le avisa', () => {
+    const b = S().createBoard('Propio')!
+    setGuestMode(true)
+    expect(S().createBoard('Nuevo')).toBeNull()
+    expect(S().toast?.message).toContain('invitado')
+    expect(S().boards.filter((x) => !x.deletedAt)).toHaveLength(1)
+    expect(S().createSubboard(b, [], 'Sub')).toBeNull()
+  })
+
+  it('no se le siembra el tablero inicial (y sin marcarlo, por si luego deja de ser invitado)', async () => {
+    setGuestMode(true)
+    await S().seedIfEmpty()
+    expect(S().boards).toHaveLength(0)
+    setGuestMode(false)
+    await S().seedIfEmpty()
+    expect(S().boards).toHaveLength(1)
   })
 })

@@ -11,6 +11,8 @@ interface AuthState {
   alias: string
   /** Puede administrar usuarios (el servidor lo vuelve a comprobar en cada petición). */
   isAdmin: boolean
+  /** Invitado: no puede crear tableros (el servidor también lo impide). */
+  isGuest: boolean
 }
 
 /** `disabled` = sin servidor configurado (modo solo local, sin cuenta). */
@@ -20,6 +22,7 @@ export const useAuth = create<AuthState>(() => ({
   email: null,
   alias: '',
   isAdmin: false,
+  isGuest: false,
 }))
 
 export interface ApiUser {
@@ -27,6 +30,7 @@ export interface ApiUser {
   email: string
   alias?: string
   isAdmin?: boolean
+  isGuest?: boolean
 }
 
 export type AuthResult = { ok: true; user: ApiUser } | { ok: false; error: string }

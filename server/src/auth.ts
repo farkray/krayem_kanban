@@ -49,6 +49,8 @@ export interface User {
   /** Nombre para mostrar ("Jorge Menéndez"); vacío = se usa el correo. */
   alias: string
   isAdmin: boolean
+  /** Invitado: no puede crear tableros, solo participar en los que le comparten. */
+  isGuest: boolean
 }
 
 export const MAX_ALIAS = 60
@@ -73,13 +75,27 @@ export function sessionUser(db: DB, token: string | undefined, now = new Date())
   if (!token) return null
   const row = db
     .prepare(
-      `SELECT u.id, u.email, u.alias, u.is_admin, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.email, u.alias, u.is_admin, u.is_guest, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`,
     )
     .get(sha256(token)) as
-    { id: string; email: string; alias: string; is_admin: number; expires_at: string } | undefined
+    | {
+        id: string
+        email: string
+        alias: string
+        is_admin: number
+        is_guest: number
+        expires_at: string
+      }
+    | undefined
   if (!row || Date.parse(row.expires_at) <= now.getTime()) return null
-  return { id: row.id, email: row.email, alias: row.alias, isAdmin: row.is_admin === 1 }
+  return {
+    id: row.id,
+    email: row.email,
+    alias: row.alias,
+    isAdmin: row.is_admin === 1,
+    isGuest: row.is_guest === 1,
+  }
 }
 
 export function renewSession(db: DB, token: string, now = new Date()) {
@@ -121,12 +137,25 @@ export function createUser(
   passHash: string,
   isAdmin = false,
   alias = '',
+  isGuest = false,
 ): User {
-  const user = { id: randomUUID(), email: normalizeEmail(email), alias, isAdmin }
+  const user = { id: randomUUID(), email: normalizeEmail(email), alias, isAdmin, isGuest }
   db.prepare(
-    'INSERT INTO users (id, email, pass_hash, created_at, is_admin, alias) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(user.id, user.email, passHash, new Date().toISOString(), isAdmin ? 1 : 0, alias)
+    'INSERT INTO users (id, email, pass_hash, created_at, is_admin, alias, is_guest) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).run(
+    user.id,
+    user.email,
+    passHash,
+    new Date().toISOString(),
+    isAdmin ? 1 : 0,
+    alias,
+    isGuest ? 1 : 0,
+  )
   return user
+}
+
+export function setGuest(db: DB, userId: string, isGuest: boolean) {
+  db.prepare('UPDATE users SET is_guest = ? WHERE id = ?').run(isGuest ? 1 : 0, userId)
 }
 
 export function setAlias(db: DB, userId: string, alias: string) {
@@ -134,7 +163,10 @@ export function setAlias(db: DB, userId: string, alias: string) {
 }
 
 export function setAdmin(db: DB, userId: string, isAdmin: boolean) {
-  db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, userId)
+  // Un administrador no puede ser invitado: al darle el rol se le quita el de invitado
+  db.prepare(
+    'UPDATE users SET is_admin = ?, is_guest = CASE WHEN ? = 1 THEN 0 ELSE is_guest END WHERE id = ?',
+  ).run(isAdmin ? 1 : 0, isAdmin ? 1 : 0, userId)
 }
 
 export interface UserSummary {
@@ -143,13 +175,14 @@ export interface UserSummary {
   alias: string
   createdAt: string
   isAdmin: boolean
+  isGuest: boolean
   rows: number
 }
 
 export function listUsers(db: DB): UserSummary[] {
   const rows = db
     .prepare(
-      `SELECT u.id, u.email, u.alias, u.created_at, u.is_admin,
+      `SELECT u.id, u.email, u.alias, u.created_at, u.is_admin, u.is_guest,
               (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS n
        FROM users u ORDER BY u.created_at`,
     )
@@ -159,6 +192,7 @@ export function listUsers(db: DB): UserSummary[] {
     alias: string
     created_at: string
     is_admin: number
+    is_guest: number
     n: number
   }[]
   return rows.map((r) => ({
@@ -167,6 +201,7 @@ export function listUsers(db: DB): UserSummary[] {
     alias: r.alias,
     createdAt: r.created_at,
     isAdmin: r.is_admin === 1,
+    isGuest: r.is_guest === 1,
     rows: r.n,
   }))
 }

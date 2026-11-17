@@ -6,6 +6,8 @@ export interface AdminUser {
   alias: string
   createdAt: string
   isAdmin: boolean
+  /** Invitado: no crea tableros, solo participa en los que le comparten. */
+  isGuest: boolean
   rows: number
 }
 
@@ -34,8 +36,21 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<Ad
 export const adminListUsers = () => call<{ users: AdminUser[] }>('GET', '/users')
 
 /** Sin `password` el servidor genera una temporal y la devuelve (solo esta vez). */
-export const adminCreateUser = (email: string, password?: string, alias?: string) =>
-  call<{ user: AdminUser; password?: string }>('POST', '/users', { email, password, alias })
+export const adminCreateUser = (
+  email: string,
+  password?: string,
+  alias?: string,
+  guest?: boolean,
+) =>
+  call<{ user: AdminUser; password?: string }>('POST', '/users', {
+    email,
+    password,
+    alias,
+    guest,
+  })
+
+export const adminSetGuest = (id: string, guest: boolean) =>
+  call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { guest })
 
 export const adminSetAlias = (id: string, alias: string) =>
   call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { alias })

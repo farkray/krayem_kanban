@@ -1791,3 +1791,124 @@ describe('"me gusta" y respuestas', () => {
     expect((await get(cOwner, 'likes'))[0]).toMatchObject({ deletedAt: t })
   })
 })
+
+describe('rol de invitado', () => {
+  const asAdmin = async () => {
+    await makeApp()
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    return (await login('admin@correo.com')).cookie
+  }
+  const call = (method: 'GET' | 'POST' | 'PATCH', url: string, cookie: string, payload?: object) =>
+    built.app.inject({ method, url, headers: headers(cookie), payload })
+  const card = (id: string, boardId: string) => ({
+    id,
+    boardId,
+    columnId: 'c1',
+    title: 'T',
+    position: 'a0',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '',
+  })
+
+  it('el admin crea un invitado y /me y login lo informan', async () => {
+    const cookie = await asAdmin()
+    const res = await call('POST', '/api/admin/users', cookie, {
+      email: 'inv@correo.com',
+      guest: true,
+      password: 'una-contraseña-larga',
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().user.isGuest).toBe(true)
+    const inv = await login('inv@correo.com', 'una-contraseña-larga')
+    expect(inv.res.json().user.isGuest).toBe(true)
+    expect((await call('GET', '/api/auth/me', inv.cookie)).json().user.isGuest).toBe(true)
+    // un usuario normal no es invitado
+    const normal = await call('POST', '/api/admin/users', cookie, { email: 'n@correo.com' })
+    expect(normal.json().user.isGuest).toBe(false)
+  })
+
+  it('un invitado no puede crear tableros, pero sí participar en los que le comparten', async () => {
+    const cookie = await asAdmin()
+    await call('POST', '/api/admin/users', cookie, {
+      email: 'inv@correo.com',
+      guest: true,
+      password: 'una-contraseña-larga',
+    })
+    const inv = (await login('inv@correo.com', 'una-contraseña-larga')).cookie
+    // crear un tablero (o filas de un tablero inexistente) se rechaza
+    const nuevo = await call('POST', '/api/sync/boards', inv, { rows: [board('bx')] })
+    expect(nuevo.json().rejected).toEqual(['bx'])
+    const huerfana = await call('POST', '/api/sync/cards', inv, { rows: [card('k0', 'bx')] })
+    expect(huerfana.json().rejected).toEqual(['k0'])
+    expect((await call('GET', '/api/sync/boards', inv)).json().rows).toEqual([])
+    // el admin le comparte un tablero: ahí sí puede escribir como editor
+    await call('POST', '/api/sync/boards', cookie, { rows: [board('b1')] })
+    await call('POST', '/api/boards/b1/members', cookie, {
+      email: 'inv@correo.com',
+      role: 'editor',
+    })
+    const ok = await call('POST', '/api/sync/cards', inv, { rows: [card('k1', 'b1')] })
+    expect(ok.json().rejected).toBeUndefined()
+    expect(
+      (await call('GET', '/api/sync/cards', cookie)).json().rows.map((r: { id: string }) => r.id),
+    ).toEqual(['k1'])
+    // y sigue sin poder crear tableros
+    expect(
+      (await call('POST', '/api/sync/boards', inv, { rows: [board('by')] })).json().rejected,
+    ).toEqual(['by'])
+  })
+
+  it('el admin cambia el rol de un usuario ya creado, en los dos sentidos', async () => {
+    const cookie = await asAdmin()
+    const ana = await addUser('ana@correo.com')
+    const anaCookie = (await login('ana@correo.com')).cookie
+    expect(
+      (await call('POST', '/api/sync/boards', anaCookie, { rows: [board('b1')] })).json().rejected,
+    ).toBeUndefined()
+    const a = await call('PATCH', `/api/admin/users/${ana.id}`, cookie, { guest: true })
+    expect(a.json().user.isGuest).toBe(true)
+    // la sesión abierta ya aplica el rol nuevo; sus tableros existentes siguen siendo suyos
+    expect(
+      (await call('POST', '/api/sync/boards', anaCookie, { rows: [board('b2')] })).json().rejected,
+    ).toEqual(['b2'])
+    expect(
+      (
+        await call('POST', '/api/sync/boards', anaCookie, { rows: [board('b1', 'renombrado')] })
+      ).json().rejected,
+    ).toBeUndefined()
+    const b = await call('PATCH', `/api/admin/users/${ana.id}`, cookie, { guest: false })
+    expect(b.json().user.isGuest).toBe(false)
+    expect(
+      (await call('POST', '/api/sync/boards', anaCookie, { rows: [board('b3')] })).json().rejected,
+    ).toBeUndefined()
+  })
+
+  it('solo el admin cambia roles; un administrador no puede ser invitado', async () => {
+    const cookie = await asAdmin()
+    const ana = await addUser('ana@correo.com')
+    const anaCookie = (await login('ana@correo.com')).cookie
+    expect(
+      (await call('PATCH', `/api/admin/users/${ana.id}`, anaCookie, { guest: true })).statusCode,
+    ).toBe(403)
+    const me = findUserByEmail(db, 'admin@correo.com')!
+    const res = await call('PATCH', `/api/admin/users/${me.id}`, cookie, { guest: true })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toBe('admin_cannot_be_guest')
+    expect(
+      (await call('PATCH', `/api/admin/users/${ana.id}`, cookie, { guest: 'si' })).statusCode,
+    ).toBe(400)
+  })
+
+  it('la lista de usuarios del admin incluye el rol', async () => {
+    const cookie = await asAdmin()
+    await call('POST', '/api/admin/users', cookie, { email: 'inv@correo.com', guest: true })
+    const users = (await call('GET', '/api/admin/users', cookie)).json().users as {
+      email: string
+      isGuest: boolean
+    }[]
+    expect(users.map((u) => [u.email, u.isGuest])).toEqual([
+      ['admin@correo.com', false],
+      ['inv@correo.com', true],
+    ])
+  })
+})

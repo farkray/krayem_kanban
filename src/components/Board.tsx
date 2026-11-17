@@ -100,6 +100,7 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
   const access = useBoardAccess(board.id)
   const me = useAuth((s) => s.userId)
   const signedIn = useAuth((s) => s.status === 'signedIn')
+  const isGuest = useAuth((s) => s.isGuest)
   const [sharing, setSharing] = useState(false)
   const [creatingSub, setCreatingSub] = useState(false)
   const [leaving, setLeaving] = useState(false)
@@ -295,7 +296,7 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
                 boardId={sourceId}
                 onManage={access.isOwner && signedIn && !isSub ? () => setSharing(true) : undefined}
               />
-              {access.isOwner && !isSub && (
+              {access.isOwner && !isSub && !isGuest && (
                 <button
                   type="button"
                   className={styles.shareBtn}

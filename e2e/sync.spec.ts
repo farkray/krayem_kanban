@@ -78,7 +78,7 @@ test('dos dispositivos: lo creado en uno llega al otro, en vivo', async ({ brows
     .getByRole('dialog')
     .getByRole('tab', { name: /^Actualizaciones/ })
     .click()
-  await expect(a.page.getByRole('dialog').locator('strong', { hasText: 'B' })).toBeVisible({
+  await expect(a.page.getByRole('dialog').locator('strong', { hasText: /^B$/ })).toBeVisible({
     timeout: 15_000,
   })
 
@@ -331,9 +331,10 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
 
   // crear con contraseña temporal generada
   const email = unique()
-  await dlg.getByLabel('Correo').fill(email)
-  await dlg.getByLabel(/Alias/).fill('Jorge  E2E')
-  await dlg.getByRole('button', { name: 'Crear usuario' }).click()
+  const newUser = dlg.getByRole('region', { name: 'Nuevo usuario' })
+  await newUser.getByLabel('Correo').fill(email)
+  await newUser.getByLabel(/Alias/).fill('Jorge  E2E')
+  await newUser.getByRole('button', { name: 'Crear usuario' }).click()
   const temp = (await dlg.getByRole('status').locator('code').innerText()).trim()
   expect(temp.length).toBeGreaterThanOrEqual(10)
   const list = dlg.getByRole('table', { name: 'Usuarios' })
@@ -560,4 +561,71 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
 
   await a.ctx.close()
   await b.ctx.close()
+})
+
+test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar el rol', async ({
+  browser,
+}) => {
+  test.skip(!ADMIN_PASSWORD, 'Define E2E_ADMIN_PASSWORD (la ADMIN_PASSWORD del stack).')
+  test.setTimeout(120_000)
+  const admin = await newDevice(browser)
+  await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+
+  // el admin crea un usuario con rol de invitado
+  await admin.page.getByRole('button', { name: 'Panel de control' }).click()
+  const form = admin.page.getByRole('region', { name: 'Nuevo usuario' })
+  const email = unique()
+  await form.getByLabel('Correo').fill(email)
+  await form.getByRole('combobox').selectOption('guest')
+  await form.getByRole('button', { name: 'Crear usuario' }).click()
+  const temp = (await admin.page.getByRole('status').locator('code').innerText()).trim()
+  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveValue('guest')
+
+  // el invitado entra: sin tablero propio y sin forma de crear uno
+  const guest = await newDevice(browser)
+  await signIn(guest.page, email, temp)
+  await expect(guest.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await expect(
+    guest.page.getByText(/Aún no te han compartido ningún tablero/).first(),
+  ).toBeVisible()
+  await expect(guest.page.getByRole('button', { name: /Nuevo tablero/ })).toHaveCount(0)
+  await expect(guest.page.getByRole('button', { name: /Mi tablero/ })).toHaveCount(0) // sin tablero inicial
+
+  // el admin comparte su tablero con él: ahora participa (como editor) sin poder crear nada
+  await admin.page.getByRole('button', { name: /Volver a los tableros/ }).click()
+  await admin.page
+    .getByRole('button', { name: /Mi tablero/ })
+    .first()
+    .click()
+  await admin.page.getByRole('button', { name: 'Compartir' }).click()
+  const dlg = admin.page.getByRole('dialog', { name: /Compartir/ })
+  await dlg.getByRole('combobox', { name: 'Persona' }).selectOption(email)
+  await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
+  await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(email)
+  await dlg.getByRole('button', { name: 'Cerrar' }).click()
+
+  const shared = guest.page.getByRole('list', { name: 'Compartidos conmigo' })
+  await expect(shared).toContainText('Mi tablero', { timeout: 15_000 })
+  await shared.getByRole('button', { name: /Mi tablero/ }).click()
+  await addCard(guest.page, 'Por hacer', 'Tarea del invitado')
+  await saved(guest.page)
+  await expect(card(column(admin.page, 'Por hacer'), 'Tarea del invitado')).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(guest.page.getByRole('button', { name: 'Crear subtablero' })).toHaveCount(0)
+  await expect(guest.page.getByRole('button', { name: 'Nuevo tablero' })).toHaveCount(0)
+
+  // el admin lo cambia a usuario normal: al recargar ya puede crear tableros
+  await admin.page.goto('/admin')
+  await admin.page.getByRole('combobox', { name: `Rol de ${email}` }).selectOption('user')
+  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveValue('user')
+  await guest.page.goto('/') // la sesión se vuelve a leer del servidor con el rol nuevo
+  await expect(guest.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await expect(guest.page.getByRole('button', { name: /Nuevo tablero/ }).first()).toBeVisible({
+    timeout: 15_000,
+  })
+
+  await admin.ctx.close()
+  await guest.ctx.close()
 })

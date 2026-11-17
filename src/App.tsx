@@ -40,6 +40,7 @@ export default function App() {
   const email = useAuth((s) => s.email)
   const alias = useAuth((s) => s.alias)
   const isAdmin = useAuth((s) => s.isAdmin)
+  const isGuest = useAuth((s) => s.isGuest)
   const pending = useSync((s) => s.pending)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -122,6 +123,7 @@ export default function App() {
       drawer={drawer}
       onSelect={openBoard}
       onCreate={create}
+      canCreate={!isGuest}
       onMove={moveBoard}
       onToggle={() => setSidebarOpen(false)}
       account={
@@ -193,7 +195,13 @@ export default function App() {
               onOpenBoard={openBoard}
             />
           ) : (
-            <HomeView boards={summaries} onOpen={openBoard} onCreate={create} onMove={moveBoard} />
+            <HomeView
+              boards={summaries}
+              onOpen={openBoard}
+              onCreate={create}
+              canCreate={!isGuest}
+              onMove={moveBoard}
+            />
           )}
         </main>
       </div>

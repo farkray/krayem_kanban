@@ -13,6 +13,7 @@ import {
   adminListUsers,
   adminResetPassword,
   adminSetAlias,
+  adminSetGuest,
   type AdminUser,
 } from '../sync/admin'
 import { AdminNotifications } from './AdminNotifications'
@@ -29,6 +30,7 @@ const MESSAGES: Record<string, string> = {
   email_taken: 'Ya existe un usuario con ese correo.',
   weak_password: `La contraseña debe tener al menos ${MIN} caracteres (o déjala vacía para generar una).`,
   cannot_delete_self: 'No puedes eliminar tu propia cuenta.',
+  admin_cannot_be_guest: 'Un administrador no puede ser invitado.',
   forbidden: 'Tu cuenta no tiene permiso de administrador.',
   offline: 'No hay conexión con el servidor.',
 }
@@ -105,6 +107,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [alias, setAlias] = useState('')
+  const [guest, setGuest] = useState(false)
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<Shown | null>(null)
@@ -136,6 +139,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
       email.trim(),
       password || undefined,
       alias.trim() || undefined,
+      guest,
     )
     setBusy(false)
     if (!res.ok) return setError(message(res.error))
@@ -144,6 +148,14 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
     setEmail('')
     setPassword('')
     setAlias('')
+    setGuest(false)
+    void load()
+  }
+
+  const changeRole = async (u: AdminUser, makeGuest: boolean) => {
+    setError(null)
+    const res = await adminSetGuest(u.id, makeGuest)
+    if (!res.ok) return setError(message(res.error))
     void load()
   }
 
@@ -296,7 +308,15 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                     {u.isAdmin ? (
                       <span className={styles.badge}>Administrador</span>
                     ) : (
-                      <span className={styles.plain}>Usuario</span>
+                      <select
+                        className={styles.roleSelect}
+                        value={u.isGuest ? 'guest' : 'user'}
+                        aria-label={`Rol de ${u.email}`}
+                        onChange={(e) => void changeRole(u, e.target.value === 'guest')}
+                      >
+                        <option value="user">Usuario</option>
+                        <option value="guest">Invitado</option>
+                      </select>
                     )}
                   </td>
                   <td className={styles.actions}>
@@ -403,6 +423,22 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                   placeholder="Vacía = se genera una temporal"
                   onChange={(e) => setPassword(e.target.value)}
                 />
+              </label>
+              <label className={styles.label}>
+                Rol
+                <select
+                  className={styles.input}
+                  value={guest ? 'guest' : 'user'}
+                  onChange={(e) => setGuest(e.target.value === 'guest')}
+                >
+                  <option value="user">Usuario</option>
+                  <option value="guest">Invitado</option>
+                </select>
+                <span className={styles.hint}>
+                  {guest
+                    ? 'El invitado no crea tableros: solo participa en los que le compartan.'
+                    : 'El usuario puede crear sus propios tableros y compartirlos.'}
+                </span>
               </label>
               <button
                 type="submit"

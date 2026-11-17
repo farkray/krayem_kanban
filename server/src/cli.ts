@@ -20,10 +20,11 @@ const db = openDb(join(dataDir, 'kanban.db'))
 
 const usage = () => {
   console.error(`Uso:
-  create-user <email> [--generate | <contraseña>] [--alias "Nombre"]   Crea un usuario (con --generate muestra una contraseña aleatoria)
+  create-user <email> [--generate | <contraseña>] [--alias "Nombre"] [--guest]   Crea un usuario (con --generate muestra una contraseña aleatoria)
   set-password <email> [--generate | <contraseña>]  Cambia la contraseña y cierra sus sesiones
   delete-user <email>                               Elimina el usuario y TODOS sus datos
   set-alias <email> "Nombre Apellido"              Cambia el alias (nombre para mostrar; vacío lo quita)
+  set-guest <email> [--remove]                      Da o quita el rol de invitado (no crea tableros, solo participa)
   set-admin <email> [--remove]                      Da o quita el rol de administrador
   list-users                                        Lista usuarios y cuántas filas tiene cada uno
   backup <carpeta>                                  Copia consistente de la base (VACUUM INTO)`)
@@ -57,8 +58,11 @@ switch (cmd) {
       process.exit(2)
     }
     const { hash, shown } = await passwordFrom(args[1] === '--alias' ? '--generate' : args[1])
-    createUser(db, email, hash, false, alias)
-    console.log(`Usuario creado: ${email}${alias ? ` (${alias})` : ''}`)
+    const guest = args.includes('--guest')
+    createUser(db, email, hash, false, alias, guest)
+    console.log(
+      `Usuario creado: ${email}${alias ? ` (${alias})` : ''}${guest ? ' [invitado]' : ''}`,
+    )
     if (shown) console.log(`Contraseña: ${shown}`)
     break
   }
@@ -102,6 +106,26 @@ switch (cmd) {
     console.log(`${user.email}: alias ${alias ? `“${alias}”` : 'quitado (se muestra el correo)'}.`)
     break
   }
+  case 'set-guest': {
+    const user = findUserByEmail(db, args[0] ?? '')
+    if (!user) {
+      console.error('No existe ese usuario.')
+      process.exit(1)
+    }
+    const on = args[1] !== '--remove'
+    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id) as {
+      is_admin: number
+    }
+    if (on && row.is_admin === 1) {
+      console.error(
+        'Un administrador no puede ser invitado: quítale primero el rol (set-admin --remove).',
+      )
+      process.exit(1)
+    }
+    db.prepare('UPDATE users SET is_guest = ? WHERE id = ?').run(on ? 1 : 0, user.id)
+    console.log(`${user.email}: ${on ? 'ahora es invitado' : 'ya no es invitado'}.`)
+    break
+  }
   case 'set-admin': {
     const user = findUserByEmail(db, args[0] ?? '')
     if (!user) {
@@ -116,7 +140,7 @@ switch (cmd) {
   case 'list-users': {
     const rows = db
       .prepare(
-        `SELECT u.email || CASE WHEN u.alias <> '' THEN ' [' || u.alias || ']' ELSE '' END || CASE WHEN u.is_admin = 1 THEN ' (admin)' ELSE '' END AS email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
+        `SELECT u.email || CASE WHEN u.alias <> '' THEN ' [' || u.alias || ']' ELSE '' END || CASE WHEN u.is_admin = 1 THEN ' (admin)' ELSE '' END || CASE WHEN u.is_guest = 1 THEN ' (invitado)' ELSE '' END AS email, u.created_at, (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS filas
          FROM users u ORDER BY u.created_at`,
       )
       .all() as { email: string; created_at: string; filas: number }[]

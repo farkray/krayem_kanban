@@ -31,6 +31,8 @@ interface Props {
   activeId: string | null
   onSelect: (id: string) => void
   onCreate: (title: string) => void
+  /** false = cuenta de invitado: no se pueden crear tableros. */
+  canCreate?: boolean
   /** Mueve uno de mis tableros al lugar `index` entre los míos. */
   onMove?: (id: string, index: number) => void
   onToggle: () => void
@@ -150,6 +152,7 @@ export function Sidebar({
   drawer = false,
   onSelect,
   onCreate,
+  canCreate = true,
   onMove,
   onToggle,
   account,
@@ -209,14 +212,16 @@ export function Sidebar({
       </div>
       <header className={styles.header}>
         <h2 className={styles.heading}>Mis Tableros</h2>
-        <button
-          type="button"
-          className={styles.add}
-          aria-label="Nuevo tablero"
-          onClick={() => setCreating(true)}
-        >
-          <PlusIcon />
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            className={styles.add}
+            aria-label="Nuevo tablero"
+            onClick={() => setCreating(true)}
+          >
+            <PlusIcon />
+          </button>
+        )}
       </header>
 
       {creating && (
@@ -235,7 +240,11 @@ export function Sidebar({
       )}
 
       {boards.length === 0 && !creating ? (
-        <p className={styles.empty}>Aún no tienes tableros. Crea el primero con “+”.</p>
+        <p className={styles.empty}>
+          {canCreate
+            ? 'Aún no tienes tableros. Crea el primero con “+”.'
+            : 'Aún no te han compartido ningún tablero.'}
+        </p>
       ) : (
         <>
           <DndContext

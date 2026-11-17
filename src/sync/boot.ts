@@ -14,6 +14,7 @@ import {
 } from './auth'
 import { setBlobFetcher } from './blobs'
 import { createEngine, type Engine } from './engine'
+import { setGuestMode } from '../lib/access'
 import { loadCachedAccess, refreshAccess, resetAccess } from './access'
 import { createHttpRemote } from './httpRemote'
 import {
@@ -38,6 +39,7 @@ interface Identity {
   email: string
   alias?: string
   isAdmin?: boolean
+  isGuest?: boolean
 }
 
 const loadIdentity = async () => (await db.meta.get('identity'))?.value as Identity | undefined
@@ -53,7 +55,14 @@ function stopEngine() {
 /** La sesión dejó de ser válida: se detiene la sincronización y se pide iniciar sesión. */
 function handleSignedOut() {
   stopEngine()
-  useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
+  useAuth.setState({
+    status: 'signedOut',
+    userId: null,
+    email: null,
+    alias: '',
+    isAdmin: false,
+    isGuest: false,
+  })
 }
 
 /** Entra un usuario: si es distinto del que dejó datos en este navegador, se descartan; luego sincroniza. */
@@ -67,6 +76,7 @@ async function handleUser(user: Identity): Promise<void> {
     email: user.email,
     alias: user.alias ?? '',
     isAdmin: !!user.isAdmin,
+    isGuest: !!user.isGuest,
   })
 
   stopEngine()
@@ -104,6 +114,7 @@ export function bootSync(): Promise<void> {
         email: null,
         alias: '',
         isAdmin: false,
+        isGuest: false,
       })
       return
     }
@@ -114,13 +125,21 @@ export function bootSync(): Promise<void> {
         email: me.user.email,
         alias: me.user.alias,
         isAdmin: me.user.isAdmin,
+        isGuest: me.user.isGuest,
       })
     if (me.kind === 'offline') {
       // PWA: sin conexión se sigue con la identidad del último inicio de sesión.
       const cached = await loadIdentity()
       if (cached) return handleUser(cached)
     }
-    useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
+    useAuth.setState({
+      status: 'signedOut',
+      userId: null,
+      email: null,
+      alias: '',
+      isAdmin: false,
+      isGuest: false,
+    })
   })()
   return booted
 }
@@ -133,6 +152,7 @@ async function finish(res: AuthResult): Promise<string | null> {
     email: res.user.email,
     alias: res.user.alias,
     isAdmin: res.user.isAdmin,
+    isGuest: res.user.isGuest,
   })
   return null
 }
@@ -151,7 +171,17 @@ export async function signOut(): Promise<void> {
   stopEngine()
   if (!(await apiLogout())) localStorage.setItem(PENDING_LOGOUT, '1')
   await wipeLocal()
-  useAuth.setState({ status: 'signedOut', userId: null, email: null, alias: '', isAdmin: false })
+  useAuth.setState({
+    status: 'signedOut',
+    userId: null,
+    email: null,
+    alias: '',
+    isAdmin: false,
+    isGuest: false,
+  })
 }
 
 export type { ApiUser }
+
+// El modo invitado de la lib sigue a la sesión (también al cerrar sesión o al cambiar el rol)
+useAuth.subscribe((s) => setGuestMode(s.isGuest))

@@ -362,3 +362,10 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - Se guarda como un enlace Markdown, `[@Nombre](mention:<id de usuario>)`, así que sigue a la persona aunque cambie de alias. Se dibuja como un **chip** con su nombre actual, tanto en el feed como en los ítems; el chip de **tus** menciones va relleno.
 - La tarjeta muestra un chip **@** («Te mencionan») cuando alguien te mencionó en sus actualizaciones o en su lista de tareas.
 - Límite conocido: aún no hay notificaciones (push ni correo); la marca en la tarjeta es el aviso. En tableros privados no hay a quién mencionar.
+
+## 23. Rol de invitado (implementado)
+
+- Una cuenta puede ser **Usuario** (crea tableros, los comparte y administra los suyos) o **Invitado**: no puede crear tableros ni subtableros, **solo participa en los que le compartan** (con permiso de editor o de solo lectura, como cualquier miembro). El administrador siempre es administrador (no puede ser invitado).
+- Se elige **al crear** la cuenta (panel de control → Nuevo usuario → Rol, con una frase que explica qué implica; o `create-user … --guest` por CLI) y se **cambia en cualquier momento** desde la columna Rol de la tabla de usuarios (`set-guest <correo> [--remove]` por CLI). El cambio aplica en cuanto la persona recarga la sesión.
+- En la interfaz, un invitado no ve «Nuevo tablero» (portada y barra lateral) ni «Crear subtablero»; no se le siembra un tablero inicial; si no le han compartido nada, la portada se lo explica.
+- Lo hace cumplir el **servidor**: rechaza cualquier escritura de un invitado sobre un tablero que no exista ya (crear tableros) o sobre filas sin tablero. Si a alguien con tableros propios se le da el rol de invitado, conserva y sigue editando los que ya tenía; solo deja de poder crear nuevos.

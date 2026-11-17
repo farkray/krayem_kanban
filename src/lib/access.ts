@@ -29,3 +29,11 @@ export const setParticipantsResolver = (fn: ((boardId: string) => string[] | nul
   participants = fn ?? (() => null)
 }
 export const participantIds = (boardId: string) => participants(boardId)
+
+let guest = false
+
+/** Cuenta de invitado: no crea tableros, solo participa en los que le comparten. */
+export const setGuestMode = (on: boolean) => {
+  guest = on
+}
+export const isGuestMode = () => guest

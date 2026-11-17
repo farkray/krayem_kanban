@@ -18,6 +18,7 @@ const users = [
     alias: 'Ana López',
     createdAt: '2026-11-02',
     isAdmin: false,
+    isGuest: false,
     rows: 3,
   },
 ]
@@ -177,5 +178,53 @@ describe('AdminPanel: pantalla propia', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('no tiene permiso')
     expect(calls).toHaveLength(0)
     expect(screen.getByRole('button', { name: /Volver a los tableros/ })).toBeInTheDocument()
+  })
+})
+
+describe('AdminPanel: rol de invitado', () => {
+  it('muestra el rol y permite cambiarlo a un usuario existente (el admin no tiene selector)', async () => {
+    const bodies: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const key = `${init?.method ?? 'GET'} ${String(url).replace(/^.*\/api/, '')}`
+        if (init?.body) bodies.push(`${key} ${init.body}`)
+        if (key === 'GET /admin/users') return Response.json({ users })
+        return Response.json({ user: users[1] })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const table = await screen.findByRole('table', { name: 'Usuarios' })
+    expect(within(table).queryByRole('combobox', { name: 'Rol de admin@correo.com' })).toBeNull()
+    const select = within(table).getByRole('combobox', { name: 'Rol de ana@correo.com' })
+    expect(select).toHaveValue('user')
+    await user.selectOptions(select, 'guest')
+    expect(bodies).toContain('PATCH /admin/users/u2 {"guest":true}')
+  })
+
+  it('al crear se elige el rol y se explica qué implica', async () => {
+    const bodies: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const key = `${init?.method ?? 'GET'} ${String(url).replace(/^.*\/api/, '')}`
+        if (init?.body) bodies.push(`${key} ${init.body}`)
+        if (key === 'GET /admin/users') return Response.json({ users })
+        return Response.json({ user: users[1], password: 'Temporal-123xyz' }, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    await screen.findByRole('table', { name: 'Usuarios' })
+    await user.type(screen.getByLabelText('Correo'), 'inv@correo.com')
+    const form = screen.getByRole('region', { name: 'Nuevo usuario' })
+    await user.selectOptions(within(form).getByRole('combobox'), 'guest')
+    expect(screen.getByText(/no crea tableros/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Crear usuario' }))
+    await screen.findByText('Temporal-123xyz')
+    expect(
+      bodies.some((b) => b.startsWith('POST /admin/users') && b.includes('"guest":true')),
+    ).toBe(true)
   })
 })

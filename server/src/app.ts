@@ -21,6 +21,7 @@ import {
   renewSession,
   sessionUser,
   setAlias,
+  setGuest,
   setPasswordHash,
   validEmail,
   verifyPassword,
@@ -135,6 +136,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return u
   }
 
+  const isGuest = (userId: string) =>
+    (
+      db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId) as
+        { is_guest: number } | undefined
+    )?.is_guest === 1
+
   const sessionIsAdmin = (userId: string) =>
     (
       db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId) as
@@ -207,7 +214,13 @@ export function buildApp(opts: AppOptions): BuiltApp {
     byEmail.reset(email)
     setCookie(reply, createSession(db, user.id))
     return {
-      user: { id: user.id, email: user.email, alias: user.alias, isAdmin: sessionIsAdmin(user.id) },
+      user: {
+        id: user.id,
+        email: user.email,
+        alias: user.alias,
+        isAdmin: sessionIsAdmin(user.id),
+        isGuest: isGuest(user.id),
+      },
     }
   })
 
@@ -278,8 +291,15 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   app.post('/api/admin/users', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
-    const body = (req.body ?? {}) as { email?: unknown; password?: unknown; alias?: unknown }
+    const body = (req.body ?? {}) as {
+      email?: unknown
+      password?: unknown
+      alias?: unknown
+      guest?: unknown
+    }
     if (!isStr(body.email, 254)) return reply.code(400).send({ error: 'bad_request' })
+    if (body.guest !== undefined && typeof body.guest !== 'boolean')
+      return reply.code(400).send({ error: 'bad_request' })
     const email = normalizeEmail(body.email)
     if (!validEmail(email)) return reply.code(400).send({ error: 'invalid_email' })
     const alias = cleanAlias(body.alias)
@@ -293,7 +313,14 @@ export function buildApp(opts: AppOptions): BuiltApp {
     // Sin contraseña indicada se genera una temporal; solo se muestra en esta respuesta.
     const generated = !body.password
     const password = generated ? generatePassword() : String(body.password)
-    const user = createUser(db, email, await hashPassword(password), false, alias)
+    const user = createUser(
+      db,
+      email,
+      await hashPassword(password),
+      false,
+      alias,
+      body.guest === true,
+    )
     return reply.code(201).send({ user, ...(generated ? { password } : {}) })
   })
 
@@ -302,9 +329,20 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const { id } = req.params as { id: string }
     if (!ID_RE.test(id) || !listUsers(db).some((u) => u.id === id))
       return reply.code(404).send({ error: 'not_found' })
-    const alias = cleanAlias((req.body as { alias?: unknown } | null)?.alias)
-    if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
-    setAlias(db, id, alias)
+    const body = (req.body ?? {}) as { alias?: unknown; guest?: unknown }
+    if (body.alias !== undefined) {
+      const alias = cleanAlias(body.alias)
+      if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
+      setAlias(db, id, alias)
+    }
+    if (body.guest !== undefined) {
+      if (typeof body.guest !== 'boolean') return reply.code(400).send({ error: 'bad_request' })
+      const target = listUsers(db).find((u) => u.id === id)
+      // Un administrador no puede ser invitado (primero se le quita el rol de administrador)
+      if (body.guest && target?.isAdmin)
+        return reply.code(400).send({ error: 'admin_cannot_be_guest' })
+      setGuest(db, id, body.guest)
+    }
     return { user: listUsers(db).find((u) => u.id === id) }
   })
 
@@ -394,6 +432,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
     // Un "me gusta" solo lo escribe su dueño (nadie da "me gusta" en nombre de otra persona).
     if (table === 'likes' && row.userId !== userId) return null
     const boardId = boardIdOf(table, row)
+    // Un invitado no crea tableros: solo escribe en tableros que ya existen (y a los que ya pertenece)
+    if (isGuest(userId) && (!boardId || !boardOwner.get(boardId))) return null
     // Un subtablero cuelga de un tablero de primer nivel (un solo nivel de profundidad).
     if (table === 'boards' && boardId !== id && parentOf(boardId as string)) return null
     const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]

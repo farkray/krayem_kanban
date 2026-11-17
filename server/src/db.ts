@@ -119,6 +119,8 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX outbox_due ON outbox(status, next_attempt_at);
   `,
+  // 7: rol de invitado: no crea tableros, solo participa en los que le comparten
+  `ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0;`,
 ]
 
 export function openDb(file: string): DB {
