@@ -30,6 +30,7 @@
   --head-peach: #fbdcc4;
   --head-rose: #f9d6e2;
   --head-lilac: #e3dafa;
+  --head-stone: #dcdfe1; /* gris apagado: columnas en pausa */
   --color-card: #e7edeb; /* gris verdoso: destaca sobre la columna */
   --color-card-border: rgb(var(--ink) / 0.28);
   --color-card-border-hover: rgb(var(--ink) / 0.45);
@@ -202,6 +203,7 @@
     --head-peach: #50301b;
     --head-rose: #502536;
     --head-lilac: #38305a;
+    --head-stone: #2e3539;
     --color-card: #1f2d33; /* un escalón por encima de la columna */
     --color-card-border: rgb(var(--ink) / 0.2);
     --color-card-border-hover: rgb(var(--ink) / 0.34);

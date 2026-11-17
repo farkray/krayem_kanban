@@ -39,6 +39,7 @@
 .header[data-color='peach'] { --head: var(--head-peach); }
 .header[data-color='rose'] { --head: var(--head-rose); }
 .header[data-color='lilac'] { --head: var(--head-lilac); }
+.header[data-color='stone'] { --head: var(--head-stone); }
 
 .headText {
   flex: 1;

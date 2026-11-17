@@ -181,7 +181,7 @@ export const kindOf = (c: { kind?: ColumnKind }): ColumnKind => c.kind ?? 'stand
 export const limitOf = (c: { kind?: ColumnKind }): number | null => WIP_LIMITS[kindOf(c)]
 
 /** Tonos claros para el encabezado de una columna (tokens.css: --head-<color>). Texto siempre legible. */
-export const HEADER_COLORS = ['sky', 'mint', 'sun', 'peach', 'rose', 'lilac'] as const
+export const HEADER_COLORS = ['sky', 'mint', 'sun', 'peach', 'rose', 'lilac', 'stone'] as const
 export type HeaderColor = (typeof HEADER_COLORS)[number]
 export const HEADER_COLOR_NAMES: Record<HeaderColor, string> = {
   sky: 'Cielo',
@@ -190,6 +190,7 @@ export const HEADER_COLOR_NAMES: Record<HeaderColor, string> = {
   peach: 'Durazno',
   rose: 'Rosa',
   lilac: 'Lila',
+  stone: 'Gris',
 }
 export const headerColorOf = (c: { headerColor?: string }): HeaderColor | null =>
   (HEADER_COLORS as readonly string[]).includes(c.headerColor ?? '')

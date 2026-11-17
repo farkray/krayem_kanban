@@ -10,8 +10,8 @@ test('el encabezado de columna cambia de color con una paleta de 6 tonos claros'
   const header = col.locator('header')
   await col.getByRole('button', { name: /Tipo de columna/ }).click()
   const group = col.getByRole('radiogroup', { name: 'Color del encabezado' })
-  // sin color + 6 tonos
-  await expect(group.getByRole('radio')).toHaveCount(7)
+  // sin color + 7 tonos
+  await expect(group.getByRole('radio')).toHaveCount(8)
   await group.getByRole('radio', { name: 'Menta' }).click()
   await expect(header).toHaveAttribute('data-color', 'mint')
   await expect(group.getByRole('radio', { name: 'Menta' })).toHaveAttribute('aria-checked', 'true')
