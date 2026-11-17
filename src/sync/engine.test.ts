@@ -17,6 +17,7 @@ class FakeRemote implements Remote {
     items: new Map(),
     comments: new Map(),
     likes: new Map(),
+    notes: new Map(),
   }
   upserts: TableKey[] = []
   blobs = new Map<string, Blob>()

@@ -246,8 +246,17 @@ export interface Like extends Base {
   userId: string
 }
 
+/** Notas generales del tablero (Markdown): enlaces, acuerdos… Una por tablero, con id `note-<id del tablero>`. */
+export interface Note extends Base {
+  boardId: string
+  bodyMd: string
+}
+
+export const noteIdOf = (boardId: string) => `note-${boardId}`
+
 export interface Data {
   boards: Board[]
+  notes: Note[]
   labels: Label[]
   columns: Column[]
   cards: Card[]
@@ -262,6 +271,7 @@ export type TableKey = keyof Data
 /** Orden de dependencias: los padres antes que los hijos (también el orden de envío a la nube). */
 export const TABLE_KEYS: TableKey[] = [
   'boards',
+  'notes',
   'labels',
   'columns',
   'cards',
@@ -278,6 +288,7 @@ export const LIMITS = {
   column: 40,
   card: 200,
   description: 10000,
+  note: 20000,
   item: 400, // texto guardado (las menciones ocupan más que lo que se ve)
   itemText: 200, // lo que se puede escribir en un ítem
   items: 100,

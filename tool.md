@@ -369,3 +369,11 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - Se elige **al crear** la cuenta (panel de control → Nuevo usuario → Rol, con una frase que explica qué implica; o `create-user … --guest` por CLI) y se **cambia en cualquier momento** desde la columna Rol de la tabla de usuarios (`set-guest <correo> [--remove]` por CLI). El cambio aplica en cuanto la persona recarga la sesión.
 - En la interfaz, un invitado no ve «Nuevo tablero» (portada y barra lateral) ni «Crear subtablero»; no se le siembra un tablero inicial; si no le han compartido nada, la portada se lo explica.
 - Lo hace cumplir el **servidor**: rechaza cualquier escritura de un invitado sobre un tablero que no exista ya (crear tableros) o sobre filas sin tablero. Si a alguien con tableros propios se le da el rol de invitado, conserva y sigue editando los que ya tenía; solo deja de poder crear nuevos.
+
+## 24. Notas del tablero (implementado)
+
+- Cada tablero tiene un panel lateral de **notas generales** (Markdown) para dejar lo que todos necesitan a la mano: p. ej. el enlace de la carpeta de Google Drive, acuerdos o accesos. Se abre y se cierra con el botón **Notas** del encabezado del tablero (o la X del panel) y se recuerda abierto entre visitas.
+- Se escribe con **Escribir / Editar notas** (Markdown: enlaces `[texto](url)`, listas, negritas; los enlaces sueltos son clicables y abren en pestaña nueva) y se guarda con **Guardar** (Ctrl/Cmd+Enter); Escape cancela.
+- Es compartido: lo que escribe el dueño o un **editor** lo ve todo el tablero en vivo; un **lector** las ve pero no las edita. En un subtablero se muestran las notas del tablero de origen. Eliminar el tablero se lleva sus notas (y «Deshacer» las devuelve).
+- En pantallas anchas el panel se acomoda a la izquierda del tablero; en teléfono se abre encima, casi a pantalla completa.
+- Datos: una fila por tablero en la tabla `notes` (`id = note-<id del tablero>`), sincronizada como el resto; hasta 20 000 caracteres.

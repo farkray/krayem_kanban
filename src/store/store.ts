@@ -8,6 +8,7 @@ import {
   DEFAULT_COLUMNS,
   LIMITS,
   MAX_COLUMNS,
+  noteIdOf,
   TABLE_KEYS,
   COLUMN_KIND_NAMES,
   limitOf,
@@ -26,6 +27,7 @@ import {
   type Comment,
   type Data,
   type Label,
+  type Note,
   type LabelColor,
   type Like,
   type TableKey,
@@ -100,6 +102,8 @@ interface Actions {
   /** Cambia el color y/o el icono del tablero (solo el dueño; los demás no pueden escribir el tablero). */
   setBoardAppearance: (id: string, look: { color?: BoardColor; icon?: BoardIconName }) => boolean
   deleteBoard: (id: string) => void
+  /** Guarda las notas generales del tablero (Markdown). Devuelve false si no cabe o no se puede editar. */
+  saveNote: (boardId: string, bodyMd: string) => boolean
   // columnas
   addColumn: (boardId: string, title: string) => string | null
   renameColumn: (id: string, title: string) => boolean
@@ -185,6 +189,7 @@ const emptyData = (): Data => ({
   items: [],
   comments: [],
   likes: [],
+  notes: [],
 })
 
 /** Quien da "me gusta" cuando no hay cuentas (modo solo-local). */
@@ -347,8 +352,8 @@ export const useStore = create<Store>((set, get) => {
   }
 
   async function load(): Promise<void> {
-    const [boards, labels, columns, cards, attachments, items, comments, likes] = await Promise.all(
-      [
+    const [boards, labels, columns, cards, attachments, items, comments, likes, notes] =
+      await Promise.all([
         db.boards.toArray(),
         db.labels.toArray(),
         db.columns.toArray(),
@@ -357,9 +362,9 @@ export const useStore = create<Store>((set, get) => {
         db.items.toArray(),
         db.comments.toArray(),
         db.likes.toArray(),
-      ],
-    )
-    set({ boards, labels, columns, cards, attachments, items, comments, likes, ready: true })
+        db.notes.toArray(),
+      ])
+    set({ boards, labels, columns, cards, attachments, items, comments, likes, notes, ready: true })
     await get().migrateLabels()
     // Con nube configurada, el tablero inicial se crea tras la primera descarga (ver sync/engine).
     if (!isConfigured()) await get().seedIfEmpty()
@@ -404,6 +409,7 @@ export const useStore = create<Store>((set, get) => {
         items: s.items.filter(inBoard),
         comments: s.comments.filter(inBoard),
         likes: s.likes.filter(inBoard),
+        notes: s.notes.filter(inBoard),
       }
       set({
         boards: s.boards.filter((x) => !removed.boards.includes(x)),
@@ -414,6 +420,7 @@ export const useStore = create<Store>((set, get) => {
         items: s.items.filter((x) => !removed.items.includes(x)),
         comments: s.comments.filter((x) => !removed.comments.includes(x)),
         likes: s.likes.filter((x) => !removed.likes.includes(x)),
+        notes: s.notes.filter((x) => !removed.notes.includes(x)),
       })
       await db.transaction('rw', [...db.tables], async () => {
         for (const k of TABLE_KEYS) {
@@ -540,6 +547,20 @@ export const useStore = create<Store>((set, get) => {
       return true
     },
 
+    saveNote: (boardId, bodyMd) => {
+      if (bodyMd.length > LIMITS.note) return false
+      if (!live(get().boards).some((b) => b.id === boardId)) return false
+      const id = noteIdOf(boardId)
+      const existing = get().notes.find((n) => n.id === id)
+      const ts = stamp()
+      const note: Note = existing
+        ? { ...existing, bodyMd, updatedAt: ts }
+        : { id, boardId, bodyMd, createdAt: ts, updatedAt: ts }
+      delete note.deletedAt
+      put('notes', [note])
+      return true
+    },
+
     deleteBoard: (id) => {
       const s = get()
       const board = live(s.boards).find((b) => b.id === id)
@@ -562,6 +583,7 @@ export const useStore = create<Store>((set, get) => {
       const snap: Snapshot = {
         boards: [board, ...kids],
         columns: live(s.columns).filter((c) => c.boardId === id),
+        notes: live(s.notes).filter((n) => n.boardId === id),
         labels: live(s.labels).filter((l) => kidIds.has(l.boardId ?? '')),
         ...cardSnapshot(cardIds),
       }

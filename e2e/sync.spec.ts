@@ -520,6 +520,24 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   ).not.toContainText('Sin leer')
   await b.page.keyboard.press('Escape')
 
+  // Notas del tablero: A las escribe, B (editor) las ve y las edita, A ve el cambio
+  await a.page.getByRole('button', { name: 'Notas', exact: true }).click()
+  await a.page.getByRole('button', { name: 'Escribir notas' }).click()
+  await a.page
+    .getByRole('textbox', { name: /Notas del tablero/ })
+    .fill('Drive: https://drive.google.com/drive/folders/xyz')
+  await a.page.getByRole('button', { name: 'Guardar' }).click()
+  await saved(a.page)
+  await b.page.getByRole('button', { name: 'Notas', exact: true }).click()
+  await expect(b.page.getByRole('link', { name: /drive.google.com/ })).toBeVisible({
+    timeout: 15_000,
+  })
+  await b.page.getByRole('button', { name: 'Editar notas' }).click()
+  await b.page.getByRole('textbox', { name: /Notas del tablero/ }).fill('Editado por B')
+  await b.page.getByRole('button', { name: 'Guardar' }).click()
+  await saved(b.page)
+  await expect(a.page.getByText('Editado por B')).toBeVisible({ timeout: 15_000 })
+
   // B (editor) agrega una tarjeta y A la ve en vivo; B no puede eliminar ni compartir el tablero
   await addCard(b.page, 'Por hacer', 'Hecha por B')
   await saved(b.page)
@@ -538,6 +556,8 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
     .getByRole('button', { name: 'Cerrar' })
     .click()
   await expect(shared).toContainText('Solo lectura', { timeout: 15_000 })
+  await expect(b.page.getByText('Editado por B')).toBeVisible() // las notas se leen
+  await expect(b.page.getByRole('button', { name: 'Editar notas' })).toHaveCount(0) // pero no se editan
   await expect(b.page.getByRole('button', { name: 'Salir del tablero' })).toBeVisible()
   const axeB = await new AxeBuilder({ page: b.page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])

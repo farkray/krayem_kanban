@@ -24,7 +24,7 @@ const snippet = (text: string, q: string): string => {
 
 const live = <T extends { deletedAt?: string }>(rows: T[]) => rows.filter((r) => !r.deletedAt)
 
-export function searchAll(data: Data, query: string, limit = 30): SearchResult[] {
+export function searchAll(data: Omit<Data, 'notes'>, query: string, limit = 30): SearchResult[] {
   const q = normalize(query.trim())
   if (!q) return []
   const out: SearchResult[] = []

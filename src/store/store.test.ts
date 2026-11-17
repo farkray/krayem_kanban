@@ -804,3 +804,51 @@ describe('cuenta de invitado', () => {
     expect(S().boards).toHaveLength(1)
   })
 })
+
+describe('notas del tablero', () => {
+  afterEach(() => setRoleResolver(null))
+
+  it('crea y actualiza la nota única del tablero (id determinista) y respeta el límite', () => {
+    const b = S().createBoard('X')!
+    expect(S().saveNote(b, 'https://drive.google.com/abc')).toBe(true)
+    expect(S().notes).toHaveLength(1)
+    expect(S().notes[0]).toMatchObject({
+      id: `note-${b}`,
+      boardId: b,
+      bodyMd: 'https://drive.google.com/abc',
+    })
+    expect(S().saveNote(b, 'otra')).toBe(true)
+    expect(S().notes).toHaveLength(1) // se actualiza, no se duplica
+    expect(S().notes[0].bodyMd).toBe('otra')
+    expect(S().saveNote(b, 'x'.repeat(20001))).toBe(false)
+    expect(S().saveNote('no-existe', 'hola')).toBe(false)
+  })
+
+  it('en solo lectura no se guarda; un editor sí', () => {
+    const b = S().createBoard('X')!
+    setRoleResolver(() => 'viewer')
+    S().saveNote(b, 'no')
+    expect(S().notes).toHaveLength(0)
+    setRoleResolver(() => 'editor')
+    S().saveNote(b, 'sí')
+    expect(S().notes.map((n) => n.bodyMd)).toEqual(['sí'])
+  })
+
+  it('eliminar el tablero se lleva sus notas y deshacer las devuelve', () => {
+    const b = S().createBoard('X')!
+    S().saveNote(b, 'nota')
+    S().deleteBoard(b)
+    expect(S().notes[0].deletedAt).toBeTruthy()
+    S().toast!.undo!()
+    expect(S().notes[0].deletedAt).toBeUndefined()
+  })
+
+  it('purgeBoards borra también las notas del dispositivo', async () => {
+    const a = S().createBoard('A')!
+    S().createBoard('B')
+    S().saveNote(a, 'nota')
+    await S().purgeBoards([a])
+    expect(S().notes).toHaveLength(0)
+    expect(await db.notes.count()).toBe(0)
+  })
+})

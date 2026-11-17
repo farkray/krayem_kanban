@@ -1,10 +1,12 @@
 import { normalize, searchAll } from './search'
 import type { Data } from './types'
 
+type Searchable = Omit<Data, 'notes'>
+
 const ts = '2026-11-03T10:00:00.000Z'
 const base = { createdAt: ts, updatedAt: ts }
 
-const data: Data = {
+const data: Searchable = {
   boards: [{ ...base, id: 'b1', title: 'Trabajo', position: 'a0' }],
   columns: [{ ...base, id: 'c1', boardId: 'b1', title: 'Por hacer', position: 'a0' }],
   cards: [
@@ -46,7 +48,7 @@ const data: Data = {
 
 describe('búsqueda por etiqueta', () => {
   it('encuentra tarjetas por el nombre de su etiqueta', () => {
-    const withLabel: Data = {
+    const withLabel: Searchable = {
       ...data,
       labels: [{ ...base, id: 'l1', name: 'Coppel', color: 'blue' }],
       cards: data.cards.map((c) => (c.id === 't1' ? { ...c, labelIds: ['l1'] } : c)),

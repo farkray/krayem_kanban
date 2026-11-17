@@ -6,6 +6,7 @@ export type DB = DatabaseSync
 
 export const TABLES = [
   'boards',
+  'notes',
   'labels',
   'columns',
   'cards',

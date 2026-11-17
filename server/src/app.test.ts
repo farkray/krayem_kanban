@@ -1912,3 +1912,55 @@ describe('rol de invitado', () => {
     ])
   })
 })
+
+describe('notas del tablero', () => {
+  const note = (boardId: string, body = 'enlace') => ({
+    id: `note-${boardId}`,
+    boardId,
+    bodyMd: body,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '',
+  })
+
+  it('el editor escribe las notas, el lector las ve pero no las cambia, y un ajeno no las ve', async () => {
+    await makeApp()
+    await addUser('dueno@correo.com')
+    await addUser('ed@correo.com')
+    await addUser('lec@correo.com')
+    await addUser('fuera@correo.com')
+    const c = Object.fromEntries(
+      await Promise.all(
+        ['dueno', 'ed', 'lec', 'fuera'].map(async (n) => [
+          n,
+          (await login(`${n}@correo.com`)).cookie,
+        ]),
+      ),
+    ) as Record<string, string>
+    const call = (cookie: string, url: string, payload?: object) =>
+      built.app.inject({ method: payload ? 'POST' : 'GET', url, headers: headers(cookie), payload })
+    await call(c.dueno, '/api/sync/boards', { rows: [board('b1')] })
+    await call(c.dueno, '/api/boards/b1/members', { email: 'ed@correo.com', role: 'editor' })
+    await call(c.dueno, '/api/boards/b1/members', { email: 'lec@correo.com', role: 'viewer' })
+
+    expect(
+      (
+        await call(c.ed, '/api/sync/notes', { rows: [note('b1', 'https://drive.google.com/x')] })
+      ).json().rejected,
+    ).toBeUndefined()
+    const read = async (cookie: string) =>
+      ((await call(cookie, '/api/sync/notes')).json().rows as { bodyMd: string }[]).map(
+        (r) => r.bodyMd,
+      )
+    expect(await read(c.dueno)).toEqual(['https://drive.google.com/x'])
+    expect(await read(c.lec)).toEqual(['https://drive.google.com/x'])
+    expect(await read(c.fuera)).toEqual([])
+    // el lector no escribe; el editor sí puede actualizarla
+    expect(
+      (await call(c.lec, '/api/sync/notes', { rows: [note('b1', 'hackeado')] })).json().rejected,
+    ).toEqual(['note-b1'])
+    expect(
+      (await call(c.ed, '/api/sync/notes', { rows: [note('b1', 'v2')] })).json().rejected,
+    ).toBeUndefined()
+    expect(await read(c.dueno)).toEqual(['v2'])
+  })
+})

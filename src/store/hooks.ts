@@ -246,3 +246,9 @@ export function useLabelIndex() {
   const labels = useStore((s) => s.labels)
   return useMemo(() => new Map(live(labels).map((l) => [l.id, l])), [labels])
 }
+
+/** Notas generales de un tablero (vacío si aún no hay). */
+export function useNote(boardId: string | null | undefined) {
+  const notes = useStore((s) => s.notes)
+  return notes.find((n) => n.boardId === boardId && !n.deletedAt)?.bodyMd ?? ''
+}
