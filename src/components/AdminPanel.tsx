@@ -296,7 +296,19 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
 
       {error && (
         <p className={styles.error} role="alert">
-          {error}
+          {error}{' '}
+          {users === null && (
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => {
+                setError(null)
+                void load()
+              }}
+            >
+              Reintentar
+            </button>
+          )}
         </p>
       )}
 

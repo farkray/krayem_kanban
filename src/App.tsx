@@ -114,7 +114,12 @@ export default function App() {
     setOpenCardId(n.cardId)
   }
 
-  if (!ready || authStatus === 'loading') return <div className={styles.loading}>Cargando…</div>
+  if (!ready || authStatus === 'loading') return (
+      <div className={styles.loading} role="status">
+        <span className={styles.spinner} aria-hidden="true" />
+        Cargando…
+      </div>
+    )
   if (authStatus === 'signedOut') return <LoginScreen />
 
   const drawer = !wide

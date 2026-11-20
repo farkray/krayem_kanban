@@ -61,6 +61,21 @@ describe('AdminPanel', () => {
     ).toBeInTheDocument()
   })
 
+  it('si no carga la lista ofrece Reintentar y recupera al volver el servidor', async () => {
+    let down = true
+    mockApi({
+      'GET /admin/users': () =>
+        down ? Response.json({ error: 'error' }, { status: 500 }) : Response.json({ users }),
+    })
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const retry = await screen.findByRole('button', { name: 'Reintentar' })
+    expect(screen.getByRole('alert')).toHaveTextContent(/No se pudo completar/)
+    down = false
+    await userEvent.setup().click(retry)
+    expect(await screen.findByRole('table', { name: 'Usuarios' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+  })
+
   it('crear sin contraseña muestra la temporal generada', async () => {
     mockApi({
       'POST /admin/users': () =>
