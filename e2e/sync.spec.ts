@@ -331,6 +331,7 @@ test('el admin crea, restablece y elimina usuarios; un usuario normal no ve el p
 
   // crear con contraseña temporal generada
   const email = unique()
+  await dlg.getByRole('button', { name: 'Nuevo usuario' }).click()
   const newUser = dlg.getByRole('region', { name: 'Nuevo usuario' })
   await newUser.getByLabel('Correo').fill(email)
   await newUser.getByLabel(/Alias/).fill('Jorge  E2E')
@@ -598,6 +599,7 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
 
   // el admin crea un usuario con rol de invitado
   await admin.page.getByRole('button', { name: 'Panel de control' }).click()
+  await admin.page.getByRole('button', { name: 'Nuevo usuario' }).click()
   const form = admin.page.getByRole('region', { name: 'Nuevo usuario' })
   const email = unique()
   await form.getByLabel('Correo').fill(email)
@@ -666,11 +668,18 @@ test('workspaces: el admin los crea y asigna; no se ven usuarios de otros worksp
   await admin.page.goto('/admin')
   const main = admin.page.getByRole('main')
   const ws = `Mercabits ${Date.now()}`
+  // pestañas: Usuarios, Workspaces y Avisos
+  await expect(main.getByRole('tab')).toHaveText([/Usuarios/, /Workspaces/, /Avisos/])
+  await expect(main.getByRole('tab', { name: /Usuarios/ })).toHaveAttribute('aria-selected', 'true')
+  await main.getByRole('tab', { name: /Workspaces/ }).click()
   await main.getByLabel('Nombre del nuevo workspace').fill(ws)
   await main.getByRole('button', { name: 'Crear', exact: true }).click()
   await expect(main.getByRole('list', { name: 'Workspaces' })).toContainText(ws)
+  await expect(main.getByRole('region', { name: `Detalle de ${ws}` })).toBeVisible()
+  await main.getByRole('tab', { name: /Usuarios/ }).click()
 
   const create = async (email: string, inWs: boolean) => {
+    await main.getByRole('button', { name: 'Nuevo usuario' }).click()
     const form = main.getByRole('region', { name: 'Nuevo usuario' })
     await form.getByLabel('Correo').fill(email)
     await form.getByLabel('Contraseña (opcional)').fill(PASSWORD)
@@ -684,7 +693,13 @@ test('workspaces: el admin los crea y asigna; no se ven usuarios de otros worksp
   await create(a, true)
   await create(b, true)
   await create(c, false)
+  await main.getByRole('tab', { name: /Workspaces/ }).click()
   await expect(main.getByRole('list', { name: 'Workspaces' })).toContainText('2 miembros')
+  await main.getByRole('button', { name: /^General/ }).click()
+  await main.getByRole('tab', { name: /Avisos/ }).click()
+  await expect(main.getByRole('heading', { name: /Avisos|Entrega/ }).first()).toBeVisible()
+  const axe = await new AxeBuilder({ page: admin.page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
 
   const userA = await newDevice(browser)
   await signIn(userA.page, a)

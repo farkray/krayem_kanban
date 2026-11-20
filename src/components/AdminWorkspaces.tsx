@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import {
   adminCreateWorkspace,
   adminDeleteWorkspace,
@@ -7,6 +7,7 @@ import {
   type AdminUser,
   type AdminWorkspace,
 } from '../sync/admin'
+import { Avatar } from './Avatar'
 import panel from './AdminPanel.module.css'
 import styles from './AdminWorkspaces.module.css'
 
@@ -18,27 +19,31 @@ const MESSAGES: Record<string, string> = {
 }
 const message = (code: string) => MESSAGES[code] ?? 'No se pudo completar la acción.'
 
-const who = (u: AdminUser) => (u.alias ? `${u.alias} (${u.email})` : u.email)
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-/** Sección del panel de control: crear workspaces y asignarles usuarios. */
-export function AdminWorkspaces({
-  users,
-  list,
-  onReplace,
-  onReload,
-}: {
+interface Props {
   users: AdminUser[]
   list: AdminWorkspace[] | null
   onReplace: (w: AdminWorkspace) => void
   onReload: () => void
-}) {
+}
+
+/** Pestaña Workspaces: lista a la izquierda, detalle (nombre y miembros) a la derecha. */
+export function AdminWorkspaces({ users, list, onReplace, onReload }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
-  const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
-  const [open, setOpen] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
-  const load = onReload
-  const replace = onReplace
+  const current = list?.find((w) => w.id === selected) ?? list?.[0] ?? null
+
+  const people = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return users.filter(
+      (u) => !q || u.email.toLowerCase().includes(q) || u.alias.toLowerCase().includes(q),
+    )
+  }, [users, query])
 
   const create = async (e: FormEvent) => {
     e.preventDefault()
@@ -46,17 +51,16 @@ export function AdminWorkspaces({
     const res = await adminCreateWorkspace(name.trim())
     if (!res.ok) return setError(message(res.error))
     setName('')
-    setOpen(res.data.workspace.id)
-    void load()
+    setSelected(res.data.workspace.id)
+    onReload()
   }
 
-  const rename = async () => {
-    if (!editing) return
+  const rename = async (w: AdminWorkspace, value: string) => {
     setError(null)
-    const res = await adminRenameWorkspace(editing.id, editing.value.trim())
+    const res = await adminRenameWorkspace(w.id, value.trim())
     if (!res.ok) return setError(message(res.error))
-    setEditing(null)
-    replace(res.data.workspace)
+    setRenaming(null)
+    onReplace(res.data.workspace)
   }
 
   const toggle = async (w: AdminWorkspace, userId: string, on: boolean) => {
@@ -64,24 +68,20 @@ export function AdminWorkspaces({
     const next = on ? [...w.members, userId] : w.members.filter((m) => m !== userId)
     const res = await adminSetWorkspaceMembers(w.id, next)
     if (!res.ok) return setError(message(res.error))
-    replace(res.data.workspace)
+    onReplace(res.data.workspace)
   }
 
   const remove = async (w: AdminWorkspace) => {
     setError(null)
     const res = await adminDeleteWorkspace(w.id)
     if (!res.ok) return setError(message(res.error))
-    void load()
+    setSelected(null)
+    onReload()
   }
 
   return (
-    <section className={panel.card} aria-labelledby="ws-title">
-      <div className={panel.cardHead}>
-        <h2 id="ws-title" className={panel.sub}>
-          Workspaces
-        </h2>
-      </div>
-      <p className={panel.hint}>
+    <div>
+      <p className={styles.intro}>
         Quienes comparten un workspace se ven y pueden compartirse tableros. No ven a nadie fuera de
         sus workspaces.
       </p>
@@ -91,105 +91,154 @@ export function AdminWorkspaces({
         </p>
       )}
 
-      <ul className={styles.list} aria-label="Workspaces">
-        {(list ?? []).map((w) => {
-          const expanded = open === w.id
-          return (
-            <li key={w.id} className={styles.item}>
-              {editing?.id === w.id ? (
+      <div className={styles.layout}>
+        <section className={panel.card} aria-labelledby="ws-list-title">
+          <h2 id="ws-list-title" className={`${panel.sub} ${styles.listTitle}`}>
+            Workspaces
+          </h2>
+          <ul className={styles.list} aria-label="Workspaces">
+            {(list ?? []).map((w) => (
+              <li key={w.id}>
+                <button
+                  type="button"
+                  className={styles.pick}
+                  aria-current={current?.id === w.id ? 'true' : undefined}
+                  onClick={() => {
+                    setSelected(w.id)
+                    setRenaming(null)
+                  }}
+                >
+                  <span className={styles.pickName}>{w.name}</span>
+                  <span className={styles.pickMeta}>
+                    {plural(w.members.length, 'miembro', 'miembros')} ·{' '}
+                    {plural(w.boards, 'tablero', 'tableros')}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {list?.length === 0 && <li className={panel.hint}>Aún no hay workspaces.</li>}
+          </ul>
+          <form className={styles.create} onSubmit={create}>
+            <input
+              className={panel.input}
+              value={name}
+              maxLength={60}
+              placeholder="Nuevo workspace (ej. Mercabits)"
+              aria-label="Nombre del nuevo workspace"
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button type="submit" className={panel.primary} disabled={name.trim() === ''}>
+              Crear
+            </button>
+          </form>
+        </section>
+
+        {current ? (
+          <section
+            className={panel.card}
+            aria-label={`Detalle de ${current.name}`}
+            key={current.id}
+          >
+            <div className={styles.detailHead}>
+              {renaming === current.id ? (
                 <form
-                  className={styles.row}
+                  className={styles.renameForm}
                   onSubmit={(e) => {
                     e.preventDefault()
-                    void rename()
+                    void rename(current, new FormData(e.currentTarget).get('n') as string)
                   }}
                 >
                   <input
+                    name="n"
                     className={panel.input}
-                    value={editing.value}
+                    defaultValue={current.name}
                     maxLength={60}
                     aria-label="Nombre del workspace"
                     autoFocus
-                    onChange={(e) => setEditing({ id: w.id, value: e.target.value })}
-                    onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                    onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
                   />
                   <button type="submit" className={panel.primary}>
                     Guardar
                   </button>
+                  <button type="button" className={panel.secondary} onClick={() => setRenaming(null)}>
+                    Cancelar
+                  </button>
                 </form>
               ) : (
-                <div className={styles.row}>
-                  <div className={styles.name}>
-                    <strong>{w.name}</strong>
-                    <span className={panel.hint}>
-                      {w.members.length === 1 ? '1 miembro' : `${w.members.length} miembros`} ·{' '}
-                      {w.boards === 1 ? '1 tablero' : `${w.boards} tableros`}
-                    </span>
+                <>
+                  <h2 className={panel.sub}>{current.name}</h2>
+                  <div className={styles.actions}>
+                    <button
+                      type="button"
+                      className={panel.secondary}
+                      aria-label={`Renombrar ${current.name}`}
+                      onClick={() => setRenaming(current.id)}
+                    >
+                      Renombrar
+                    </button>
+                    <button
+                      type="button"
+                      className={`${panel.secondary} ${styles.danger}`}
+                      aria-label={`Eliminar ${current.name}`}
+                      disabled={current.boards > 0}
+                      onClick={() => void remove(current)}
+                    >
+                      Eliminar
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={panel.secondary}
-                    aria-expanded={expanded}
-                    aria-label={`Miembros de ${w.name}`}
-                    onClick={() => setOpen(expanded ? null : w.id)}
-                  >
-                    Miembros
-                  </button>
-                  <button
-                    type="button"
-                    className={panel.secondary}
-                    aria-label={`Renombrar ${w.name}`}
-                    onClick={() => setEditing({ id: w.id, value: w.name })}
-                  >
-                    Renombrar
-                  </button>
-                  <button
-                    type="button"
-                    className={`${panel.secondary} ${styles.danger}`}
-                    aria-label={`Eliminar ${w.name}`}
-                    disabled={w.boards > 0}
-                    title={w.boards > 0 ? 'Tiene tableros: no se puede eliminar' : undefined}
-                    onClick={() => void remove(w)}
-                  >
-                    Eliminar
-                  </button>
-                </div>
+                </>
               )}
-              {expanded && (
-                <fieldset className={styles.members}>
-                  <legend className={styles.legend}>Miembros de {w.name}</legend>
-                  {users.map((u) => (
-                    <label key={u.id} className={styles.member}>
-                      <input
-                        type="checkbox"
-                        checked={w.members.includes(u.id)}
-                        onChange={(e) => void toggle(w, u.id, e.target.checked)}
-                      />
-                      <span>{who(u)}</span>
-                    </label>
-                  ))}
-                  {users.length === 0 && <span className={panel.hint}>No hay usuarios.</span>}
-                </fieldset>
-              )}
-            </li>
-          )
-        })}
-        {list?.length === 0 && <li className={panel.hint}>Aún no hay workspaces.</li>}
-      </ul>
+            </div>
+            <p className={panel.hint}>
+              {current.boards > 0
+                ? `Tiene ${plural(current.boards, 'tablero', 'tableros')}, así que no se puede eliminar.`
+                : 'Sin tableros: se puede eliminar.'}
+            </p>
 
-      <form className={styles.create} onSubmit={create}>
-        <input
-          className={panel.input}
-          value={name}
-          maxLength={60}
-          placeholder="Nuevo workspace (ej. Mercabits)"
-          aria-label="Nombre del nuevo workspace"
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button type="submit" className={panel.primary} disabled={name.trim() === ''}>
-          Crear
-        </button>
-      </form>
-    </section>
+            <div className={styles.membersHead}>
+              <h3 className={styles.membersTitle}>Miembros</h3>
+              <span className={styles.membersCount} aria-live="polite">
+                {current.members.length} de {plural(users.length, 'usuario', 'usuarios')}
+              </span>
+              <input
+                type="search"
+                className={panel.search}
+                value={query}
+                placeholder="Buscar persona"
+                aria-label="Buscar persona"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <fieldset className={styles.members}>
+              <legend className={panel.sr}>Miembros de {current.name}</legend>
+              {people.map((u) => (
+                <label key={u.id} className={styles.member}>
+                  <input
+                    type="checkbox"
+                    checked={current.members.includes(u.id)}
+                    onChange={(e) => void toggle(current, u.id, e.target.checked)}
+                  />
+                  <Avatar email={u.email} alias={u.alias} decorative />
+                  <span className={styles.memberText}>
+                    <span>{u.alias || u.email}</span>
+                    {u.alias && <span className={styles.memberMeta}>{u.email}</span>}
+                  </span>
+                </label>
+              ))}
+              {people.length === 0 && <span className={panel.hint}>Nadie coincide.</span>}
+            </fieldset>
+            <p className={panel.hint}>
+              Quitar a alguien le retira el acceso a los tableros compartidos de este workspace.
+            </p>
+          </section>
+        ) : (
+          list && (
+            <section className={panel.card}>
+              <p className={panel.hint}>Crea el primer workspace para empezar a agrupar personas.</p>
+            </section>
+          )
+        )}
+      </div>
+    </div>
   )
 }

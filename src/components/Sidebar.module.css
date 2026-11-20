@@ -221,6 +221,7 @@
 
 .signOut {
   align-self: flex-start;
+  min-height: 28px; /* objetivo táctil ≥ 24px (WCAG 2.5.8) */
   padding: 0;
   border: 0;
   background: none;

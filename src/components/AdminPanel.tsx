@@ -27,6 +27,22 @@ import styles from './AdminPanel.module.css'
 
 const MIN = 10
 
+type Tab = 'users' | 'workspaces' | 'alerts'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'users', label: 'Usuarios' },
+  { id: 'workspaces', label: 'Workspaces' },
+  { id: 'alerts', label: 'Avisos' },
+]
+const TAB_KEY = 'kanban-admin-tab'
+const savedTab = (): Tab => {
+  try {
+    const v = sessionStorage.getItem(TAB_KEY)
+    return TABS.some((t) => t.id === v) ? (v as Tab) : 'users'
+  } catch {
+    return 'users'
+  }
+}
+
 const MESSAGES: Record<string, string> = {
   invalid_email: 'Ese correo no es válido.',
   invalid_alias: 'El alias admite hasta 60 caracteres.',
@@ -118,10 +134,44 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
   const [copied, setCopied] = useState(false)
   const [workspaces, setWorkspaces] = useState<AdminWorkspace[] | null>(null)
   const [newWs, setNewWs] = useState<string[]>([])
+  const [tab, setTab] = useState<Tab>(savedTab)
+  const [creating, setCreating] = useState(false)
+
+  const pickTab = (t: Tab) => {
+    setTab(t)
+    try {
+      sessionStorage.setItem(TAB_KEY, t)
+    } catch {
+      /* sin almacenamiento: la pestaña solo dura esta visita */
+    }
+  }
+  // Flechas, Inicio y Fin cambian de pestaña (patrón de pestañas WAI-ARIA)
+  const onTabKey = (e: React.KeyboardEvent, id: Tab) => {
+    const i = TABS.findIndex((t) => t.id === id)
+    const next =
+      e.key === 'ArrowRight'
+        ? (i + 1) % TABS.length
+        : e.key === 'ArrowLeft'
+          ? (i - 1 + TABS.length) % TABS.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? TABS.length - 1
+              : -1
+    if (next < 0) return
+    e.preventDefault()
+    pickTab(TABS[next].id)
+    document.getElementById(`tab-${TABS[next].id}`)?.focus()
+  }
+  const workspacesOf = (userId: string) =>
+    (workspaces ?? [])
+      .filter((w) => w.members.includes(userId))
+      .map((w) => w.name)
+      .join(', ')
 
   const loadWorkspaces = useCallback(async () => {
     const res = await adminListWorkspaces()
-    if (res.ok) setWorkspaces(res.data.workspaces)
+    if (res.ok) setWorkspaces(res.data?.workspaces ?? [])
   }, [])
 
   const load = useCallback(async () => {
@@ -164,6 +214,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
     setAlias('')
     setGuest(false)
     setNewWs([])
+    setCreating(false)
     void load()
     void loadWorkspaces()
   }
@@ -249,20 +300,162 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
         </p>
       )}
 
-      <div className={styles.layout}>
+      <div className={styles.tabs} role="tablist" aria-label="Secciones del panel">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            id={`tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls={`panel-${t.id}`}
+            tabIndex={tab === t.id ? 0 : -1}
+            className={styles.tab}
+            onClick={() => pickTab(t.id)}
+            onKeyDown={(e) => onTabKey(e, t.id)}
+          >
+            {t.label}
+            {t.id === 'users' && users && <span className={styles.count}>{users.length}</span>}
+            {t.id === 'workspaces' && workspaces && (
+              <span className={styles.count}>{workspaces.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'users' && (
+        <div role="tabpanel" id="panel-users" aria-labelledby="tab-users" className={styles.panel}>
+        {shown && (
+          <section className={styles.secret} role="status" aria-label="Contraseña temporal">
+            <h2 className={styles.secretTitle}>Contraseña temporal</h2>
+            <p>
+              De <strong>{shown.email}</strong>. Cópiala ahora: no se vuelve a mostrar.
+            </p>
+            <div className={styles.secretRow}>
+              <code className={styles.code}>{shown.password}</code>
+              <button type="button" className={styles.secondary} onClick={copy}>
+                {copied ? 'Copiada' : 'Copiar'}
+              </button>
+            </div>
+          </section>
+        )}
+
+
+          {creating && (
+        <section id="new-user" className={styles.card} aria-labelledby="new-title">
+          <div className={styles.cardHead}>
+            <h2 id="new-title" className={styles.sub}>
+              Nuevo usuario
+            </h2>
+          </div>
+          <form onSubmit={create}>
+            <label className={styles.label}>
+              Correo
+              <input
+                type="email"
+                className={styles.input}
+                value={email}
+                required
+                autoComplete="off"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <label className={styles.label}>
+              Alias (opcional)
+              <input
+                type="text"
+                className={styles.input}
+                value={alias}
+                maxLength={60}
+                autoComplete="off"
+                placeholder="Ej. Jorge Menéndez"
+                onChange={(e) => setAlias(e.target.value)}
+              />
+            </label>
+            <label className={styles.label}>
+              Contraseña (opcional)
+              <input
+                type="text"
+                className={styles.input}
+                value={password}
+                autoComplete="off"
+                placeholder="Vacía = se genera una temporal"
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+            <label className={styles.label}>
+              Rol
+              <select
+                className={styles.input}
+                value={guest ? 'guest' : 'user'}
+                onChange={(e) => setGuest(e.target.value === 'guest')}
+              >
+                <option value="user">Usuario</option>
+                <option value="guest">Invitado</option>
+              </select>
+              <span className={styles.hint}>
+                {guest
+                  ? 'El invitado no crea tableros: solo participa en los que le compartan.'
+                  : 'El usuario puede crear sus propios tableros y compartirlos.'}
+              </span>
+            </label>
+            {workspaces && workspaces.length > 0 && (
+              <fieldset className={styles.wsPick}>
+                <legend className={styles.wsLegend}>Workspaces</legend>
+                {workspaces.map((w) => (
+                  <label key={w.id} className={styles.wsOption}>
+                    <input
+                      type="checkbox"
+                      checked={newWs.includes(w.id)}
+                      onChange={(e) =>
+                        setNewWs((cur) =>
+                          e.target.checked ? [...cur, w.id] : cur.filter((x) => x !== w.id),
+                        )
+                      }
+                    />
+                    {w.name}
+                  </label>
+                ))}
+                <span className={styles.hint}>
+                  Sin workspace, la persona no ve a nadie ni puede crear tableros.
+                </span>
+              </fieldset>
+            )}
+            <button
+              type="submit"
+              className={styles.primaryWide}
+              disabled={busy || email.trim() === ''}
+            >
+              Crear usuario
+            </button>
+          </form>
+        </section>
+          )}
+
         <section className={styles.card} aria-labelledby="users-title">
           <div className={styles.cardHead}>
             <h2 id="users-title" className={styles.sub}>
               Usuarios
             </h2>
-            <input
-              type="search"
-              className={styles.search}
-              value={query}
-              placeholder="Buscar usuario"
-              aria-label="Buscar usuario"
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <div className={styles.tools}>
+              <input
+                type="search"
+                className={styles.search}
+                value={query}
+                placeholder="Buscar usuario"
+                aria-label="Buscar usuario"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <button
+                type="button"
+                className={styles.primary}
+                aria-expanded={creating}
+                aria-controls="new-user"
+                onClick={() => setCreating((v) => !v)}
+              >
+                Nuevo usuario
+              </button>
+            </div>
           </div>
 
           <table className={styles.table} aria-label="Usuarios">
@@ -270,6 +463,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
               <tr>
                 <th scope="col">Usuario</th>
                 <th scope="col">Rol</th>
+                <th scope="col">Workspaces</th>
                 <th scope="col">
                   <span className={styles.sr}>Acciones</span>
                 </th>
@@ -335,6 +529,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                       </select>
                     )}
                   </td>
+                  <td className={styles.meta}>{workspacesOf(u.id) || '—'}</td>
                   <td className={styles.actions}>
                     {editing?.id !== u.id && (
                       <div className={styles.actionsRow}>
@@ -381,121 +576,32 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
           )}
         </section>
 
-        <div className={styles.side}>
-          {shown && (
-            <section className={styles.secret} role="status" aria-label="Contraseña temporal">
-              <h2 className={styles.secretTitle}>Contraseña temporal</h2>
-              <p>
-                De <strong>{shown.email}</strong>. Cópiala ahora: no se vuelve a mostrar.
-              </p>
-              <div className={styles.secretRow}>
-                <code className={styles.code}>{shown.password}</code>
-                <button type="button" className={styles.secondary} onClick={copy}>
-                  {copied ? 'Copiada' : 'Copiar'}
-                </button>
-              </div>
-            </section>
-          )}
+        </div>
+      )}
 
+      {tab === 'workspaces' && (
+        <div
+          role="tabpanel"
+          id="panel-workspaces"
+          aria-labelledby="tab-workspaces"
+          className={styles.panel}
+        >
           <AdminWorkspaces
             users={users ?? []}
             list={workspaces}
-            onReplace={(w) => setWorkspaces((cur) => cur?.map((x) => (x.id === w.id ? w : x)) ?? cur)}
+            onReplace={(w) =>
+              setWorkspaces((cur) => cur?.map((x) => (x.id === w.id ? w : x)) ?? cur)
+            }
             onReload={() => void loadWorkspaces()}
           />
-
-          <AdminNotifications />
-
-          <section className={styles.card} aria-labelledby="new-title">
-            <div className={styles.cardHead}>
-              <h2 id="new-title" className={styles.sub}>
-                Nuevo usuario
-              </h2>
-            </div>
-            <form onSubmit={create}>
-              <label className={styles.label}>
-                Correo
-                <input
-                  type="email"
-                  className={styles.input}
-                  value={email}
-                  required
-                  autoComplete="off"
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label className={styles.label}>
-                Alias (opcional)
-                <input
-                  type="text"
-                  className={styles.input}
-                  value={alias}
-                  maxLength={60}
-                  autoComplete="off"
-                  placeholder="Ej. Jorge Menéndez"
-                  onChange={(e) => setAlias(e.target.value)}
-                />
-              </label>
-              <label className={styles.label}>
-                Contraseña (opcional)
-                <input
-                  type="text"
-                  className={styles.input}
-                  value={password}
-                  autoComplete="off"
-                  placeholder="Vacía = se genera una temporal"
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <label className={styles.label}>
-                Rol
-                <select
-                  className={styles.input}
-                  value={guest ? 'guest' : 'user'}
-                  onChange={(e) => setGuest(e.target.value === 'guest')}
-                >
-                  <option value="user">Usuario</option>
-                  <option value="guest">Invitado</option>
-                </select>
-                <span className={styles.hint}>
-                  {guest
-                    ? 'El invitado no crea tableros: solo participa en los que le compartan.'
-                    : 'El usuario puede crear sus propios tableros y compartirlos.'}
-                </span>
-              </label>
-              {workspaces && workspaces.length > 0 && (
-                <fieldset className={styles.wsPick}>
-                  <legend className={styles.wsLegend}>Workspaces</legend>
-                  {workspaces.map((w) => (
-                    <label key={w.id} className={styles.wsOption}>
-                      <input
-                        type="checkbox"
-                        checked={newWs.includes(w.id)}
-                        onChange={(e) =>
-                          setNewWs((cur) =>
-                            e.target.checked ? [...cur, w.id] : cur.filter((x) => x !== w.id),
-                          )
-                        }
-                      />
-                      {w.name}
-                    </label>
-                  ))}
-                  <span className={styles.hint}>
-                    Sin workspace, la persona no ve a nadie ni puede crear tableros.
-                  </span>
-                </fieldset>
-              )}
-              <button
-                type="submit"
-                className={styles.primaryWide}
-                disabled={busy || email.trim() === ''}
-              >
-                Crear usuario
-              </button>
-            </form>
-          </section>
         </div>
-      </div>
+      )}
+
+      {tab === 'alerts' && (
+        <div role="tabpanel" id="panel-alerts" aria-labelledby="tab-alerts" className={styles.panel}>
+          <AdminNotifications />
+        </div>
+      )}
 
       {toDelete && (
         <ConfirmDialog
