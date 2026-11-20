@@ -43,6 +43,18 @@ select {
   color: inherit;
 }
 
+/* Selectores: flecha propia y con aire (la nativa queda pegada al borde y cambia según el sistema) */
+select {
+  appearance: none;
+  /* !important: cada selector declara su propio `background` y `padding` (atajos que borrarían la flecha) */
+  background-image: var(--chevron) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 16px !important;
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+
 /* Casillas y radios: tamaño propio (el nativo mide 13px y se ve diminuto junto al texto) */
 input[type='checkbox'],
 input[type='radio'] {

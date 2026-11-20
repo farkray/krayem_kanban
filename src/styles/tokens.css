@@ -51,6 +51,8 @@
 
   /* Texto */
   --color-text: #17262b;
+  /* flecha de los selectores (el tono sigue al texto de apoyo de cada tema) */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%234a5c61' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5l4 4 4-4'/%3E%3C/svg%3E");
   --color-text-muted: #4a5c61; /* AA también sobre la tarjeta gris */
   --color-text-faint: #566a6f; /* metadatos: aún ≥ 4.5:1 sobre la tarjeta */
 
@@ -223,6 +225,7 @@
     --color-scrim: rgba(0, 8, 10, 0.6);
 
     --color-text: #e6f0f1;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%239fb2b7' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5l4 4 4-4'/%3E%3C/svg%3E");
     --color-text-muted: #9fb2b7;
     --color-text-faint: #8ea2a7;
 
