@@ -181,16 +181,6 @@
   }
 }
 
-/* El agarre vive en el margen izquierdo: el título queda alineado con las tarjetas */
-.grip {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 16px;
-  height: 32px;
-  transform: translateY(-50%);
-  border-radius: var(--radius-xs);
-}
 
 .count {
   display: inline-flex;
@@ -222,16 +212,6 @@
   text-align: center;
 }
 
-@media (hover: none), (pointer: coarse) {
-  .grip {
-    position: static;
-    transform: none;
-    width: 44px;
-    height: 44px;
-    margin-left: calc(-1 * var(--space-3));
-  }
-}
-
 @media (pointer: coarse) {
   .header {
     padding-top: var(--space-2);
@@ -239,10 +219,8 @@
   }
 }
 
-/* Agarre de la columna: siempre visible (atenuado) y más grande; se enciende al apuntarlo */
+/* Agarre de la columna: siempre visible (atenuado); se enciende al apuntarlo */
 .grip {
-  width: 20px;
-  height: 36px;
   color: var(--color-text-muted);
   opacity: 0.9; /* el agarre se ve siempre: ≥ 3:1 sobre la columna */
   cursor: grab;
@@ -264,33 +242,31 @@
   }
 }
 
-@media (pointer: coarse) {
-  .grip {
-    width: 44px;
-    height: 44px;
-  }
+/* Controles de la columna: un solo grupo a la derecha (tipo · eliminar · mover), todos del mismo tamaño.
+   El agarre queda siempre en el borde derecho: es el ancla visual de todas las columnas. */
+.tools {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 2px;
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1)) 0 0;
 }
 
-/* El agarre va a la derecha, junto a "eliminar": así nunca tapa el título */
-.headText {
-  order: 1;
-}
-
-.grip {
-  position: static;
-  order: 2;
-  width: 28px;
-  height: 32px;
-  margin-left: 0;
-  transform: none;
-}
-
+.tools > *,
+.grip,
 .delete {
-  order: 3;
+  width: 32px;
+  height: 32px;
 }
 
 @media (pointer: coarse) {
-  .grip {
+  .tools {
+    gap: var(--space-1);
+  }
+
+  .tools > *,
+  .grip,
+  .delete {
     width: 44px;
     height: 44px;
   }

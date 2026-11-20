@@ -108,20 +108,6 @@ export function Column({
       aria-label={column.title}
     >
       <header className={styles.header} data-color={headerColorOf(column) ?? undefined}>
-        {canEditColumns && (
-          <button
-            type="button"
-            ref={sortable.setActivatorNodeRef}
-            className={styles.grip}
-            aria-label={`Mover columna ${column.title}`}
-            title="Arrastra para mover la columna"
-            {...sortable.attributes}
-            aria-roledescription="columna que se puede mover"
-            {...sortable.listeners}
-          >
-            <GripIcon width={18} height={18} />
-          </button>
-        )}
         <div className={styles.headText}>
           {renaming ? (
             <InlineInput
@@ -164,23 +150,35 @@ export function Column({
           </span>
         </div>
         {canEditColumns && (
-          <ColumnKindMenu
-            column={column}
-            onChange={(k) => setColumnKind(column.id, k)}
-            onColor={(c) => setColumnColor(column.id, c)}
-          />
-        )}
-        {canEditColumns && (
-          <button
-            type="button"
-            className={styles.delete}
-            aria-label={`Eliminar columna ${column.title}`}
-            disabled={siblings.length <= 1}
-            title={siblings.length <= 1 ? 'Un tablero necesita al menos una columna' : undefined}
-            onClick={() => setConfirmDelete(true)}
-          >
-            <TrashIcon width={15} height={15} />
-          </button>
+          <div className={styles.tools}>
+            <ColumnKindMenu
+              column={column}
+              onChange={(k) => setColumnKind(column.id, k)}
+              onColor={(c) => setColumnColor(column.id, c)}
+            />
+            <button
+              type="button"
+              className={styles.delete}
+              aria-label={`Eliminar columna ${column.title}`}
+              disabled={siblings.length <= 1}
+              title={siblings.length <= 1 ? 'Un tablero necesita al menos una columna' : undefined}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <TrashIcon width={15} height={15} />
+            </button>
+            <button
+              type="button"
+              ref={sortable.setActivatorNodeRef}
+              className={styles.grip}
+              aria-label={`Mover columna ${column.title}`}
+              title="Arrastra para mover la columna"
+              {...sortable.attributes}
+              aria-roledescription="columna que se puede mover"
+              {...sortable.listeners}
+            >
+              <GripIcon width={18} height={18} />
+            </button>
+          </div>
         )}
       </header>
 

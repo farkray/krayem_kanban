@@ -19,7 +19,7 @@ detalles: espacios, alineaciones, estados y foco.
 1. **Espaciado y alineación (hecha):** un solo borde izquierdo en la barra lateral (título, iconos, pie), pie con
    enlaces de 32 px y aire para el foco, portada con más aire arriba e iconos de tablero alineados, casillas y
    radios de 18 px, título de columna con objetivo ≥ 24 px.
-2. **Cabecera del tablero y de columna:** ordenar los controles de la columna (agarre, tipo, eliminar) en un grupo
+2. **Cabecera del tablero y de columna (hecha):** ordenar los controles de la columna (agarre, tipo, eliminar) en un grupo
    fijo, separar el botón de eliminar tablero del título, y que las acciones del tablero tengan el mismo ritmo.
 3. **Tarjetas y detalle:** jerarquía título → metadatos → chips, ritmo vertical constante, foco visible en todo.
 4. **Estados:** vacíos con indicación de qué hacer, cargas con esqueleto, errores con recuperación.
