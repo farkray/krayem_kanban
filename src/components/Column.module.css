@@ -55,7 +55,8 @@
 
 .titleBtn {
   max-width: 100%;
-  padding: 0;
+  padding: 3px 0; /* objetivo de al menos 24px de alto */
+  margin-block: -3px;
   border: 0;
   background: none;
   font: inherit;
