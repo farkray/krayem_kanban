@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { addCard, card, column, dragTo, openFirstBoard, setKind } from './helpers'
 import AxeBuilder from '@axe-core/playwright'
 
-const titles = (page: Page, col: string) => column(page, col).locator('article h4').allInnerTexts()
+const titles = (page: Page, col: string) => column(page, col).locator('article h3').allInnerTexts()
 
 test.describe('tipo de columna y límite de tarjetas', () => {
   test('"En curso" es Doing: admite 2 y bloquea la tercera', async ({ page }) => {
@@ -114,7 +114,7 @@ test.describe('tipo Done', () => {
       card(column(page, 'Por hacer'), 'Pendiente').getByRole('img', { name: 'Finalizada' }),
     ).toHaveCount(0)
     // más apagada pero legible: el título no baja la opacidad (eso rompe el contraste AA)
-    const title = card(done, 'Entregada').locator('h4')
+    const title = card(done, 'Entregada').locator('h3')
     expect(await title.evaluate((e) => getComputedStyle(e).opacity)).toBe('1')
     const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
     expect(r.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])

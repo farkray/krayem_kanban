@@ -292,6 +292,17 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
                   </button>
                 </h1>
               )}
+            {access.isOwner && (
+              <button
+                type="button"
+                className={styles.delete}
+                aria-label="Eliminar tablero"
+                title="Eliminar tablero"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <TrashIcon width={16} height={16} />
+              </button>
+            )}
               <div className={styles.headAction}>
                 <button
                   type="button"
@@ -352,17 +363,6 @@ export function Board({ board, onOpenCard, onDeleted, onOpenBoard }: Props) {
                     count={columns.length}
                     onAdd={() => setNewColumnId(addColumn(board.id, DEFAULT_COLUMN_TITLE))}
                   />
-                )}
-                {access.isOwner && (
-                  <button
-                    type="button"
-                    className={styles.delete}
-                    aria-label="Eliminar tablero"
-                    title="Eliminar tablero"
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    <TrashIcon width={16} height={16} />
-                  </button>
                 )}
               </div>
             </div>

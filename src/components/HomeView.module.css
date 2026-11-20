@@ -70,6 +70,15 @@
   }
 }
 
+@media (pointer: coarse) {
+  .grip {
+    top: 0;
+    right: 0;
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .tile {
   display: flex;
   flex-direction: column;

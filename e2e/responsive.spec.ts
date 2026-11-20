@@ -102,7 +102,7 @@ test.describe('teléfono (390×844, táctil)', () => {
     await addCard(page, 'Por hacer', 'Texto legible')
     expect(
       await card(page, 'Texto legible')
-        .locator('h4')
+        .locator('h3')
         .evaluate((e) => getComputedStyle(e).fontSize),
     ).toBe('16px')
     expect(
@@ -179,7 +179,7 @@ test.describe('teléfono (390×844, táctil)', () => {
     }
     await touch('touchEnd')
     await expect
-      .poll(() => column(page, 'Por hacer').locator('article h4').allInnerTexts())
+      .poll(() => column(page, 'Por hacer').locator('article h3').allInnerTexts())
       .toEqual(['T2', 'T1'])
   })
 })

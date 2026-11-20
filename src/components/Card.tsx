@@ -77,7 +77,7 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
           {labels.length > 3 && <span className={styles.more}>+{labels.length - 3}</span>}
         </div>
       )}
-      <h4 className={styles.title}>
+      <h3 className={styles.title}>
         {done && (
           <CheckIcon
             className={styles.doneMark}
@@ -89,7 +89,7 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
           />
         )}
         {card.title}
-      </h4>
+      </h3>
       {hasMeta && (
         <div className={styles.meta}>
           {range && (

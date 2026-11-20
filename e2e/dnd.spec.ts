@@ -17,7 +17,7 @@ async function dragToPoint(page: Page, from: Locator, x: number, y: number) {
   }
 }
 
-const titles = (page: Page, col: string) => column(page, col).locator('article h4').allInnerTexts()
+const titles = (page: Page, col: string) => column(page, col).locator('article h3').allInnerTexts()
 
 async function seed(page: Page) {
   await openFirstBoard(page)
