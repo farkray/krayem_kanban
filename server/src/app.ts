@@ -33,6 +33,16 @@ import { Notifications, detect, type NotificationView, type RowChange } from './
 import { Delivery, cleanPhone, cleanWebhookUrl, validTimezone } from './delivery.ts'
 import { buildDigest } from './digest.ts'
 import { buildN8nWorkflow } from './n8nWorkflow.ts'
+import {
+  cleanWorkspaceName,
+  createWorkspace,
+  isMember,
+  joinGeneral,
+  listAdminWorkspaces,
+  setWorkspaceMembers,
+  sharesWorkspace,
+  workspacesOf,
+} from './workspaces.ts'
 
 export interface AppOptions {
   db: DB
@@ -236,6 +246,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (body.password.length < MIN_PASSWORD) return reply.code(400).send({ error: 'weak_password' })
     if (findUserByEmail(db, email)) return reply.code(409).send({ error: 'email_taken' })
     const user = createUser(db, email, await hashPassword(body.password), false, alias)
+    joinGeneral(db, user.id) // quien se registra solo entra al workspace General
     setCookie(reply, createSession(db, user.id))
     return reply.code(201).send({ user })
   })
@@ -296,7 +307,11 @@ export function buildApp(opts: AppOptions): BuiltApp {
       password?: unknown
       alias?: unknown
       guest?: unknown
+      workspaceIds?: unknown
     }
+    const wsIds = body.workspaceIds ?? []
+    if (!Array.isArray(wsIds) || !wsIds.every((w) => validId(w) && workspaceExists.get(w)))
+      return reply.code(400).send({ error: 'unknown_workspace' })
     if (!isStr(body.email, 254)) return reply.code(400).send({ error: 'bad_request' })
     if (body.guest !== undefined && typeof body.guest !== 'boolean')
       return reply.code(400).send({ error: 'bad_request' })
@@ -321,6 +336,11 @@ export function buildApp(opts: AppOptions): BuiltApp {
       alias,
       body.guest === true,
     )
+    for (const w of wsIds)
+      db.prepare('INSERT OR IGNORE INTO workspace_members (workspace_id, user_id) VALUES (?, ?)').run(
+        w,
+        user.id,
+      )
     return reply.code(201).send({ user, ...(generated ? { password } : {}) })
   })
 
@@ -369,6 +389,66 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return reply.code(204).send()
   })
 
+  /* ---------- workspaces (solo admin) ---------- */
+
+  const workspaceId = (req: FastifyRequest) => (req.params as { id: string }).id
+  const knownWorkspace = (id: string) => ID_RE.test(id) && !!workspaceExists.get(id)
+
+  app.get('/api/admin/workspaces', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return { workspaces: listAdminWorkspaces(db) }
+  })
+
+  app.post('/api/admin/workspaces', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const name = cleanWorkspaceName((req.body as { name?: unknown } | null)?.name)
+    if (!name) return reply.code(400).send({ error: 'invalid_name' })
+    const w = createWorkspace(db, name)
+    if (!w) return reply.code(409).send({ error: 'name_taken' })
+    return reply.code(201).send({ workspace: listAdminWorkspaces(db).find((x) => x.id === w.id) })
+  })
+
+  app.patch('/api/admin/workspaces/:id', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const id = workspaceId(req)
+    if (!knownWorkspace(id)) return reply.code(404).send({ error: 'not_found' })
+    const name = cleanWorkspaceName((req.body as { name?: unknown } | null)?.name)
+    if (!name) return reply.code(400).send({ error: 'invalid_name' })
+    try {
+      db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(name, id)
+    } catch {
+      return reply.code(409).send({ error: 'name_taken' })
+    }
+    for (const m of listAdminWorkspaces(db).find((w) => w.id === id)?.members ?? [])
+      hub.publishAccess(m)
+    return { workspace: listAdminWorkspaces(db).find((w) => w.id === id) }
+  })
+
+  app.put('/api/admin/workspaces/:id/members', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const id = workspaceId(req)
+    if (!knownWorkspace(id)) return reply.code(404).send({ error: 'not_found' })
+    const ids = (req.body as { userIds?: unknown } | null)?.userIds
+    if (!Array.isArray(ids) || ids.length > 5000 || !ids.every(validId))
+      return reply.code(400).send({ error: 'bad_request' })
+    const known = new Set(listUsers(db).map((u) => u.id))
+    if (!ids.every((u) => known.has(u))) return reply.code(400).send({ error: 'unknown_user' })
+    const affected = transaction(db, () => setWorkspaceMembers(db, id, [...new Set(ids)]))
+    for (const u of affected) hub.publishAccess(u)
+    return { workspace: listAdminWorkspaces(db).find((w) => w.id === id) }
+  })
+
+  app.delete('/api/admin/workspaces/:id', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const id = workspaceId(req)
+    const w = ID_RE.test(id) ? listAdminWorkspaces(db).find((x) => x.id === id) : undefined
+    if (!w) return reply.code(404).send({ error: 'not_found' })
+    if (w.boards > 0) return reply.code(409).send({ error: 'workspace_not_empty' })
+    db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
+    for (const m of w.members) hub.publishAccess(m)
+    return reply.code(204).send()
+  })
+
   /* ---------- sincronización ---------- */
 
   const selectSince = db.prepare(
@@ -389,6 +469,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
   const memberRole = db.prepare('SELECT role FROM board_members WHERE board_id = ? AND user_id = ?')
   const membersOf = db.prepare('SELECT user_id FROM board_members WHERE board_id = ?')
 
+  const workspaceExists = db.prepare('SELECT 1 FROM workspaces WHERE id = ?')
   const boardRow = db.prepare("SELECT data FROM rows WHERE tbl = 'boards' AND id = ? LIMIT 1")
   const validId = (v: unknown): v is string => typeof v === 'string' && ID_RE.test(v)
 
@@ -436,6 +517,23 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (isGuest(userId) && (!boardId || !boardOwner.get(boardId))) return null
     // Un subtablero cuelga de un tablero de primer nivel (un solo nivel de profundidad).
     if (table === 'boards' && boardId !== id && parentOf(boardId as string)) return null
+    // Un tablero solo se crea (o se mueve) en un workspace del que su autor es miembro.
+    if (table === 'boards' && row.workspaceId !== undefined) {
+      if (!validId(row.workspaceId)) return null
+      const stored = (boardRow.get(id) as { data: string } | undefined)?.data
+      let storedWs: unknown
+      try {
+        storedWs = stored ? (JSON.parse(stored) as { workspaceId?: unknown }).workspaceId : undefined
+      } catch {
+        storedWs = undefined
+      }
+      if (
+        storedWs !== row.workspaceId &&
+        !isMember(db, row.workspaceId, userId) &&
+        !(sessionIsAdmin(userId) && workspaceExists.get(row.workspaceId))
+      )
+        return null
+    }
     const existing = findRow.all(table, id) as { user_id: string; board_id: string | null }[]
     const mine = existing.find((e) => e.user_id === userId)
 
@@ -611,7 +709,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
     if (!user) return
     return {
       users: listUsers(db)
-        .filter((u) => u.id !== user.id)
+        .filter((u) => u.id !== user.id && (user.isAdmin || sharesWorkspace(db, user.id, u.id)))
         .map((u) => ({ id: u.id, email: u.email, alias: u.alias }))
         .sort((a, b) => (a.alias || a.email).localeCompare(b.alias || b.email, 'es')),
     }
@@ -708,7 +806,12 @@ export function buildApp(opts: AppOptions): BuiltApp {
           email: user.email,
           alias: user.alias,
         })
-    return { shared, members, participants: [...owners.values(), ...participants] }
+    return {
+      shared,
+      members,
+      participants: [...owners.values(), ...participants],
+      workspaces: workspacesOf(db, user.id, user.isAdmin),
+    }
   })
 
   /** Pone al día a un usuario recién invitado: sube el `updated_at` de las filas del tablero. */
@@ -743,6 +846,18 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const target = findUserByEmail(db, body.email)
     if (!target) return reply.code(404).send({ error: 'user_not_found' })
     if (target.id === user.id) return reply.code(400).send({ error: 'cannot_share_with_self' })
+    // Solo se comparte con quien está en el workspace del tablero (si no, es como si no existiera).
+    const bw = (() => {
+      try {
+        const d = (boardRow.get(id) as { data: string } | undefined)?.data
+        const w = d ? (JSON.parse(d) as { workspaceId?: unknown }).workspaceId : undefined
+        return validId(w) ? w : null
+      } catch {
+        return null
+      }
+    })()
+    if (bw ? !isMember(db, bw, target.id) : !sharesWorkspace(db, user.id, target.id))
+      return reply.code(404).send({ error: 'user_not_found' })
     const had = memberRole.get(id, target.id)
     db.prepare(
       `INSERT INTO board_members (board_id, owner_id, user_id, role, created_at) VALUES (?, ?, ?, ?, ?)

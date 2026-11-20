@@ -380,3 +380,12 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - **Permisos:** el dueño y los **editores** crean, editan, fijan y eliminan (en vivo para todos los miembros); un **lector** solo las ve. En un subtablero se muestran las del tablero de origen; eliminar el tablero se lleva sus notas.
 - Pantallas anchas: el panel se acomoda a la izquierda del tablero; teléfono: se abre encima, casi a pantalla completa.
 - Datos: tabla `notes` (`bodyMd`, `pinned`, `pinnedAt`), sincronizada como el resto; hasta 20 000 caracteres por nota. La nota única de la versión anterior se conserva como una tarjeta más.
+
+## 25. Workspaces (implementado)
+
+- Un **workspace** (p. ej. «Mercabits») agrupa personas y sus tableros. **Quienes comparten un workspace se ven y pueden compartirse tableros; no existe nadie fuera de los suyos**: ni en el directorio de «Compartir», ni al mencionar, ni al invitar (el servidor responde como si el usuario no existiera).
+- **Solo el administrador** los gestiona: panel de control → **Workspaces** (crear, renombrar, eliminar si no tiene tableros, y marcar los **miembros**) y, al crear un usuario, casillas de workspaces. El admin ve a todos los usuarios y workspaces.
+- Una persona puede estar en **varios** workspaces. Cada tablero pertenece a uno (`workspaceId`): al crearlo, si la persona tiene más de uno elige cuál; con uno solo se usa ese. El nombre del workspace aparece en las tarjetas de tablero cuando hay más de uno. Quien **no tiene workspace** entra pero no puede crear tableros (se le explica) hasta que el admin lo asigne.
+- Quitar a alguien de un workspace retira sus accesos a tableros de ese workspace (los que le compartieron y los que él compartió ahí). Sus propios tableros siguen siendo suyos.
+- **Migración 8:** crea el workspace **General** con todos los usuarios actuales y le asigna todos los tableros existentes: nada cambia hasta que el admin los reparta. El registro propio (si está activo) y el primer admin entran a «General».
+- Servidor: tablas `workspaces` y `workspace_members`; `GET/POST /api/admin/workspaces`, `PATCH/DELETE …/:id`, `PUT …/:id/members`; `/api/shares` devuelve `workspaces`; `/api/users/directory` filtra por workspace compartido; la escritura de un tablero exige ser miembro de su workspace. Sin `workspaceId` (tableros anteriores a la función), compartir exige compartir algún workspace.

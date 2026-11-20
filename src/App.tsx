@@ -16,6 +16,7 @@ import { ADMIN_PATH, boardPath, useRoute } from './lib/route'
 import { useMediaQuery, WIDE_QUERY } from './lib/useMediaQuery'
 import type { SearchResult } from './lib/search'
 import { useBoardSummaries, useBoards } from './store/hooks'
+import { useAccess } from './sync/access'
 import { useAuth } from './sync/auth'
 import { bootSync, signOut } from './sync/boot'
 import { markCardRead, refreshNotifications, type AppNotification } from './sync/notifications'
@@ -35,6 +36,7 @@ export default function App() {
   const moveBoard = useStore((s) => s.moveBoard)
   const boards = useBoards()
   const summaries = useBoardSummaries()
+  const workspaces = useAccess((s) => s.workspaces)
   const { boardId, isAdminPage, navigate } = useRoute()
   const authStatus = useAuth((s) => s.status)
   const email = useAuth((s) => s.email)
@@ -93,8 +95,8 @@ export default function App() {
     closeDrawer()
   }
 
-  const create = (title: string) => {
-    const id = createBoard(title)
+  const create = (title: string, workspaceId?: string) => {
+    const id = createBoard(title, workspaceId)
     if (id) openBoard(id)
   }
 
@@ -123,6 +125,7 @@ export default function App() {
       drawer={drawer}
       onSelect={openBoard}
       onCreate={create}
+      workspaces={workspaces}
       canCreate={!isGuest}
       onMove={moveBoard}
       onToggle={() => setSidebarOpen(false)}
@@ -199,6 +202,7 @@ export default function App() {
               boards={summaries}
               onOpen={openBoard}
               onCreate={create}
+              workspaces={workspaces}
               canCreate={!isGuest}
               onMove={moveBoard}
             />

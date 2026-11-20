@@ -5,6 +5,7 @@ import {
   setIdentityResolver,
   setParticipantsResolver,
   setRoleResolver,
+  setWorkspacesResolver,
   type Role,
 } from '../lib/access'
 import { displayName } from '../lib/people'
@@ -41,10 +42,17 @@ export interface Member {
   role: ShareRole
 }
 
+/** Un workspace al que pertenezco (el admin ve todos). */
+export interface Workspace {
+  id: string
+  name: string
+}
+
 interface AccessState {
   shared: SharedBoard[]
   members: Member[]
   participants: Participant[]
+  workspaces: Workspace[]
   loaded: boolean
 }
 
@@ -52,6 +60,7 @@ export const useAccess = create<AccessState>(() => ({
   shared: [],
   members: [],
   participants: [],
+  workspaces: [],
   loaded: false,
 }))
 
@@ -66,6 +75,10 @@ function resolve(boardId: string): Role {
   return useAccess.getState().shared.find((s) => s.boardId === boardId)?.role ?? 'viewer'
 }
 setRoleResolver(resolve)
+// Con cuentas (sesión iniciada) los tableros nacen en un workspace; sin cuentas no hay workspaces.
+setWorkspacesResolver(() =>
+  useAuth.getState().userId ? useAccess.getState().workspaces.map((w) => w.id) : null,
+)
 setIdentityResolver(() => useAuth.getState().userId)
 setParticipantsResolver((boardId) => {
   const all = useAccess.getState().participants.filter((p) => p.boardId === boardId)
@@ -92,13 +105,18 @@ async function send(method: string, path: string, body?: unknown) {
 /** Al abrir sin red se usa lo último que se supo. */
 export async function loadCachedAccess() {
   const cached = (await db.meta.get('access'))?.value as
-    Pick<AccessState, 'shared' | 'members' | 'participants'> | undefined
+    Pick<AccessState, 'shared' | 'members' | 'participants' | 'workspaces'> | undefined
   if (cached)
-    useAccess.setState({ ...cached, participants: cached.participants ?? [], loaded: true })
+    useAccess.setState({
+      ...cached,
+      participants: cached.participants ?? [],
+      workspaces: cached.workspaces ?? [],
+      loaded: true,
+    })
 }
 
 export function resetAccess() {
-  useAccess.setState({ shared: [], members: [], participants: [], loaded: false })
+  useAccess.setState({ shared: [], members: [], participants: [], workspaces: [], loaded: false })
 }
 
 /**
@@ -106,7 +124,7 @@ export function resetAccess() {
  * un tablero ajeno (me sacaron o lo dejaron de compartir), se borra del dispositivo.
  */
 export async function refreshAccess(): Promise<void> {
-  let data: Pick<AccessState, 'shared' | 'members' | 'participants'>
+  let data: Pick<AccessState, 'shared' | 'members' | 'participants' | 'workspaces'>
   try {
     const res = await fetch(api('/shares'), { credentials: 'same-origin' })
     if (!res.ok) return
@@ -114,6 +132,7 @@ export async function refreshAccess(): Promise<void> {
   } catch {
     return // sin red: se queda con lo último que se supo
   }
+  data.workspaces = data.workspaces ?? []
   useAccess.setState({ ...data, participants: data.participants ?? [], loaded: true })
   await db.meta.put({ key: 'access', value: data })
 

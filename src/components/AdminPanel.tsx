@@ -11,12 +11,15 @@ import {
   adminCreateUser,
   adminDeleteUser,
   adminListUsers,
+  adminListWorkspaces,
   adminResetPassword,
   adminSetAlias,
   adminSetGuest,
   type AdminUser,
+  type AdminWorkspace,
 } from '../sync/admin'
 import { AdminNotifications } from './AdminNotifications'
+import { AdminWorkspaces } from './AdminWorkspaces'
 import { Avatar } from './Avatar'
 import { ConfirmDialog } from './ConfirmDialog'
 import { MoreIcon } from './Icons'
@@ -113,6 +116,13 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
   const [shown, setShown] = useState<Shown | null>(null)
   const [toDelete, setToDelete] = useState<AdminUser | null>(null)
   const [copied, setCopied] = useState(false)
+  const [workspaces, setWorkspaces] = useState<AdminWorkspace[] | null>(null)
+  const [newWs, setNewWs] = useState<string[]>([])
+
+  const loadWorkspaces = useCallback(async () => {
+    const res = await adminListWorkspaces()
+    if (res.ok) setWorkspaces(res.data.workspaces)
+  }, [])
 
   const load = useCallback(async () => {
     const res = await adminListUsers()
@@ -121,8 +131,11 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
   }, [])
 
   useEffect(() => {
-    if (isAdmin) void load()
-  }, [isAdmin, load])
+    if (isAdmin) {
+      void load()
+      void loadWorkspaces()
+    }
+  }, [isAdmin, load, loadWorkspaces])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -140,6 +153,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
       password || undefined,
       alias.trim() || undefined,
       guest,
+      newWs,
     )
     setBusy(false)
     if (!res.ok) return setError(message(res.error))
@@ -149,7 +163,9 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
     setPassword('')
     setAlias('')
     setGuest(false)
+    setNewWs([])
     void load()
+    void loadWorkspaces()
   }
 
   const changeRole = async (u: AdminUser, makeGuest: boolean) => {
@@ -381,6 +397,13 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
             </section>
           )}
 
+          <AdminWorkspaces
+            users={users ?? []}
+            list={workspaces}
+            onReplace={(w) => setWorkspaces((cur) => cur?.map((x) => (x.id === w.id ? w : x)) ?? cur)}
+            onReload={() => void loadWorkspaces()}
+          />
+
           <AdminNotifications />
 
           <section className={styles.card} aria-labelledby="new-title">
@@ -440,6 +463,28 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                     : 'El usuario puede crear sus propios tableros y compartirlos.'}
                 </span>
               </label>
+              {workspaces && workspaces.length > 0 && (
+                <fieldset className={styles.wsPick}>
+                  <legend className={styles.wsLegend}>Workspaces</legend>
+                  {workspaces.map((w) => (
+                    <label key={w.id} className={styles.wsOption}>
+                      <input
+                        type="checkbox"
+                        checked={newWs.includes(w.id)}
+                        onChange={(e) =>
+                          setNewWs((cur) =>
+                            e.target.checked ? [...cur, w.id] : cur.filter((x) => x !== w.id),
+                          )
+                        }
+                      />
+                      {w.name}
+                    </label>
+                  ))}
+                  <span className={styles.hint}>
+                    Sin workspace, la persona no ve a nadie ni puede crear tableros.
+                  </span>
+                </fieldset>
+              )}
               <button
                 type="submit"
                 className={styles.primaryWide}

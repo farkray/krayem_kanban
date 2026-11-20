@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
-import { canEditBoard, currentUserId, isGuestMode, participantIds, roleOf } from '../lib/access'
+import {
+  canEditBoard,
+  currentUserId,
+  isGuestMode,
+  myWorkspaceIds,
+  participantIds,
+  roleOf,
+} from '../lib/access'
 import { isConfigured } from '../lib/config'
 import { byPosition, positionAt, positionsFor } from '../lib/position'
 import {
@@ -88,7 +95,8 @@ interface Actions {
   /** Aplica filas llegadas de la nube (no se vuelven a enviar). */
   applyRemote: <K extends TableKey>(key: K, rows: Data[K]) => void
   // tableros
-  createBoard: (title: string) => string | null
+  /** Con cuentas, el tablero nace en un workspace (el indicado o el primero de la persona). */
+  createBoard: (title: string, workspaceId?: string) => string | null
   /**
    * Crea un subtablero de `parentId` que muestra las tarjetas con la etiqueta `labelIds` (una o
    * varias; con varias, `mode` dice si basta una (`any`) o hacen falta todas (`all`)).
@@ -391,6 +399,7 @@ export const useStore = create<Store>((set, get) => {
     seedIfEmpty: async () => {
       await flush() // asegura que lo ya descargado esté en memoria
       if (isGuestMode()) return // un invitado no crea tableros (no se marca como sembrado)
+      if (myWorkspaceIds()?.length === 0) return // sin workspace aún (o sin cargar): se siembra cuando llegue
       if (await db.meta.get('seeded')) return
       // Se cuentan también los borrados lógicos: si hubo tableros alguna vez, no se resiembra.
       if (get().boards.length === 0) get().createBoard('Mi tablero')
@@ -478,17 +487,31 @@ export const useStore = create<Store>((set, get) => {
 
     /* ---------- tableros ---------- */
 
-    createBoard: (title) => {
+    createBoard: (title, workspaceId) => {
       const t = clean(title, LIMITS.board)
       if (!t) return null
       if (isGuestMode()) {
         notify('Tu cuenta es de invitado: solo puedes participar en los tableros que te compartan.')
         return null
       }
+      const mine = myWorkspaceIds()
+      let ws: string | undefined
+      if (mine) {
+        ws = workspaceId && mine.includes(workspaceId) ? workspaceId : mine[0]
+        if (!ws) {
+          notify('No perteneces a ningún workspace todavía. Pide al administrador que te asigne a uno.')
+          return null
+        }
+      }
       const boards = live(get().boards)
         .filter((b) => !b.parentId)
         .sort(byPosition)
-      const board: Board = { ...base(), title: t, position: positionAt(boards, boards.length) }
+      const board: Board = {
+        ...base(),
+        title: t,
+        position: positionAt(boards, boards.length),
+        ...(ws ? { workspaceId: ws } : {}),
+      }
       const keys = positionsFor(DEFAULT_COLUMNS.length)
       const columns: Column[] = DEFAULT_COLUMNS.map((name, i) => ({
         ...base(),

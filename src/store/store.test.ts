@@ -2,7 +2,7 @@ import { db } from '../db/db'
 import { byPosition } from '../lib/position'
 import { cardInSub, linkIdsOf, newCardLabelsOf } from '../lib/types'
 import { act, renderHook } from '@testing-library/react'
-import { setGuestMode, setRoleResolver } from '../lib/access'
+import { setGuestMode, setRoleResolver, setWorkspacesResolver } from '../lib/access'
 import { useNotes } from './hooks'
 import { flush, resetInit, resetStore, useStore } from './store'
 
@@ -887,5 +887,29 @@ describe('notas del tablero (como tarjetas)', () => {
     await S().purgeBoards([a])
     expect(S().notes.map((n) => n.boardId)).toEqual([c])
     expect(await db.notes.count()).toBe(1)
+  })
+})
+
+describe('workspaces: tableros', () => {
+  afterEach(() => setWorkspacesResolver(null))
+
+  it('sin cuentas el tablero no lleva workspace', () => {
+    const id = S().createBoard('A')!
+    expect(S().boards.find((b) => b.id === id)?.workspaceId).toBeUndefined()
+  })
+
+  it('con cuentas nace en el workspace indicado o, si no, en el primero', () => {
+    setWorkspacesResolver(() => ['w1', 'w2'])
+    const a = S().createBoard('A')!
+    const b = S().createBoard('B', 'w2')!
+    const c = S().createBoard('C', 'ajeno')!
+    const ws = (id: string) => S().boards.find((x) => x.id === id)?.workspaceId
+    expect([ws(a), ws(b), ws(c)]).toEqual(['w1', 'w2', 'w1'])
+  })
+
+  it('sin ningún workspace no se crean tableros y se avisa', () => {
+    setWorkspacesResolver(() => [])
+    expect(S().createBoard('A')).toBeNull()
+    expect(S().toast?.message).toContain('workspace')
   })
 })

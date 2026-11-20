@@ -15,6 +15,12 @@ let built: BuiltApp
 
 async function makeApp(opts: { allowSignup?: boolean; fetch?: typeof fetch } = {}) {
   db = openDb(':memory:')
+  // Por defecto todos los usuarios de prueba comparten un workspace; las pruebas de aislamiento lo quitan.
+  db.exec(`
+    INSERT INTO workspaces (id, name, created_at) VALUES ('general', 'General', '2026-01-01T00:00:00.000Z');
+    CREATE TRIGGER test_default_ws AFTER INSERT ON users BEGIN
+      INSERT INTO workspace_members (workspace_id, user_id) VALUES ('general', NEW.id);
+    END;`)
   built = buildApp({
     db,
     dataDir: mkdtempSync(join(tmpdir(), 'kanban-')),
@@ -1962,5 +1968,190 @@ describe('notas del tablero', () => {
       (await call(c.ed, '/api/sync/notes', { rows: [note('b1', 'v2')] })).json().rejected,
     ).toBeUndefined()
     expect(await read(c.dueno)).toEqual(['v2'])
+  })
+})
+
+describe('workspaces', () => {
+  const call = (
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    url: string,
+    cookie: string,
+    payload?: object,
+  ) => built.app.inject({ method, url, headers: headers(cookie), payload })
+  const bd = (id: string, workspaceId?: string) => ({
+    id,
+    title: 'T',
+    position: 'a0',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '',
+    ...(workspaceId ? { workspaceId } : {}),
+  })
+
+  /** Admin + Ana y Beto en "mercabits"; Carla en "otra". Nadie comparte con el resto. */
+  async function setup() {
+    await makeApp()
+    db.exec('DROP TRIGGER test_default_ws; DELETE FROM workspaces')
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    const ids: Record<string, string> = {}
+    for (const n of ['ana', 'beto', 'carla']) ids[n] = (await addUser(`${n}@correo.com`)).id
+    const c = {
+      admin: (await login('admin@correo.com')).cookie,
+      ana: (await login('ana@correo.com')).cookie,
+      beto: (await login('beto@correo.com')).cookie,
+      carla: (await login('carla@correo.com')).cookie,
+    }
+    const mk = async (name: string, members: string[]) => {
+      const r = await call('POST', '/api/admin/workspaces', c.admin, { name })
+      const id = r.json().workspace.id as string
+      await call('PUT', `/api/admin/workspaces/${id}/members`, c.admin, { userIds: members })
+      return id
+    }
+    const merca = await mk('Mercabits', [ids.ana, ids.beto])
+    const otra = await mk('Otra', [ids.carla])
+    return { c, ids, merca, otra }
+  }
+  const directory = async (cookie: string) =>
+    ((await call('GET', '/api/users/directory', cookie)).json().users as { email: string }[]).map(
+      (u) => u.email,
+    )
+
+  it('solo el admin gestiona workspaces; nombres válidos y únicos', async () => {
+    const { c } = await setup()
+    expect((await call('GET', '/api/admin/workspaces', c.ana)).statusCode).toBe(403)
+    expect((await call('POST', '/api/admin/workspaces', c.ana, { name: 'X' })).statusCode).toBe(403)
+    expect((await call('POST', '/api/admin/workspaces', c.admin, { name: '  ' })).statusCode).toBe(400)
+    expect((await call('POST', '/api/admin/workspaces', c.admin, { name: 'mercabits' })).statusCode).toBe(409)
+    const list = (await call('GET', '/api/admin/workspaces', c.admin)).json().workspaces
+    expect(list.map((w: { name: string }) => w.name)).toEqual(['Mercabits', 'Otra'])
+    expect(list[0].members).toHaveLength(2)
+  })
+
+  it('el directorio solo muestra a quienes comparten un workspace (el admin ve a todos)', async () => {
+    const { c } = await setup()
+    expect(await directory(c.ana)).toEqual(['beto@correo.com'])
+    expect(await directory(c.carla)).toEqual([])
+    expect((await directory(c.admin)).sort()).toEqual(
+      ['ana@correo.com', 'beto@correo.com', 'carla@correo.com'].sort(),
+    )
+  })
+
+  it('un usuario en dos workspaces ve a los de ambos', async () => {
+    const { c, ids, otra } = await setup()
+    await call('PUT', `/api/admin/workspaces/${otra}/members`, c.admin, {
+      userIds: [ids.carla, ids.ana],
+    })
+    expect((await directory(c.ana)).sort()).toEqual(['beto@correo.com', 'carla@correo.com'])
+    expect(await directory(c.carla)).toEqual(['ana@correo.com'])
+  })
+
+  it('/api/shares lista mis workspaces', async () => {
+    const { c } = await setup()
+    const ana = (await call('GET', '/api/shares', c.ana)).json().workspaces
+    expect(ana.map((w: { name: string }) => w.name)).toEqual(['Mercabits'])
+    expect((await call('GET', '/api/shares', c.admin)).json().workspaces).toHaveLength(2)
+  })
+
+  it('un tablero solo se crea en un workspace propio', async () => {
+    const { c, merca, otra } = await setup()
+    const push = (cookie: string, ws: string) =>
+      call('POST', '/api/sync/boards', cookie, { rows: [bd(`b-${ws}`, ws)] })
+    expect((await push(c.ana, merca)).json().rejected ?? []).toEqual([])
+    expect((await push(c.ana, otra)).json().rejected).toEqual([`b-${otra}`])
+    expect((await push(c.ana, 'no-existe')).json().rejected).toEqual(['b-no-existe'])
+    // el admin puede crear en cualquiera
+    expect((await push(c.admin, otra)).json().rejected ?? []).toEqual([])
+  })
+
+  it('se comparte solo con miembros del workspace del tablero', async () => {
+    const { c, merca } = await setup()
+    await call('POST', '/api/sync/boards', c.ana, { rows: [bd('b1', merca)] })
+    const share = (email: string) =>
+      call('POST', '/api/boards/b1/members', c.ana, { email, role: 'editor' })
+    expect((await share('carla@correo.com')).statusCode).toBe(404) // no existe para ella
+    expect((await share('beto@correo.com')).statusCode).toBe(201)
+  })
+
+  it('quitar a alguien del workspace le retira el acceso a sus tableros', async () => {
+    const { c, ids, merca } = await setup()
+    await call('POST', '/api/sync/boards', c.ana, { rows: [bd('b1', merca)] })
+    await call('POST', '/api/boards/b1/members', c.ana, { email: 'beto@correo.com', role: 'editor' })
+    const mine = async () =>
+      (await call('GET', '/api/shares', c.beto)).json().shared as { boardId: string }[]
+    expect(await mine()).toHaveLength(1)
+    await call('PUT', `/api/admin/workspaces/${merca}/members`, c.admin, { userIds: [ids.ana] })
+    expect(await mine()).toHaveLength(0)
+    expect(await directory(c.ana)).toEqual([])
+  })
+
+  it('renombrar, y borrar solo si está vacío', async () => {
+    const { c, merca, otra } = await setup()
+    expect(
+      (await call('PATCH', `/api/admin/workspaces/${otra}`, c.admin, { name: 'Mercabits' })).statusCode,
+    ).toBe(409)
+    expect(
+      (await call('PATCH', `/api/admin/workspaces/${otra}`, c.admin, { name: 'Nueva' })).json()
+        .workspace.name,
+    ).toBe('Nueva')
+    await call('POST', '/api/sync/boards', c.ana, { rows: [bd('b1', merca)] })
+    expect((await call('DELETE', `/api/admin/workspaces/${merca}`, c.admin)).statusCode).toBe(409)
+    expect((await call('DELETE', `/api/admin/workspaces/${otra}`, c.admin)).statusCode).toBe(204)
+  })
+
+  it('el registro propio entra a "General"; el admin puede dar de alta con workspaces', async () => {
+    await makeApp({ allowSignup: true })
+    db.exec('DROP TRIGGER test_default_ws; DELETE FROM workspaces')
+    const signup = await call('POST', '/api/auth/signup', '', {
+      email: 'nueva@correo.com',
+      password: PASSWORD,
+    })
+    expect(signup.statusCode).toBe(201)
+    const cookie = String(signup.headers['set-cookie']).split(';')[0]
+    const mine = (await call('GET', '/api/shares', cookie)).json().workspaces
+    expect(mine.map((w: { name: string }) => w.name)).toEqual(['General'])
+
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    const admin = (await login('admin@correo.com')).cookie
+    const wid = mine[0].id as string
+    const bad = await call('POST', '/api/admin/users', admin, {
+      email: 'x@correo.com',
+      workspaceIds: ['no-existe'],
+    })
+    expect(bad.statusCode).toBe(400)
+    const ok = await call('POST', '/api/admin/users', admin, {
+      email: 'y@correo.com',
+      password: PASSWORD,
+      workspaceIds: [wid],
+    })
+    expect(ok.statusCode).toBe(201)
+    const ws = (await call('GET', '/api/admin/workspaces', admin)).json().workspaces
+    expect(ws[0].members).toHaveLength(2)
+  })
+
+  it('la migración lleva usuarios y tableros existentes a "General"', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'kanban-mig-')), 'k.db')
+    const old = openDb(file)
+    // simula una base anterior a los workspaces
+    old.exec('DROP TABLE workspace_members; DROP TABLE workspaces; PRAGMA user_version = 7')
+    const u = createUser(old, 'a@correo.com', await hashPassword(PASSWORD))
+    old
+      .prepare(
+        `INSERT INTO rows (user_id, tbl, id, data, updated_at, board_id) VALUES (?, 'boards', 'b1', ?, ?, 'b1')`,
+      )
+      .run(u.id, JSON.stringify({ id: 'b1', title: 'T' }), '2026-01-01T00:00:00.000Z')
+    old.close()
+
+    const migrated = openDb(file)
+    const ws = migrated.prepare('SELECT id, name FROM workspaces').all()
+    expect(ws).toMatchObject([{ id: 'general', name: 'General' }])
+    expect(
+      migrated.prepare('SELECT user_id FROM workspace_members WHERE workspace_id = ?').all('general'),
+    ).toMatchObject([{ user_id: u.id }])
+    const row = migrated.prepare("SELECT data, updated_at FROM rows WHERE id = 'b1'").get() as {
+      data: string
+      updated_at: string
+    }
+    expect(JSON.parse(row.data).workspaceId).toBe('general')
+    expect(row.updated_at > '2026-01-01').toBe(true) // sube el cursor: los clientes lo descargan
+    migrated.close()
   })
 })

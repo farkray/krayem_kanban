@@ -117,6 +117,8 @@ export interface Board extends Base {
   position: string
   color?: BoardColor // ausente = petróleo
   icon?: BoardIconName // ausente = tablero
+  /** Workspace al que pertenece (solo con cuentas): sus miembros son quienes pueden compartirlo. */
+  workspaceId?: string
   /** Dueño del tablero: lo pone el servidor al descargar. Ausente = tablero propio creado aquí. */
   ownerId?: string
   /**

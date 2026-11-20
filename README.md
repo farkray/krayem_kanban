@@ -9,6 +9,7 @@ Tablero Kanban en español, instalable (PWA), con guardado automático en tu pro
 - **Centro de notificaciones** (campana): menciones, asignaciones y cambios de acceso. Opcionalmente **avisos por correo y WhatsApp** a través de un flujo de n8n que el administrador descarga desde el panel: [docs/notificaciones-n8n.md](docs/notificaciones-n8n.md).
 - **Tipos de columna con límite (WIP):** Estándar (sin límite), Next (máx. 4) y Doing (máx. 2).
 - **Tableros privados o compartidos:** por defecto cada tablero es privado; el dueño puede compartirlo por correo con otras cuentas como **Editor** o **Solo lectura**.
+- **Workspaces:** el admin crea espacios (p. ej. Mercabits) y les asigna usuarios; cada quien solo ve y comparte con las personas de sus workspaces.
 - **Notas del tablero:** panel lateral con notas como tarjetas (estilo Google Keep): texto con formato y atajos de teclado, enlaces, fijar y eliminar, compartidas con los miembros.
 - **Búsqueda global** (`/` o `Cmd/Ctrl+K`), deshacer en todos los borrados.
 - **Offline-first:** todo se guarda primero en IndexedDB y se sincroniza con tu propio servidor en segundo plano.

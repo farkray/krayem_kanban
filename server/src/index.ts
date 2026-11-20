@@ -11,6 +11,7 @@ import {
   validEmail,
 } from './auth.ts'
 import { openDb } from './db.ts'
+import { joinGeneral } from './workspaces.ts'
 
 const env = process.env
 const dataDir = env.DATA_DIR ?? './data'
@@ -28,7 +29,8 @@ if (adminEmail && env.ADMIN_PASSWORD && !findUserByEmail(db, adminEmail)) {
     console.error(`ADMIN_EMAIL inválido o ADMIN_PASSWORD con menos de ${MIN_PASSWORD} caracteres.`)
     process.exit(1)
   }
-  createUser(db, adminEmail, await hashPassword(env.ADMIN_PASSWORD), true)
+  const admin = createUser(db, adminEmail, await hashPassword(env.ADMIN_PASSWORD), true)
+  joinGeneral(db, admin.id)
   console.log(`Usuario creado: ${adminEmail}`)
 }
 

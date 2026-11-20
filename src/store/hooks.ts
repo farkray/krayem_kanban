@@ -155,6 +155,8 @@ export interface BoardSummary {
   linkLabels: string[]
   /** Cuántos subtableros tiene. */
   subCount: number
+  /** Nombre de su workspace (solo si la persona tiene más de uno, para distinguirlos). */
+  workspace?: string
 }
 
 export function useBoardSummaries(): BoardSummary[] {
@@ -164,6 +166,7 @@ export function useBoardSummaries(): BoardSummary[] {
   const labels = useStore((s) => s.labels)
   const shared = useAccess((s) => s.shared)
   const members = useAccess((s) => s.members)
+  const workspaces = useAccess((s) => s.workspaces)
   const me = useAuth((s) => s.userId)
   return useMemo(() => {
     const colCount = new Map<string, number>()
@@ -206,10 +209,14 @@ export function useBoardSummaries(): BoardSummary[] {
             parentId: b.parentId,
             linkLabels: linkNames,
             subCount: subCount.get(b.id) ?? 0,
+            workspace:
+              workspaces.length > 1 && !b.parentId
+                ? workspaces.find((w) => w.id === b.workspaceId)?.name
+                : undefined,
           }
         })
     )
-  }, [boards, columns, cards, labels, shared, members, me])
+  }, [boards, columns, cards, labels, shared, members, workspaces, me])
 }
 
 export function useAttachments(cardId: string) {

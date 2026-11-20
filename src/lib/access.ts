@@ -37,3 +37,11 @@ export const setGuestMode = (on: boolean) => {
   guest = on
 }
 export const isGuestMode = () => guest
+
+let workspaces: () => string[] | null = () => null
+
+/** Ids de los workspaces de la persona; null en el modo solo-local (sin workspaces). */
+export const setWorkspacesResolver = (fn: (() => string[] | null) | null) => {
+  workspaces = fn ?? (() => null)
+}
+export const myWorkspaceIds = () => workspaces()

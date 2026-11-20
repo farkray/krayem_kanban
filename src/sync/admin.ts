@@ -41,12 +41,14 @@ export const adminCreateUser = (
   password?: string,
   alias?: string,
   guest?: boolean,
+  workspaceIds?: string[],
 ) =>
   call<{ user: AdminUser; password?: string }>('POST', '/users', {
     email,
     password,
     alias,
     guest,
+    workspaceIds,
   })
 
 export const adminSetGuest = (id: string, guest: boolean) =>
@@ -91,3 +93,30 @@ export const adminRetryDelivery = () => call<DeliveryAdmin>('POST', '/notificati
 
 /** Dirección del flujo de n8n para descargar (JSON, sin secretos). */
 export const deliveryWorkflowUrl = () => url('/notifications/workflow')
+
+/* ---------- workspaces ---------- */
+
+export interface AdminWorkspace {
+  id: string
+  name: string
+  createdAt: string
+  /** Ids de los usuarios que pertenecen. */
+  members: string[]
+  boards: number
+}
+
+export const adminListWorkspaces = () => call<{ workspaces: AdminWorkspace[] }>('GET', '/workspaces')
+
+export const adminCreateWorkspace = (name: string) =>
+  call<{ workspace: AdminWorkspace }>('POST', '/workspaces', { name })
+
+export const adminRenameWorkspace = (id: string, name: string) =>
+  call<{ workspace: AdminWorkspace }>('PATCH', `/workspaces/${encodeURIComponent(id)}`, { name })
+
+export const adminSetWorkspaceMembers = (id: string, userIds: string[]) =>
+  call<{ workspace: AdminWorkspace }>('PUT', `/workspaces/${encodeURIComponent(id)}/members`, {
+    userIds,
+  })
+
+export const adminDeleteWorkspace = (id: string) =>
+  call<void>('DELETE', `/workspaces/${encodeURIComponent(id)}`)

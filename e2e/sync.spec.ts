@@ -602,6 +602,7 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
   const email = unique()
   await form.getByLabel('Correo').fill(email)
   await form.getByRole('combobox').selectOption('guest')
+  await form.getByRole('checkbox', { name: 'General' }).check() // comparte workspace con el admin
   await form.getByRole('button', { name: 'Crear usuario' }).click()
   const temp = (await admin.page.getByRole('status').locator('code').innerText()).trim()
   await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveValue('guest')
@@ -652,4 +653,57 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
 
   await admin.ctx.close()
   await guest.ctx.close()
+})
+
+// Workspaces: el admin crea uno y asigna usuarios; quien está fuera no existe para los de dentro.
+test('workspaces: el admin los crea y asigna; no se ven usuarios de otros workspaces', async ({
+  browser,
+}) => {
+  test.skip(!ADMIN_PASSWORD, 'Define E2E_ADMIN_PASSWORD (la ADMIN_PASSWORD del stack).')
+  const admin = await newDevice(browser)
+  await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await admin.page.goto('/admin')
+  const main = admin.page.getByRole('main')
+  const ws = `Mercabits ${Date.now()}`
+  await main.getByLabel('Nombre del nuevo workspace').fill(ws)
+  await main.getByRole('button', { name: 'Crear', exact: true }).click()
+  await expect(main.getByRole('list', { name: 'Workspaces' })).toContainText(ws)
+
+  const create = async (email: string, inWs: boolean) => {
+    const form = main.getByRole('region', { name: 'Nuevo usuario' })
+    await form.getByLabel('Correo').fill(email)
+    await form.getByLabel('Contraseña (opcional)').fill(PASSWORD)
+    const box = form.getByRole('checkbox', { name: ws })
+    if (inWs) await box.check()
+    else if (await box.isChecked()) await box.uncheck()
+    await form.getByRole('button', { name: 'Crear usuario' }).click()
+    await expect(main.getByRole('table', { name: 'Usuarios' })).toContainText(email)
+  }
+  const [a, b, c] = [unique(), unique(), unique()]
+  await create(a, true)
+  await create(b, true)
+  await create(c, false)
+  await expect(main.getByRole('list', { name: 'Workspaces' })).toContainText('2 miembros')
+
+  const userA = await newDevice(browser)
+  await signIn(userA.page, a)
+  await expect(userA.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  const emails = await userA.page.evaluate(async () => {
+    const r = await fetch('/api/users/directory', { credentials: 'same-origin' })
+    return ((await r.json()) as { users: { email: string }[] }).users.map((u) => u.email)
+  })
+  expect(emails).toContain(b)
+  expect(emails).not.toContain(c)
+
+  // sin workspace: la persona entra pero no puede crear tableros y se le explica
+  const userC = await newDevice(browser)
+  await signIn(userC.page, c)
+  await expect(userC.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await userC.page.getByRole('button', { name: /Nuevo tablero/ }).first().click()
+  await userC.page.getByLabel('Nombre del tablero').fill('Sin workspace')
+  await userC.page.keyboard.press('Enter')
+  await expect(userC.page.getByRole('status').filter({ hasText: /workspace/ })).toBeVisible()
+
+  for (const x of [admin, userA, userC]) await x.ctx.close()
 })

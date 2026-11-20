@@ -23,12 +23,16 @@ import type { BoardSummary } from '../store/hooks'
 import { BoardTile } from './BoardTile'
 import { GripIcon, PlusIcon } from './Icons'
 import { InlineInput } from './InlineInput'
+import { WorkspaceSelect } from './WorkspaceSelect'
+import type { Workspace } from '../sync/access'
 import styles from './HomeView.module.css'
 
 interface Props {
   boards: BoardSummary[]
   onOpen: (id: string) => void
-  onCreate: (title: string) => void
+  onCreate: (title: string, workspaceId?: string) => void
+  /** Workspaces de la persona (con más de uno se elige dónde nace el tablero). */
+  workspaces?: Workspace[]
   /** false = cuenta de invitado: no se pueden crear tableros. */
   canCreate?: boolean
   /** Mueve uno de mis tableros al lugar `index` entre los míos. */
@@ -58,6 +62,7 @@ function Tile({
           {pluralize(b.columnCount, 'columna', 'columnas')} ·{' '}
           {pluralize(b.cardCount, 'tarjeta', 'tarjetas')}
         </span>
+        {b.workspace && <span className={styles.meta}>{b.workspace}</span>}
         {b.subCount > 0 && (
           <span className={styles.meta}>{pluralize(b.subCount, 'subtablero', 'subtableros')}</span>
         )}
@@ -80,8 +85,16 @@ function Tile({
   )
 }
 
-export function HomeView({ boards, onOpen, onCreate, canCreate = true, onMove }: Props) {
+export function HomeView({
+  boards,
+  onOpen,
+  onCreate,
+  workspaces = [],
+  canCreate = true,
+  onMove,
+}: Props) {
   const [creating, setCreating] = useState(false)
+  const [ws, setWs] = useState('')
   // La portada lista los tableros de primer nivel; los subtableros se abren desde la barra lateral.
   boards = boards.filter((b) => !b.parentId)
   const mine = boards.filter((b) => !b.sharedBy)
@@ -133,12 +146,17 @@ export function HomeView({ boards, onOpen, onCreate, canCreate = true, onMove }:
             ))}
             {!canCreate ? null : creating ? (
               <div className={styles.tile}>
+                <WorkspaceSelect
+                  workspaces={workspaces}
+                  value={ws || (workspaces[0]?.id ?? '')}
+                  onChange={setWs}
+                />
                 <InlineInput
                   label="Nombre del tablero"
                   placeholder="Nombre del tablero"
                   maxLength={LIMITS.board}
                   onSubmit={(t) => {
-                    onCreate(t)
+                    onCreate(t, ws || workspaces[0]?.id)
                     setCreating(false)
                   }}
                   onCancel={() => setCreating(false)}

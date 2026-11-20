@@ -122,6 +122,30 @@ const MIGRATIONS: string[] = [
   `,
   // 7: rol de invitado: no crea tableros, solo participa en los que le comparten
   `ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0;`,
+  // 8: workspaces. Agrupan usuarios (y sus tableros): solo se ven y comparten entre quienes
+  // comparten un workspace. Los usuarios y tableros que ya existían pasan a "General".
+  `
+  CREATE TABLE workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE workspace_members (
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (workspace_id, user_id)
+  );
+  CREATE INDEX workspace_members_user ON workspace_members(user_id);
+  INSERT INTO workspaces (id, name, created_at)
+    SELECT 'general', 'General', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    WHERE EXISTS (SELECT 1 FROM users);
+  INSERT INTO workspace_members (workspace_id, user_id)
+    SELECT 'general', id FROM users WHERE EXISTS (SELECT 1 FROM workspaces WHERE id = 'general');
+  UPDATE rows SET
+    data = json_set(data, '$.workspaceId', 'general', '$.updatedAt', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    WHERE tbl = 'boards' AND EXISTS (SELECT 1 FROM workspaces WHERE id = 'general');
+  `,
 ]
 
 export function openDb(file: string): DB {

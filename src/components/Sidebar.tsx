@@ -24,13 +24,17 @@ import { BoardTile } from './BoardTile'
 import { GripIcon, PlusIcon, SidebarIcon } from './Icons'
 import { InlineInput } from './InlineInput'
 import { InstallButton } from './PwaPrompts'
+import { WorkspaceSelect } from './WorkspaceSelect'
+import type { Workspace } from '../sync/access'
 import styles from './Sidebar.module.css'
 
 interface Props {
   boards: BoardSummary[]
   activeId: string | null
   onSelect: (id: string) => void
-  onCreate: (title: string) => void
+  onCreate: (title: string, workspaceId?: string) => void
+  /** Workspaces de la persona (con más de uno se elige dónde nace el tablero). */
+  workspaces?: Workspace[]
   /** false = cuenta de invitado: no se pueden crear tableros. */
   canCreate?: boolean
   /** Mueve uno de mis tableros al lugar `index` entre los míos. */
@@ -102,6 +106,7 @@ function Item({
                 De {b.sharedBy.name} · {b.sharedBy.role === 'editor' ? 'Editor' : 'Solo lectura'}
               </span>
             )}
+            {b.workspace && depth === 0 && <span className={styles.itemMeta}>{b.workspace}</span>}
             {b.memberCount > 0 && (
               <span className={styles.itemMeta}>
                 Compartido con {pluralize(b.memberCount, 'persona', 'personas')}
@@ -152,12 +157,14 @@ export function Sidebar({
   drawer = false,
   onSelect,
   onCreate,
+  workspaces = [],
   canCreate = true,
   onMove,
   onToggle,
   account,
 }: Props) {
   const [creating, setCreating] = useState(false)
+  const [ws, setWs] = useState('')
   const top = boards.filter((b) => !b.parentId)
   const mine = top.filter((b) => !b.sharedBy)
   const sharedWithMe = top.filter((b) => b.sharedBy)
@@ -226,12 +233,17 @@ export function Sidebar({
 
       {creating && (
         <div className={styles.create}>
+          <WorkspaceSelect
+            workspaces={workspaces}
+            value={ws || (workspaces[0]?.id ?? '')}
+            onChange={setWs}
+          />
           <InlineInput
             label="Nombre del tablero"
             placeholder="Nombre del tablero"
             maxLength={LIMITS.board}
             onSubmit={(t) => {
-              onCreate(t)
+              onCreate(t, ws || workspaces[0]?.id)
               setCreating(false)
             }}
             onCancel={() => setCreating(false)}
