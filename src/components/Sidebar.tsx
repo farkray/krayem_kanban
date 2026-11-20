@@ -231,67 +231,69 @@ export function Sidebar({
         )}
       </header>
 
-      {creating && (
-        <div className={styles.create}>
-          <WorkspaceSelect
-            workspaces={workspaces}
-            value={ws || (workspaces[0]?.id ?? '')}
-            onChange={setWs}
-          />
-          <InlineInput
-            label="Nombre del tablero"
-            placeholder="Nombre del tablero"
-            maxLength={LIMITS.board}
-            onSubmit={(t) => {
-              onCreate(t, ws || workspaces[0]?.id)
-              setCreating(false)
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </div>
-      )}
+      <div className={styles.scroll}>
+        {creating && (
+          <div className={styles.create}>
+            <WorkspaceSelect
+              workspaces={workspaces}
+              value={ws || (workspaces[0]?.id ?? '')}
+              onChange={setWs}
+            />
+            <InlineInput
+              label="Nombre del tablero"
+              placeholder="Nombre del tablero"
+              maxLength={LIMITS.board}
+              onSubmit={(t) => {
+                onCreate(t, ws || workspaces[0]?.id)
+                setCreating(false)
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          </div>
+        )}
 
-      {boards.length === 0 && !creating ? (
-        <p className={styles.empty}>
-          {canCreate
-            ? 'Aún no tienes tableros. Crea el primero con “+”.'
-            : 'Aún no te han compartido ningún tablero.'}
-        </p>
-      ) : (
-        <>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={onDragEnd}
-            accessibility={{
-              announcements: announcements(
-                (id) => boards.find((b) => b.id === id)?.title ?? '',
-                'el tablero',
-              ),
-              screenReaderInstructions,
-            }}
-          >
-            <SortableContext items={mine.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-              <ul className={styles.list} aria-label="Mis tableros">
-                {mine.map((b) => renderItem(b, canSort))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-          {sharedWithMe.length > 0 && (
-            <>
-              <h3 className={styles.subheading}>Compartidos conmigo</h3>
-              <ul className={styles.list} aria-label="Compartidos conmigo">
-                {sharedWithMe.map((b) => renderItem(b))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-      {drawer && (
-        <div className={styles.install}>
-          <InstallButton />
-        </div>
-      )}
+        {boards.length === 0 && !creating ? (
+          <p className={styles.empty}>
+            {canCreate
+              ? 'Aún no tienes tableros. Crea el primero con “+”.'
+              : 'Aún no te han compartido ningún tablero.'}
+          </p>
+        ) : (
+          <>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDragEnd}
+              accessibility={{
+                announcements: announcements(
+                  (id) => boards.find((b) => b.id === id)?.title ?? '',
+                  'el tablero',
+                ),
+                screenReaderInstructions,
+              }}
+            >
+              <SortableContext items={mine.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                <ul className={styles.list} aria-label="Mis tableros">
+                  {mine.map((b) => renderItem(b, canSort))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+            {sharedWithMe.length > 0 && (
+              <>
+                <h3 className={styles.subheading}>Compartidos conmigo</h3>
+                <ul className={styles.list} aria-label="Compartidos conmigo">
+                  {sharedWithMe.map((b) => renderItem(b))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+        {drawer && (
+          <div className={styles.install}>
+            <InstallButton />
+          </div>
+        )}
+      </div>
       {account && (
         <footer className={styles.account}>
           <span className={styles.email} title={account.email ?? undefined}>
