@@ -1,4 +1,5 @@
 .panel {
+  animation: enter var(--duration-base) var(--ease-out) both;
   display: flex;
   flex: none;
   flex-direction: column;

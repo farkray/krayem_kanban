@@ -541,6 +541,7 @@
 .panel {
   display: grid;
   gap: var(--space-4);
+  animation: enter var(--duration-base) var(--ease-out) both;
 }
 
 .tools {

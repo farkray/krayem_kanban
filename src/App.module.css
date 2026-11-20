@@ -61,7 +61,7 @@
   inset: 0;
   z-index: 44;
   background: var(--color-scrim);
-  animation: scrim-in 0.2s ease-out;
+  animation: scrim-in var(--duration-base) var(--ease-out);
 }
 
 @keyframes scrim-in {

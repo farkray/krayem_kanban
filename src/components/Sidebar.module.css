@@ -254,7 +254,7 @@
   border-right: 0;
   background: var(--color-surface);
   box-shadow: var(--shadow-lifted);
-  animation: drawer-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: drawer-in var(--duration-base) var(--ease-out);
 }
 
 @keyframes drawer-in {

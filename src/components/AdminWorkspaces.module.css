@@ -5,6 +5,10 @@
   font-size: var(--text-sm);
 }
 
+.layout > section:last-child {
+  animation: enter var(--duration-base) var(--ease-out) both;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);

@@ -43,7 +43,7 @@
   .dialog {
     max-height: calc(100dvh - 24px - env(safe-area-inset-top));
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    animation: sheet-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: sheet-in var(--duration-base) var(--ease-out);
   }
 
   .sm,

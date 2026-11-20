@@ -96,3 +96,20 @@ button {
     transform: none;
   }
 }
+
+/* Entrada compartida de paneles y secciones: un leve ascenso con desvanecido (ease-out exponencial).
+   Es el único movimiento "de autor" para contenido que aparece (panel de notas, pestañas del panel de control). */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes enter {
+    from {
+      opacity: 0;
+    }
+  }
+}

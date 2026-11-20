@@ -138,7 +138,7 @@
 
 .panel,
 .none {
-  animation: panel-in var(--duration-fast) ease-out;
+  animation: panel-in var(--duration-fast) var(--ease-out);
 }
 
 @keyframes panel-in {
