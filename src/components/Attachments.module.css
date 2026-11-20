@@ -1,4 +1,6 @@
 .zone {
+  /* el aire del resaltado al soltar una imagen no desplaza el contenido: queda alineado con las demás secciones */
+  margin: calc(-1 * var(--space-2));
   padding: var(--space-2);
   border: 1px dashed transparent;
   border-radius: var(--radius-md);

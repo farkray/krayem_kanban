@@ -54,12 +54,17 @@
   overscroll-behavior: contain;
 }
 
-/* Columna + fechas en una sola fila */
+/* Columna + fechas + mover: una fila que se acomoda; los enlaces se alinean con el centro de los campos */
 .details {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: end;
-  gap: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-5);
+}
+
+.details > .field {
+  flex: 1 1 180px;
+  max-width: 260px;
 }
 
 .field {
@@ -93,6 +98,9 @@
 }
 
 .link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px; /* misma altura que los campos: quedan alineados en la fila */
   padding: 0;
   border: 0;
   background: none;

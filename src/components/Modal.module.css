@@ -18,6 +18,11 @@
   outline: 0;
 }
 
+/* el contenedor solo recibe el foco para atrapar el teclado: no es un control, sin anillo */
+.dialog:focus-visible {
+  outline: none;
+}
+
 .sm {
   width: min(420px, 100%);
   padding: var(--space-5);

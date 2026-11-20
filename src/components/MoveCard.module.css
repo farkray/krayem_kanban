@@ -5,16 +5,19 @@
   background: none;
   color: var(--color-accent-text);
   font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   text-align: left;
 }
 
 .trigger {
-  grid-column: 1 / -1;
-  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
 }
 
 .box {
+  flex: 1 1 100%;
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr 1fr;

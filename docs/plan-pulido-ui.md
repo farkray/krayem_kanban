@@ -21,7 +21,7 @@ detalles: espacios, alineaciones, estados y foco.
    radios de 18 px, título de columna con objetivo ≥ 24 px.
 2. **Cabecera del tablero y de columna (hecha):** ordenar los controles de la columna (agarre, tipo, eliminar) en un grupo
    fijo, separar el botón de eliminar tablero del título, y que las acciones del tablero tengan el mismo ritmo.
-3. **Tarjetas y detalle:** jerarquía título → metadatos → chips, ritmo vertical constante, foco visible en todo.
+3. **Tarjetas y detalle (hecha):** jerarquía título → metadatos → chips, ritmo vertical constante, foco visible en todo.
 4. **Estados:** vacíos con indicación de qué hacer, cargas con esqueleto, errores con recuperación.
 5. **Movimiento:** una sola transición de autor (entrada de tarjeta/panel) con ease-out; respetar movimiento reducido.
 6. **Móvil y oscuro:** repasar cada pantalla a 390 px y en modo oscuro (contraste, objetivos de 44 px).
