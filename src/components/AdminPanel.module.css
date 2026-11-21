@@ -439,6 +439,7 @@
 
 .roleSelect {
   width: 132px;
+  margin-right: var(--space-4); /* aire respecto a la columna Workspaces */
 }
 
 .hint {

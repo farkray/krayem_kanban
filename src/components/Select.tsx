@@ -27,7 +27,7 @@ interface Props {
   onChange: (value: string) => void
   disabled?: boolean
   required?: boolean
-  /** `filled`: campo relleno con etiqueta flotante (Material 2). `pill`: compacto, para tablas y filas. */
+  /** `filled`: campo relleno con etiqueta flotante (Material 2). `pill`: compacto (cuadro de esquinas suaves), para tablas y filas. */
   variant?: 'filled' | 'pill'
   className?: string
   /** Fuerza el selector nativo (true) o el propio (false). Por defecto: nativo con puntero táctil. */
