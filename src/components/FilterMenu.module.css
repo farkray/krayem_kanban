@@ -47,17 +47,11 @@
   max-height: 60vh;
   padding: var(--space-3);
   overflow-y: auto;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lifted);
-  animation: panel-in var(--duration-fast) var(--ease-out);
-}
-
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
+  border-radius: var(--radius-m2);
+  background: var(--color-menu);
+  box-shadow: var(--elev-menu);
+  transform-origin: top right;
+  animation: m2-menu-in 120ms var(--ease-decel);
 }
 
 .title {

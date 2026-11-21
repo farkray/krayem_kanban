@@ -140,8 +140,8 @@
   padding: 8px 0;
   overflow-y: auto;
   border-radius: var(--radius-m2);
-  background: var(--color-surface);
-  box-shadow: var(--elev-8);
+  background: var(--color-menu);
+  box-shadow: var(--elev-menu);
   list-style: none;
   outline: none;
   transform-origin: top left;

@@ -150,6 +150,8 @@
   --elev-2: 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12);
   --elev-8: 0 5px 5px -3px rgba(0, 0, 0, 0.2), 0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12);
   --radius-m2: 4px; /* campos y menús */
+  --color-menu: var(--color-surface); /* superficie de los menús (en oscuro se aclara: así se eleva, como en M2) */
+  --elev-menu: var(--elev-8), 0 0 0 1px rgb(var(--ink) / 0.06); /* menú: z8 con un filo fino para que se lea sobre cualquier fondo */
 
   /* Capas de estado (sobre la tinta del texto) */
   --state-hover: rgb(var(--ink) / 0.04);
@@ -209,6 +211,7 @@
 
     --bg-app: linear-gradient(135deg, #0b1215 0%, #0f181c 50%, #121e24 100%);
     --color-surface: #172227;
+    --color-menu: #22323a; /* z8: capa blanca sobre la superficie */
     --color-surface-glass: rgba(17, 27, 31, 0.74);
     --color-sidebar: rgba(17, 27, 31, 0.5);
     --color-column: #131d21;

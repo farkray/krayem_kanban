@@ -113,7 +113,7 @@
 }
 
 .manage:hover {
-  background: var(--color-fill-2);
+  background: var(--state-hover);
 }
 
 @media (pointer: coarse) {

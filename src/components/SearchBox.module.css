@@ -38,9 +38,11 @@
   padding: var(--space-2);
   overflow-y: auto;
   list-style: none;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lifted);
+  border-radius: var(--radius-m2);
+  background: var(--color-menu);
+  box-shadow: var(--elev-menu);
+  transform-origin: top right;
+  animation: m2-menu-in 120ms var(--ease-decel);
 }
 
 .none {
@@ -136,16 +138,9 @@
   }
 }
 
-.panel,
 .none {
-  animation: panel-in var(--duration-fast) var(--ease-out);
-}
-
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
+  animation: m2-menu-in 120ms var(--ease-decel);
+  transform-origin: top right;
 }
 
 @media (prefers-reduced-motion: reduce) {

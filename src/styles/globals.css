@@ -125,3 +125,19 @@ button {
     }
   }
 }
+
+/* Entrada de los menús (Material 2): crecen desde su ancla de 0.8 a 1 mientras aparecen */
+@keyframes m2-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes m2-menu-in {
+    from {
+      opacity: 0;
+    }
+  }
+}

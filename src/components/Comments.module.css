@@ -259,31 +259,37 @@
   top: calc(100% + 4px);
   right: 0;
   z-index: 20;
-  min-width: 140px;
-  padding: var(--space-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lifted);
+  min-width: 160px;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-m2);
+  background: var(--color-menu);
+  box-shadow: var(--elev-menu);
+  transform-origin: top right;
+  animation: m2-menu-in 120ms var(--ease-decel);
 }
 
 .menuItem {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 8px 10px;
+  min-height: 40px;
+  padding: 0 var(--space-4);
   border: 0;
-  border-radius: var(--radius-xs);
   background: none;
   color: var(--color-text);
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
 }
 
-.menuItem:hover,
+.menuItem:hover {
+  background: var(--state-hover);
+}
+
 .menuItem:focus-visible {
-  background: var(--color-fill-2);
+  background: var(--state-focus);
+  outline: none;
 }
 
 .danger {
