@@ -53,9 +53,9 @@ de Material Components Web 14.0.0 (el SCSS de M2), leído desde jsDelivr:
 
 ## Plan por fases
 
-1. **Fundamentos M2:** tokens de elevación (z1, z2, z8), radios (4 px), curvas y duraciones de movimiento, capas de estado
+1. **Fundamentos M2 (hecha):** tokens de elevación (z1, z2, z8), radios (4 px), curvas y duraciones de movimiento, capas de estado
    (hover/foco/pulsado). Sin cambiar aún ninguna pantalla.
-2. **Selector «exposed dropdown» propio** (`Select`): campo relleno con etiqueta flotante, línea de acento, flecha que gira,
+2. **Selector «exposed dropdown» propio (hecha)** (`Select`): campo relleno con etiqueta flotante, línea de acento, flecha que gira,
    menú elevado z8 con ítems de 48 px y el ítem seleccionado resaltado, apertura con escala 0.8 → 1. Teclado completo y
    `<select>` nativo en táctil. Se aplica a: rol de usuario, columna, asignado, workspace, mover tarjeta, compartir.
 3. **Menús:** unificar «Más acciones», tipo de columna, filtros y notificaciones con la misma superficie y los mismos ítems.

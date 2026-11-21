@@ -3,6 +3,7 @@ import { displayName } from '../lib/people'
 import { fetchDirectory, type DirectoryUser } from '../sync/directory'
 import { removeMember, shareBoard, useBoardAccess, type ShareRole } from '../sync/access'
 import { Modal } from './Modal'
+import { Select } from './Select'
 import styles from './ShareDialog.module.css'
 
 const MESSAGES: Record<string, string> = {
@@ -14,6 +15,10 @@ const MESSAGES: Record<string, string> = {
 const message = (code: string) => MESSAGES[code] ?? 'No se pudo completar la acción.'
 
 const ROLE_LABEL: Record<ShareRole, string> = { editor: 'Editor', viewer: 'Solo lectura' }
+const ROLE_OPTIONS = [
+  { value: 'editor', label: ROLE_LABEL.editor },
+  { value: 'viewer', label: ROLE_LABEL.viewer },
+]
 
 /** El dueño comparte el tablero con otras personas (por correo) y decide qué pueden hacer. */
 export function ShareDialog({
@@ -81,15 +86,14 @@ export function ShareDialog({
                 <span className={styles.email}>{displayName(m)}</span>
                 {m.alias && <span className={styles.sub2}>{m.email}</span>}
               </span>
-              <select
+              <Select
+                variant="pill"
                 className={styles.select}
+                label={`Permiso de ${displayName(m)}`}
                 value={m.role}
-                aria-label={`Permiso de ${displayName(m)}`}
-                onChange={(e) => void change(m.email, e.target.value as ShareRole)}
-              >
-                <option value="editor">{ROLE_LABEL.editor}</option>
-                <option value="viewer">{ROLE_LABEL.viewer}</option>
-              </select>
+                options={ROLE_OPTIONS}
+                onChange={(v) => void change(m.email, v as ShareRole)}
+              />
               <button
                 type="button"
                 className={styles.remove}
@@ -106,40 +110,36 @@ export function ShareDialog({
       <form className={styles.form} onSubmit={add}>
         <h3 className={styles.sub}>Invitar</h3>
         <div className={styles.inline}>
-          <label className={styles.label}>
-            Persona
-            <select
-              className={styles.select}
-              value={email}
-              required
-              disabled={available.length === 0}
-              onChange={(e) => setEmail(e.target.value)}
-            >
-              <option value="">
-                {directory === undefined
-                  ? 'Cargando usuarios…'
-                  : available.length === 0
-                    ? 'No hay más usuarios'
-                    : 'Elige una persona…'}
-              </option>
-              {available.map((u) => (
-                <option key={u.id} value={u.email}>
-                  {u.alias ? `${u.alias} · ${u.email}` : u.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.label}>
-            Permiso
-            <select
-              className={styles.select}
-              value={role}
-              onChange={(e) => setRole(e.target.value as ShareRole)}
-            >
-              <option value="editor">{ROLE_LABEL.editor}</option>
-              <option value="viewer">{ROLE_LABEL.viewer}</option>
-            </select>
-          </label>
+          <Select
+            className={styles.label}
+            label="Persona"
+            value={email}
+            required
+            disabled={available.length === 0}
+            onChange={setEmail}
+            options={[
+              {
+                value: '',
+                label:
+                  directory === undefined
+                    ? 'Cargando usuarios…'
+                    : available.length === 0
+                      ? 'No hay más usuarios'
+                      : 'Elige una persona…',
+              },
+              ...available.map((u) => ({
+                value: u.email,
+                label: u.alias ? `${u.alias} · ${u.email}` : u.email,
+              })),
+            ]}
+          />
+          <Select
+            className={styles.label}
+            label="Permiso"
+            value={role}
+            options={ROLE_OPTIONS}
+            onChange={(v) => setRole(v as ShareRole)}
+          />
         </div>
         <p className={styles.hint}>
           Solo aparecen usuarios registrados. Editor: puede cambiar tarjetas, columnas y etiquetas.

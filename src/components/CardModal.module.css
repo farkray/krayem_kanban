@@ -62,9 +62,14 @@
   gap: var(--space-3) var(--space-5);
 }
 
-.details > .field {
+.details > .field,
+.details > .fieldSelect {
   flex: 1 1 180px;
   max-width: 260px;
+}
+
+.fieldSelect {
+  min-width: 0;
 }
 
 .field {

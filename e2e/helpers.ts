@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 /** Abre la app (con datos limpios) y entra al tablero inicial. */
 export async function openFirstBoard(page: Page) {
@@ -77,4 +77,10 @@ export async function setKind(page: Page, columnName: string, kind: 'Estándar' 
   const col = column(page, columnName)
   await col.getByRole('button', { name: /^Tipo de columna/ }).click()
   await col.getByRole('radio', { name: new RegExp(`^${kind}`) }).click()
+}
+
+/** Elige una opción de un selector propio (combobox + listbox): abre el menú y pulsa la opción por su nombre. */
+export async function pickOption(combo: Locator, name: string | RegExp) {
+  await combo.click()
+  await combo.page().getByRole('option', { name }).click()
 }

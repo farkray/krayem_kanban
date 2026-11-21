@@ -23,9 +23,15 @@ import { AdminWorkspaces } from './AdminWorkspaces'
 import { Avatar } from './Avatar'
 import { ConfirmDialog } from './ConfirmDialog'
 import { MoreIcon } from './Icons'
+import { Select } from './Select'
 import styles from './AdminPanel.module.css'
 
 const MIN = 10
+
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'Usuario' },
+  { value: 'guest', label: 'Invitado' },
+]
 
 type Tab = 'users' | 'workspaces' | 'alerts'
 const TABS: { id: Tab; label: string }[] = [
@@ -395,22 +401,19 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </label>
-            <label className={styles.label}>
-              Rol
-              <select
-                className={styles.input}
+            <div className={styles.label}>
+              <Select
+                label="Rol"
                 value={guest ? 'guest' : 'user'}
-                onChange={(e) => setGuest(e.target.value === 'guest')}
-              >
-                <option value="user">Usuario</option>
-                <option value="guest">Invitado</option>
-              </select>
+                options={ROLE_OPTIONS}
+                onChange={(v) => setGuest(v === 'guest')}
+              />
               <span className={styles.hint}>
                 {guest
                   ? 'El invitado no crea tableros: solo participa en los que le compartan.'
                   : 'El usuario puede crear sus propios tableros y compartirlos.'}
               </span>
-            </label>
+            </div>
             {workspaces && workspaces.length > 0 && (
               <fieldset className={styles.wsPick}>
                 <legend className={styles.wsLegend}>Workspaces</legend>
@@ -530,15 +533,14 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                     {u.isAdmin ? (
                       <span className={styles.badge}>Administrador</span>
                     ) : (
-                      <select
+                      <Select
+                        variant="pill"
                         className={styles.roleSelect}
+                        label={`Rol de ${u.email}`}
                         value={u.isGuest ? 'guest' : 'user'}
-                        aria-label={`Rol de ${u.email}`}
-                        onChange={(e) => void changeRole(u, e.target.value === 'guest')}
-                      >
-                        <option value="user">Usuario</option>
-                        <option value="guest">Invitado</option>
-                      </select>
+                        options={ROLE_OPTIONS}
+                        onChange={(v) => void changeRole(u, v === 'guest')}
+                      />
                     )}
                   </td>
                   <td className={styles.meta}>{workspacesOf(u.id) || '—'}</td>

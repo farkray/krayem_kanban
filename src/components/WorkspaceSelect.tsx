@@ -1,4 +1,5 @@
 import type { Workspace } from '../sync/access'
+import { Select } from './Select'
 import styles from './WorkspaceSelect.module.css'
 
 interface Props {
@@ -11,15 +12,12 @@ interface Props {
 export function WorkspaceSelect({ workspaces, value, onChange }: Props) {
   if (workspaces.length < 2) return null
   return (
-    <label className={styles.wrap}>
-      <span className={styles.label}>Workspace</span>
-      <select className={styles.select} value={value} onChange={(e) => onChange(e.target.value)}>
-        {workspaces.map((w) => (
-          <option key={w.id} value={w.id}>
-            {w.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      className={styles.wrap}
+      label="Workspace"
+      value={value}
+      options={workspaces.map((w) => ({ value: w.id, label: w.name }))}
+      onChange={onChange}
+    />
   )
 }

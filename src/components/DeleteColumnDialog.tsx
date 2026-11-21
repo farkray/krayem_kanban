@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { pluralize } from '../lib/format'
 import { limitOf, type Column } from '../lib/types'
 import { ConfirmDialog } from './ConfirmDialog'
+import { Select } from './Select'
 
 interface Props {
   column: Column
@@ -34,22 +35,23 @@ export function DeleteColumnDialog({
       ) : (
         <>
           <p>Tiene {pluralize(cardCount, 'tarjeta', 'tarjetas')}. ¿Qué hacemos con ellas?</p>
-          <select
-            aria-label="Destino de las tarjetas"
+          <Select
+            label="Destino de las tarjetas"
             value={target}
-            onChange={(e) => setTarget(e.target.value)}
-          >
-            <option value="">Eliminar las tarjetas</option>
-            {others.map((c) => {
-              const limit = limitOf(c)
-              const fits = limit === null || (countOf?.(c.id) ?? 0) + cardCount <= limit
-              return (
-                <option key={c.id} value={c.id} disabled={!fits}>
-                  Mover a “{c.title}”{fits ? '' : ' (no caben)'}
-                </option>
-              )
-            })}
-          </select>
+            onChange={setTarget}
+            options={[
+              { value: '', label: 'Eliminar las tarjetas' },
+              ...others.map((c) => {
+                const limit = limitOf(c)
+                const fits = limit === null || (countOf?.(c.id) ?? 0) + cardCount <= limit
+                return {
+                  value: c.id,
+                  label: `Mover a “${c.title}”${fits ? '' : ' (no caben)'}`,
+                  disabled: !fits,
+                }
+              }),
+            ]}
+          />
         </>
       )}
     </ConfirmDialog>

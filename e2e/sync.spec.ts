@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { addCard, card, column } from './helpers'
+import { addCard, card, column, pickOption } from './helpers'
 
 // Requiere el stack completo (web + api): ALLOW_SIGNUP=true docker compose up -d --build
 //   E2E_SYNC=1 E2E_BASE_URL=http://localhost:8080 npx playwright test sync
@@ -427,8 +427,9 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes[0]?.html}`)).toEqual([])
   // menú con los usuarios registrados (sin uno mismo); se elige a B
   const picker = dlg.getByRole('combobox', { name: 'Persona' })
-  await expect(picker.locator('option', { hasText: emailA })).toHaveCount(0)
-  await picker.selectOption(emailB)
+  await picker.click()
+  await expect(dlg.page().getByRole('option', { name: new RegExp(emailA) })).toHaveCount(0)
+  await dlg.page().getByRole('option', { name: new RegExp(emailB) }).click()
   await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
   await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(emailB)
   await dlg.getByRole('button', { name: 'Cerrar' }).click()
@@ -451,7 +452,7 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
   // A asigna la tarjeta a B: el avatar aparece en ambos y B la filtra con "Yo"
   await card(column(a.page, 'Por hacer'), 'Tarea compartida').click()
   const detalleA = a.page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
-  await detalleA.getByLabel('Asignado a').selectOption({ label: emailB })
+  await pickOption(detalleA.getByLabel('Asignado a'), new RegExp(emailB))
   await detalleA.getByRole('button', { name: 'Listo' }).click()
   await expect(
     card(column(b.page, 'Por hacer'), 'Tarea compartida').getByRole('img', {
@@ -551,10 +552,10 @@ test('compartir tableros: privado por defecto, editor, solo lectura y salir', as
 
   // A baja a B a solo lectura: B pierde los controles de edición
   await a.page.getByRole('button', { name: /Compartido · 1/ }).click()
-  await a.page
-    .getByRole('dialog', { name: /Compartir/ })
-    .getByLabel(`Permiso de ${emailB}`)
-    .selectOption('viewer')
+  await pickOption(
+    a.page.getByRole('dialog', { name: /Compartir/ }).getByLabel(`Permiso de ${emailB}`),
+    'Solo lectura',
+  )
   await a.page
     .getByRole('dialog', { name: /Compartir/ })
     .getByRole('button', { name: 'Cerrar' })
@@ -603,11 +604,11 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
   const form = admin.page.getByRole('region', { name: 'Nuevo usuario' })
   const email = unique()
   await form.getByLabel('Correo').fill(email)
-  await form.getByRole('combobox').selectOption('guest')
+  await pickOption(form.getByRole('combobox', { name: 'Rol' }), 'Invitado')
   await form.getByRole('checkbox', { name: 'General' }).check() // comparte workspace con el admin
   await form.getByRole('button', { name: 'Crear usuario' }).click()
   const temp = (await admin.page.getByRole('status').locator('code').innerText()).trim()
-  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveValue('guest')
+  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveText(/Invitado/)
 
   // el invitado entra: sin tablero propio y sin forma de crear uno
   const guest = await newDevice(browser)
@@ -627,7 +628,7 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
     .click()
   await admin.page.getByRole('button', { name: 'Compartir' }).click()
   const dlg = admin.page.getByRole('dialog', { name: /Compartir/ })
-  await dlg.getByRole('combobox', { name: 'Persona' }).selectOption(email)
+  await pickOption(dlg.getByRole('combobox', { name: 'Persona' }), new RegExp(email))
   await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
   await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(email)
   await dlg.getByRole('button', { name: 'Cerrar' }).click()
@@ -645,8 +646,8 @@ test('rol de invitado: no crea tableros, solo participa; el admin puede cambiar 
 
   // el admin lo cambia a usuario normal: al recargar ya puede crear tableros
   await admin.page.goto('/admin')
-  await admin.page.getByRole('combobox', { name: `Rol de ${email}` }).selectOption('user')
-  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveValue('user')
+  await pickOption(admin.page.getByRole('combobox', { name: `Rol de ${email}` }), 'Usuario')
+  await expect(admin.page.getByRole('combobox', { name: `Rol de ${email}` })).toHaveText(/Usuario/)
   await guest.page.goto('/') // la sesión se vuelve a leer del servidor con el rol nuevo
   await expect(guest.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
   await expect(guest.page.getByRole('button', { name: /Nuevo tablero/ }).first()).toBeVisible({

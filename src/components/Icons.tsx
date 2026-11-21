@@ -230,3 +230,9 @@ export const EditIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4" />
   </Svg>
 )
+
+export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+)

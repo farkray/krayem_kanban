@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addCard, card, column } from './helpers'
+import { addCard, card, column, pickOption } from './helpers'
 
 test('los tableros se reordenan con el teclado y el orden se conserva', async ({ page }) => {
   await page.goto('/')
@@ -85,8 +85,8 @@ test('una tarjeta se mueve a otro tablero y columna', async ({ page }) => {
   await card(column(page, 'Por hacer'), 'Viajera').click()
   const dialog = page.getByRole('dialog', { name: 'Detalle de la tarjeta' })
   await dialog.getByRole('button', { name: 'Mover a otro tablero…' }).click()
-  await dialog.getByRole('combobox', { name: 'Tablero' }).selectOption({ label: 'Destino' })
-  await dialog.getByRole('combobox', { name: 'Columna' }).last().selectOption({ label: 'En curso' })
+  await pickOption(dialog.getByRole('combobox', { name: 'Tablero' }), 'Destino')
+  await pickOption(dialog.getByRole('combobox', { name: 'Columna' }).last(), 'En curso')
   await dialog.getByRole('button', { name: 'Mover', exact: true }).click()
   await expect(page.getByText(/Tarjeta movida a “Destino” · En curso/)).toBeVisible()
   await page.keyboard.press('Escape')

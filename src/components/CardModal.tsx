@@ -15,6 +15,7 @@ import { LabelPicker } from './LabelPicker'
 import { Comments } from './Comments'
 import { Modal } from './Modal'
 import { MoveCard } from './MoveCard'
+import { Select } from './Select'
 import styles from './CardModal.module.css'
 
 interface Props {
@@ -146,16 +147,13 @@ export function CardModal({ cardId, onClose }: Props) {
             >
               <fieldset className={styles.fieldset} disabled={!canEdit}>
                 <section className={styles.details} aria-label="Detalles">
-                  <label className={styles.field}>
-                    <span>Columna</span>
-                    <select value={card.columnId} onChange={(e) => changeColumn(e.target.value)}>
-                      {[...columns].sort(byPosition).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <Select
+                    className={styles.fieldSelect}
+                    label="Columna"
+                    value={card.columnId}
+                    options={[...columns].sort(byPosition).map((c) => ({ value: c.id, label: c.title }))}
+                    onChange={changeColumn}
+                  />
                   {showDateFields ? (
                     <>
                       <label className={styles.field}>
@@ -195,27 +193,22 @@ export function CardModal({ cardId, onClose }: Props) {
 
                 {people.length > 1 && (
                   <section className={styles.section}>
-                    <label className={styles.field}>
-                      <span>Asignado a</span>
-                      <select
-                        value={card.assigneeId ?? ''}
-                        onChange={(e) =>
-                          updateCard(card.id, { assigneeId: e.target.value || undefined })
-                        }
-                      >
-                        <option value="">Sin asignar</option>
-                        {card.assigneeId && !people.some((p) => p.userId === card.assigneeId) && (
-                          <option value={card.assigneeId}>Ya no participa en el tablero</option>
-                        )}
-                        {people.map((p) => (
-                          <option key={p.userId} value={p.userId}>
-                            {displayName(p)}
-                            {p.alias ? ` · ${p.email}` : ''}
-                            {p.userId === me ? ' (tú)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <Select
+                      className={styles.fieldSelect}
+                      label="Asignado a"
+                      value={card.assigneeId ?? ''}
+                      options={[
+                        { value: '', label: 'Sin asignar' },
+                        ...(card.assigneeId && !people.some((p) => p.userId === card.assigneeId)
+                          ? [{ value: card.assigneeId, label: 'Ya no participa en el tablero' }]
+                          : []),
+                        ...people.map((p) => ({
+                          value: p.userId,
+                          label: `${displayName(p)}${p.alias ? ` · ${p.email}` : ''}${p.userId === me ? ' (tú)' : ''}`,
+                        })),
+                      ]}
+                      onChange={(v) => updateCard(card.id, { assigneeId: v || undefined })}
+                    />
                   </section>
                 )}
 
