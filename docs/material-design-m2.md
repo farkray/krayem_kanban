@@ -59,7 +59,7 @@ de Material Components Web 14.0.0 (el SCSS de M2), leído desde jsDelivr:
    menú elevado z8 con ítems de 48 px y el ítem seleccionado resaltado, apertura con escala 0.8 → 1. Teclado completo y
    `<select>` nativo en táctil. Se aplica a: rol de usuario, columna, asignado, workspace, mover tarjeta, compartir.
 3. **Menús (hecha):** unificar «Más acciones», tipo de columna, filtros y notificaciones con la misma superficie y los mismos ítems.
-4. **Campos de texto rellenos con etiqueta flotante** en formularios clave (inicio de sesión, nuevo usuario, alias, detalle de
+4. **Campos de texto rellenos con etiqueta flotante (hecha)** en formularios clave (inicio de sesión, nuevo usuario, alias, detalle de
    tarjeta), con línea de acento y texto de apoyo/errores.
 5. **Botones, chips y casillas:** estados M2 (capas de hover/foco/pulsado), chips de filtro y de etiqueta, interruptores.
 6. **Diálogos y avisos (snackbar):** elevación y movimiento de M2, acciones alineadas a la derecha.

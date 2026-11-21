@@ -17,6 +17,7 @@ import { Comments } from './Comments'
 import { Modal } from './Modal'
 import { MoveCard } from './MoveCard'
 import { Select } from './Select'
+import { TextField } from './TextField'
 import styles from './CardModal.module.css'
 
 interface Props {
@@ -184,23 +185,21 @@ export function CardModal({ cardId, onClose }: Props) {
                   />
                   {showDateFields ? (
                     <>
-                      <label className={styles.field}>
-                        <span>Inicio</span>
-                        <input
-                          type="date"
-                          value={card.startDate ?? ''}
-                          onChange={(e) => setDate('startDate', e.target.value)}
-                        />
-                      </label>
-                      <label className={styles.field}>
-                        <span>Final</span>
-                        <input
-                          type="date"
-                          value={card.endDate ?? ''}
-                          min={card.startDate}
-                          onChange={(e) => setDate('endDate', e.target.value)}
-                        />
-                      </label>
+                      <TextField
+                        className={styles.fieldSelect}
+                        label="Inicio"
+                        type="date"
+                        value={card.startDate ?? ''}
+                        onChange={(e) => setDate('startDate', e.target.value)}
+                      />
+                      <TextField
+                        className={styles.fieldSelect}
+                        label="Final"
+                        type="date"
+                        value={card.endDate ?? ''}
+                        min={card.startDate}
+                        onChange={(e) => setDate('endDate', e.target.value)}
+                      />
                     </>
                   ) : (
                     <button

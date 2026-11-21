@@ -1,3 +1,4 @@
+import { TextField } from './TextField'
 import { useEffect, useState, type FormEvent } from 'react'
 import { authConfig, signIn, signUp } from '../sync/boot'
 import styles from './LoginScreen.module.css'
@@ -47,44 +48,37 @@ export function LoginScreen() {
         <p className={styles.text}>
           {signup ? 'Crea tu cuenta.' : 'Inicia sesión para sincronizar tus tableros.'}
         </p>
-        <label className={styles.label}>
-          Correo electrónico
-          <input
-            type="email"
-            className={styles.input}
-            value={email}
-            autoComplete="username"
-            autoFocus
-            required
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
+        <TextField
+          label="Correo electrónico"
+          type="email"
+          value={email}
+          autoComplete="username"
+          autoFocus
+          required
+          onChange={(e) => setEmail(e.target.value)}
+        />
         {signup && (
-          <label className={`${styles.label} ${styles.gap}`}>
-            Nombre (opcional)
-            <input
-              type="text"
-              className={styles.input}
-              value={alias}
-              maxLength={60}
-              autoComplete="name"
-              placeholder="Cómo te verán los demás, p. ej. Jorge Menéndez"
-              onChange={(e) => setAlias(e.target.value)}
-            />
-          </label>
-        )}
-        <label className={`${styles.label} ${styles.gap}`}>
-          Contraseña
-          <input
-            type="password"
-            className={styles.input}
-            value={password}
-            autoComplete={signup ? 'new-password' : 'current-password'}
-            minLength={signup ? 10 : undefined}
-            required
-            onChange={(e) => setPassword(e.target.value)}
+          <TextField
+            className={styles.gap}
+            label="Nombre (opcional)"
+            type="text"
+            value={alias}
+            maxLength={60}
+            autoComplete="name"
+            placeholder="Cómo te verán los demás, p. ej. Jorge Menéndez"
+            onChange={(e) => setAlias(e.target.value)}
           />
-        </label>
+        )}
+        <TextField
+          className={styles.gap}
+          label="Contraseña"
+          type="password"
+          value={password}
+          autoComplete={signup ? 'new-password' : 'current-password'}
+          minLength={signup ? 10 : undefined}
+          required
+          onChange={(e) => setPassword(e.target.value)}
+        />
         {error && (
           <p className={styles.error} role="alert">
             {error}

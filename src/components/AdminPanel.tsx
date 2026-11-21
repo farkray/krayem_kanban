@@ -1,3 +1,4 @@
+import { TextField } from './TextField'
 import {
   useCallback,
   useEffect,
@@ -367,40 +368,34 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
             </h2>
           </div>
           <form onSubmit={create}>
-            <label className={styles.label}>
-              Correo
-              <input
-                type="email"
-                className={styles.input}
-                value={email}
-                required
-                autoComplete="off"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label className={styles.label}>
-              Alias (opcional)
-              <input
-                type="text"
-                className={styles.input}
-                value={alias}
-                maxLength={60}
-                autoComplete="off"
-                placeholder="Ej. Jorge Menéndez"
-                onChange={(e) => setAlias(e.target.value)}
-              />
-            </label>
-            <label className={styles.label}>
-              Contraseña (opcional)
-              <input
-                type="text"
-                className={styles.input}
-                value={password}
-                autoComplete="off"
-                placeholder="Vacía = se genera una temporal"
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
+            <TextField
+              className={styles.field}
+              label="Correo"
+              type="email"
+              value={email}
+              required
+              autoComplete="off"
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <TextField
+              className={styles.field}
+              label="Alias (opcional)"
+              type="text"
+              value={alias}
+              maxLength={60}
+              autoComplete="off"
+              placeholder="Ej. Jorge Menéndez"
+              onChange={(e) => setAlias(e.target.value)}
+            />
+            <TextField
+              className={styles.field}
+              label="Contraseña (opcional)"
+              type="text"
+              value={password}
+              autoComplete="off"
+              placeholder="Vacía = se genera una temporal"
+              onChange={(e) => setPassword(e.target.value)}
+            />
             <div className={styles.label}>
               <Select
                 label="Rol"

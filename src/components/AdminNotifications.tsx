@@ -1,3 +1,4 @@
+import { TextField } from './TextField'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   adminGetDelivery,
@@ -135,35 +136,31 @@ export function AdminNotifications() {
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           Enviar avisos al webhook
         </label>
-        <label className={styles.label}>
-          URL del webhook de n8n
-          <input
-            type="url"
-            className={styles.input}
-            value={url}
-            placeholder="https://tu-n8n/webhook/kanban-avisos"
-            autoComplete="off"
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </label>
-        <label className={styles.label}>
-          Zona horaria del resumen diario
-          <input
-            type="text"
-            className={styles.input}
-            value={timezone}
-            list="kanban-zones"
-            autoComplete="off"
-            onChange={(e) => setTimezone(e.target.value)}
-          />
-          {zones.length > 0 && (
-            <datalist id="kanban-zones">
-              {zones.map((z) => (
-                <option key={z} value={z} />
-              ))}
-            </datalist>
-          )}
-        </label>
+        <TextField
+          className={styles.field}
+          label="URL del webhook de n8n"
+          type="url"
+          value={url}
+          placeholder="https://tu-n8n/webhook/kanban-avisos"
+          autoComplete="off"
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <TextField
+          className={styles.field}
+          label="Zona horaria del resumen diario"
+          type="text"
+          value={timezone}
+          list="kanban-zones"
+          autoComplete="off"
+          onChange={(e) => setTimezone(e.target.value)}
+        />
+        {zones.length > 0 && (
+          <datalist id="kanban-zones">
+            {zones.map((z) => (
+              <option key={z} value={z} />
+            ))}
+          </datalist>
+        )}
         <div className={styles.row}>
           <button type="submit" className={styles.primary} disabled={busy}>
             Guardar configuración

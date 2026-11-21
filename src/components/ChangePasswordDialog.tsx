@@ -1,3 +1,4 @@
+import { TextField } from './TextField'
 import { useState, type FormEvent } from 'react'
 import { changePassword } from '../sync/boot'
 import { Modal } from './Modal'
@@ -50,46 +51,36 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       ) : (
         <form onSubmit={submit}>
           <h2 className={styles.title}>Cambiar contraseña</h2>
-          <label className={styles.label}>
-            Contraseña actual
-            <input
-              type="password"
-              className={styles.input}
-              value={current}
-              autoComplete="current-password"
-              autoFocus
-              required
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </label>
-          <div className={styles.label}>
-            <label htmlFor="pw-next">Nueva contraseña</label>
-            <input
-              id="pw-next"
-              type="password"
-              className={styles.input}
-              value={next}
-              autoComplete="new-password"
-              minLength={MIN}
-              aria-describedby="pw-hint"
-              required
-              onChange={(e) => setNext(e.target.value)}
-            />
-            <span id="pw-hint" className={styles.hint}>
-              Al menos {MIN} caracteres.
-            </span>
-          </div>
-          <label className={styles.label}>
-            Repite la nueva contraseña
-            <input
-              type="password"
-              className={styles.input}
-              value={confirm}
-              autoComplete="new-password"
-              required
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </label>
+          <TextField
+            className={styles.field}
+            label="Contraseña actual"
+            type="password"
+            value={current}
+            autoComplete="current-password"
+            autoFocus
+            required
+            onChange={(e) => setCurrent(e.target.value)}
+          />
+          <TextField
+            className={styles.field}
+            label="Nueva contraseña"
+            type="password"
+            value={next}
+            autoComplete="new-password"
+            minLength={MIN}
+            required
+            helper={`Al menos ${MIN} caracteres.`}
+            onChange={(e) => setNext(e.target.value)}
+          />
+          <TextField
+            className={styles.field}
+            label="Repite la nueva contraseña"
+            type="password"
+            value={confirm}
+            autoComplete="new-password"
+            required
+            onChange={(e) => setConfirm(e.target.value)}
+          />
           {error && (
             <p className={styles.error} role="alert">
               {error}
