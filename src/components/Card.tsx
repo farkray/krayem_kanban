@@ -1,3 +1,4 @@
+import { cardHasDraft, useDrafts } from '../lib/drafts'
 import { useState, type KeyboardEvent } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -12,7 +13,15 @@ import { displayName } from '../lib/people'
 import { createdLabel, dateRangeLabel, dueState } from '../lib/format'
 import type { Card as CardModel } from '../lib/types'
 import { useStore } from '../store/store'
-import { CalendarIcon, CheckIcon, CheckSquareIcon, CommentIcon, GripIcon, TrashIcon } from './Icons'
+import {
+  CalendarIcon,
+  CheckIcon,
+  CheckSquareIcon,
+  CommentIcon,
+  EditIcon,
+  GripIcon,
+  TrashIcon,
+} from './Icons'
 import styles from './Card.module.css'
 
 export interface CardStats {
@@ -52,7 +61,9 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
   const canEdit = useCanEdit()
   const people = useParticipants(card.boardId)
   const assignee = card.assigneeId ? people.find((p) => p.userId === card.assigneeId) : undefined
-  const hasMeta = range || (stats && (stats.total > 0 || stats.comments > 0 || stats.mentioned))
+  const hasDraft = useDrafts((s) => cardHasDraft(s.items, card.id))
+  const hasMeta =
+    range || hasDraft || (stats && (stats.total > 0 || stats.comments > 0 || stats.mentioned))
 
   return (
     <>
@@ -108,6 +119,12 @@ export function CardView({ card, stats, finished, done, overlay }: ViewProps) {
             >
               <CheckSquareIcon width={12} height={12} />
               {stats.done}/{stats.total}
+            </span>
+          )}
+          {hasDraft && (
+            <span className={styles.chip} title="Hay texto sin enviar en esta tarjeta">
+              <EditIcon width={12} height={12} />
+              Borrador
             </span>
           )}
           {stats?.mentioned && (

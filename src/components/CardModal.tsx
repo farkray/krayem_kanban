@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { updateDraftKey, useDrafts } from '../lib/drafts'
 import { byPosition } from '../lib/position'
 import { LIMITS } from '../lib/types'
 import { useColumns, useComments } from '../store/hooks'
@@ -40,6 +41,23 @@ export function CardModal({ cardId, onClose }: Props) {
   const updatesCount = useComments(cardId).filter((c) => !c.parentId).length
   const [dateError, setDateError] = useState<string | null>(null)
 
+  // Actualización escrita y aún sin enviar (borrador): "Listo" la publica; cerrar de otra forma la conserva
+  const draftKey = updateDraftKey(cardId)
+  const pendingText = useDrafts((s) => s.items[draftKey] ?? '')
+  const hasPending = pendingText.trim() !== ''
+  const [publishError, setPublishError] = useState<string | null>(null)
+  const announce = useStore((s) => s.announce)
+  const hasPendingRef = useRef(false)
+  useEffect(() => {
+    hasPendingRef.current = hasPending
+  })
+  /** ×, Esc o pulsar fuera: el borrador se queda guardado en la tarjeta y se avisa. */
+  const dismiss = useCallback(() => {
+    if (hasPendingRef.current)
+      announce('Borrador guardado en la tarjeta. Ábrela de nuevo para continuar o enviarlo.')
+    onClose()
+  }, [onClose, announce])
+
   // La descripción ya no existe como campo aparte: lo que había pasa a ser la primera actualización.
   const migrated = useRef(false)
   useEffect(() => {
@@ -65,6 +83,16 @@ export function CardModal({ cardId, onClose }: Props) {
   /** "Listo": guarda el título pendiente y cierra. */
   const finish = () => {
     commitTitle()
+    if (canEdit && hasPending) {
+      // lo escrito se publica como actualización; si no se puede, el diálogo sigue abierto y el borrador intacto
+      if (useStore.getState().addComment(cardId, pendingText.trim()) === null) {
+        setPublishError(
+          'No se pudo enviar la actualización (revisa su longitud o tus permisos). Sigue guardada como borrador.',
+        )
+        return
+      }
+      useDrafts.getState().clear(draftKey)
+    }
     onClose()
   }
 
@@ -86,7 +114,7 @@ export function CardModal({ cardId, onClose }: Props) {
   return (
     <MentionContext.Provider value={{ people: peopleOf(people), me }}>
       <CanEditContext.Provider value={canEdit}>
-        <Modal label="Detalle de la tarjeta" onClose={onClose} size="lg" flush>
+        <Modal label="Detalle de la tarjeta" onClose={dismiss} size="lg" flush>
           <header className={styles.head}>
             <input
               className={styles.title}
@@ -100,7 +128,7 @@ export function CardModal({ cardId, onClose }: Props) {
                 if (e.key === 'Enter') e.currentTarget.blur()
               }}
             />
-            <button type="button" className={styles.close} aria-label="Cerrar" onClick={onClose}>
+            <button type="button" className={styles.close} aria-label="Cerrar" onClick={dismiss}>
               ×
             </button>
           </header>
@@ -109,7 +137,7 @@ export function CardModal({ cardId, onClose }: Props) {
             {(
               [
                 ['details', 'Detalles'],
-                ['updates', `Actualizaciones${updatesCount > 0 ? ` / ${updatesCount}` : ''}`],
+                ['updates', `Actualizaciones${updatesCount > 0 ? ` / ${updatesCount}` : ''}${hasPending ? ' · borrador' : ''}`],
               ] as const
             ).map(([id, text]) => (
               <button
@@ -258,9 +286,17 @@ export function CardModal({ cardId, onClose }: Props) {
           )}
 
           <footer className={styles.footer}>
-            <span className={styles.autosave}>Los cambios se guardan solos</span>
+            {publishError ? (
+              <span className={styles.footError} role="alert">
+                {publishError}
+              </span>
+            ) : (
+              <span className={hasPending ? styles.pending : styles.autosave}>
+                {hasPending ? 'Hay una actualización sin enviar' : 'Los cambios se guardan solos'}
+              </span>
+            )}
             <button type="button" className={styles.done} onClick={finish}>
-              Listo
+              {hasPending && canEdit ? 'Actualizar y cerrar' : 'Listo'}
             </button>
           </footer>
         </Modal>

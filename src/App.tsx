@@ -1,3 +1,4 @@
+import { hydrateDrafts } from './lib/drafts'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Board } from './components/Board'
 import { displayName } from './lib/people'
@@ -73,6 +74,7 @@ export default function App() {
 
   useEffect(() => {
     void init()
+    void hydrateDrafts()
     void bootSync()
   }, [init])
 

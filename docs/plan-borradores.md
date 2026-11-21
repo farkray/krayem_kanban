@@ -35,7 +35,7 @@ hasta que se pulsa **Actualizar** (o Ctrl/Cmd+Enter). Todo lo demás lo descarta
   tarjeta» (así nadie publica algo a medias sin querer).
 
 **C. Visibilidad**
-- Barra de acciones del editor (Cancelar / Actualizar) **fija al pie del cuerpo** del diálogo para que nunca quede oculta.
+- El envío siempre está a la vista en el pie del diálogo: «Actualizar y cerrar» y el aviso «Hay una actualización sin enviar» (la barra fija dentro del editor tapaba el texto y se descartó).
 - Marca «Borrador» en la pestaña Actualizaciones y un punto discreto en la tarjeta del tablero cuando hay texto pendiente.
 - Aviso al cambiar de pestaña con texto sin enviar: se conserva (A) y el pie lo recuerda.
 

@@ -390,3 +390,11 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - **Migración 8:** crea el workspace **General** con todos los usuarios actuales y le asigna todos los tableros existentes: nada cambia hasta que el admin los reparta. El registro propio (si está activo) y el primer admin entran a «General».
 - Servidor: tablas `workspaces` y `workspace_members`; `GET/POST /api/admin/workspaces`, `PATCH/DELETE …/:id`, `PUT …/:id/members`; `/api/shares` devuelve `workspaces`; `/api/users/directory` filtra por workspace compartido; la escritura de un tablero exige ser miembro de su workspace. Sin `workspaceId` (tableros anteriores a la función), compartir exige compartir algún workspace.
 - **Mover un tablero de workspace:** el dueño lo hace desde **Compartir** → «Workspace del tablero» (solo si pertenece a más de uno). Si alguien con acceso no pertenece al destino, se muestra quiénes perderían el acceso y se pide confirmar; al aceptar se les retira el acceso y reciben el aviso. Servidor: `GET /api/boards/:id/workspace-impact?to=` y `PUT /api/boards/:id/workspace`. El cambio de **dueño** no existe.
+
+## 26. Borradores: lo escrito no se pierde (implementado)
+
+- Las actualizaciones, respuestas y ediciones que aún no se envían son **borradores**: se guardan solos mientras escribes (en la base local del navegador, sin sincronizar) y se recuperan al reabrir la tarjeta, cambiar de pestaña o recargar. Se borran al enviar o con **Cancelar**.
+- **Listo** con una actualización pendiente la **publica** y cierra (el botón dice «Actualizar y cerrar» y el pie «Hay una actualización sin enviar»). Si no se puede publicar, el diálogo sigue abierto y el borrador intacto.
+- La **×**, **Esc** y pulsar fuera cierran **sin publicar**: el borrador queda guardado, se avisa «Borrador guardado en la tarjeta», la tarjeta muestra la marca «Borrador» y la pestaña Actualizaciones indica «· borrador».
+- Un borrador de respuesta o de edición reabre su cuadro solo, con el texto recuperado.
+

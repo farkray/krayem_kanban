@@ -14,6 +14,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { Markdown as MarkdownExt } from '@tiptap/markdown'
 import { compressImage } from '../lib/image/compress'
+import { flushDrafts, useDrafts } from '../lib/drafts'
 import {
   decodeMentions,
   encodeMentions,
@@ -66,6 +67,8 @@ interface Props {
   onCancel?: () => void
   /** Enfoca el editor al abrirlo (cuando se abre a propósito, p. ej. al pulsar "Responder"). */
   autoFocus?: boolean
+  /** Si se indica, lo escrito se guarda como borrador con esta clave y se recupera al reabrir. */
+  draftKey?: string
 }
 
 /**
@@ -81,7 +84,11 @@ export function RichEditor({
   onSubmit,
   onCancel,
   autoFocus = false,
+  draftKey,
 }: Props) {
+  // Borrador guardado antes (se lee una sola vez, al abrir): tiene prioridad sobre el texto inicial
+  const [saved] = useState(() => (draftKey ? useDrafts.getState().items[draftKey] : undefined))
+  const restored = saved !== undefined && saved.trim() !== initial.trim()
   const [working, setWorking] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -102,6 +109,12 @@ export function RichEditor({
   const [url, setUrl] = useState('https://')
   const editorRef = useRef<Editor | null>(null)
   const submitRef = useRef<() => void>(() => {})
+  const peopleRef = useRef(people)
+  useEffect(() => {
+    peopleRef.current = people
+  })
+  // al cerrar el editor lo escrito ya está en el store; se asegura que llegue a disco
+  useEffect(() => () => void flushDrafts(), [])
 
   const addImages = async (files: File[]) => {
     for (const file of files) {
@@ -145,9 +158,15 @@ export function RichEditor({
       InlineImage,
       Placeholder.configure({ placeholder }),
     ],
-    content: decodeMentions(initial, people),
+    content: decodeMentions(restored ? saved : initial, people),
     contentType: 'markdown',
     autofocus: autoFocus ? 'end' : false,
+    onUpdate: ({ editor: ed }) => {
+      if (!draftKey) return
+      const md = encodeMentions(ed.getMarkdown().trim(), peopleRef.current)
+      // sin cambios respecto al texto original (edición) no hay nada que recuperar
+      useDrafts.getState().set(draftKey, md === initial.trim() ? '' : md)
+    },
     editorProps: {
       attributes: {
         role: 'textbox',
@@ -230,6 +249,7 @@ export function RichEditor({
       return
     }
     if (onSubmit(md)) {
+      if (draftKey) useDrafts.getState().clear(draftKey)
       editor.commands.clearContent(true)
       setError(null)
     }
@@ -443,6 +463,11 @@ export function RichEditor({
           style={{ position: 'fixed', left: menu.x, top: menu.y + 6 }}
         />
       )}
+      {restored && (
+        <p className={styles.status} role="status">
+          Borrador recuperado: lo escribiste antes y no se había enviado.
+        </p>
+      )}
       {working > 0 && (
         <p className={styles.status} role="status">
           Comprimiendo imagen…
@@ -455,7 +480,15 @@ export function RichEditor({
       )}
       <div className={styles.footer}>
         {onCancel && (
-          <button type="button" className={styles.secondary} onClick={onCancel}>
+          <button
+            type="button"
+            className={styles.secondary}
+            onClick={() => {
+              // cancelar es descartar a propósito: el borrador se borra
+              if (draftKey) useDrafts.getState().clear(draftKey)
+              onCancel()
+            }}
+          >
             Cancelar
           </button>
         )}

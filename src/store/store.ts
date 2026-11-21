@@ -1,3 +1,4 @@
+import { resetDrafts } from '../lib/drafts'
 import { create } from 'zustand'
 import type { Table } from 'dexie'
 import { db, type OutboxEntry } from '../db/db'
@@ -191,6 +192,8 @@ interface Actions {
   editComment: (id: string, bodyMd: string) => boolean
   deleteComment: (id: string) => void
   // toast
+  /** Muestra un aviso breve (sin deshacer). */
+  announce: (message: string) => void
   dismissToast: () => void
 }
 
@@ -1130,6 +1133,8 @@ export const useStore = create<Store>((set, get) => {
       notify(c.parentId ? 'Respuesta eliminada' : 'Actualización eliminada', () => restore(snap))
     },
 
+    announce: (message) => notify(message),
+
     dismissToast: () => set({ toast: null }),
   }
 })
@@ -1139,6 +1144,7 @@ export async function wipeLocal(): Promise<void> {
   await flush()
   await Promise.all(db.tables.map((t) => t.clear()))
   useStore.setState({ ...emptyData(), toast: null, labelFilter: [], assigneeFilter: [] })
+  resetDrafts()
 }
 
 /** Solo para tests: fuerza que el próximo init() vuelva a leer de IndexedDB. */

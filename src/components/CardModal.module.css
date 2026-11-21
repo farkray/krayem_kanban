@@ -151,6 +151,17 @@
   font-size: var(--text-xs);
 }
 
+.pending {
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.footError {
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+}
+
 .done {
   min-width: 112px;
   height: 40px;

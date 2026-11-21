@@ -1,3 +1,4 @@
+import { editDraftKey, replyDraftKey, updateDraftKey, useDrafts } from '../lib/drafts'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useCanEdit } from '../lib/CanEdit'
 import { relativeTime } from '../lib/format'
@@ -181,7 +182,10 @@ function Post({ comment, author, likes, canManage, canReply, reply = false, onRe
   const names = useParticipants(
     useStore((s) => s.cards.find((c) => c.id === comment.cardId)?.boardId),
   )
-  const [editing, setEditing] = useState(false)
+  const editKey = editDraftKey(comment.cardId, comment.id)
+  const hasEditDraft = useDrafts((s) => editKey in s.items)
+  const [editingNow, setEditing] = useState(false)
+  const editing = editingNow || hasEditDraft // una edición sin guardar se reabre sola
   const count = likes?.count ?? 0
   const mine = likes?.mine ?? false
   const who = (likes?.by ?? [])
@@ -216,6 +220,7 @@ function Post({ comment, author, likes, canManage, canReply, reply = false, onRe
         {editing ? (
           <RichEditor
             cardId={comment.cardId}
+            draftKey={editKey}
             initial={comment.bodyMd}
             submitLabel="Guardar"
             label="Editar comentario"
@@ -267,6 +272,7 @@ function Post({ comment, author, likes, canManage, canReply, reply = false, onRe
 /** Cuadro cerrado "Escribe…": al pulsarlo se abre el editor completo. */
 function Composer({
   cardId,
+  draftKey,
   label,
   placeholder,
   submitLabel,
@@ -277,6 +283,7 @@ function Composer({
   onSubmit,
 }: {
   cardId: string
+  draftKey: string
   label: string
   placeholder: string
   submitLabel: string
@@ -286,15 +293,18 @@ function Composer({
   onClose: () => void
   onSubmit: (md: string) => boolean
 }) {
-  if (open) {
+  // Con un borrador sin enviar el editor se abre solo (sin quitarle el foco a nada)
+  const hasDraft = useDrafts((s) => draftKey in s.items)
+  if (open || hasDraft) {
     return (
       <div className={styles.composerOpen}>
         <RichEditor
           cardId={cardId}
+          draftKey={draftKey}
           label={label}
           placeholder={placeholder}
           submitLabel={submitLabel}
-          autoFocus
+          autoFocus={open}
           onSubmit={(t) => {
             const ok = onSubmit(t)
             if (ok) onClose()
@@ -343,6 +353,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
         {canEdit && (
           <RichEditor
             cardId={cardId}
+            draftKey={updateDraftKey(cardId)}
             label="Nueva actualización"
             placeholder="Escribe una actualización…"
             submitLabel="Actualizar"
@@ -366,6 +377,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
       {canEdit && (
         <Composer
           cardId={cardId}
+          draftKey={updateDraftKey(cardId)}
           label="Nueva actualización"
           placeholder="Escribe una actualización y menciona a otros con @"
           submitLabel="Actualizar"
@@ -408,6 +420,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
                   {canEdit && (
                     <Composer
                       cardId={cardId}
+                      draftKey={replyDraftKey(cardId, update.id)}
                       label={`Responder a ${authorOf(update.authorId).name}`}
                       placeholder="Escribe una respuesta y menciona a otros con @"
                       submitLabel="Responder"
