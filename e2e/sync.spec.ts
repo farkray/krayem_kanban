@@ -723,3 +723,53 @@ test('workspaces: el admin los crea y asigna; no se ven usuarios de otros worksp
 
   for (const x of [admin, userA, userC]) await x.ctx.close()
 })
+
+// Mover un tablero de workspace: avisa de quién perdería el acceso y lo retira al confirmar.
+test('el dueño mueve su tablero a otro workspace y quien queda fuera pierde el acceso', async ({
+  browser,
+}) => {
+  test.skip(!ADMIN_PASSWORD, 'Define E2E_ADMIN_PASSWORD (la ADMIN_PASSWORD del stack).')
+  test.setTimeout(120_000)
+  const admin = await newDevice(browser)
+  await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await admin.page.goto('/admin')
+  const main = admin.page.getByRole('main')
+
+  // un workspace nuevo y una persona solo en General
+  const dest = `Destino ${Date.now()}`
+  await main.getByRole('tab', { name: /Workspaces/ }).click()
+  await main.getByLabel('Nombre del nuevo workspace').fill(dest)
+  await main.getByRole('button', { name: 'Crear', exact: true }).click()
+  await expect(main.getByRole('list', { name: 'Workspaces' })).toContainText(dest)
+  await main.getByRole('tab', { name: /Usuarios/ }).click()
+  const email = unique()
+  await main.getByRole('button', { name: 'Nuevo usuario' }).click()
+  const form = main.getByRole('region', { name: 'Nuevo usuario' })
+  await form.getByLabel('Correo').fill(email)
+  await form.getByLabel('Contraseña (opcional)').fill(PASSWORD)
+  await form.getByRole('checkbox', { name: 'General' }).check()
+  await form.getByRole('button', { name: 'Crear usuario' }).click()
+  await expect(main.getByRole('table', { name: 'Usuarios' })).toContainText(email)
+
+  // el admin comparte su tablero con esa persona
+  await admin.page.getByRole('button', { name: /Volver a los tableros/ }).click()
+  await admin.page.getByRole('button', { name: /Mi tablero/ }).first().click()
+  await admin.page.getByRole('main').getByRole('button', { name: /^(Compartir|Compartido)/ }).click()
+  const dlg = admin.page.getByRole('dialog', { name: /Compartir/ })
+  await pickOption(dlg.getByRole('combobox', { name: 'Persona' }), new RegExp(email))
+  await dlg.getByRole('button', { name: 'Compartir', exact: true }).click()
+  await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toContainText(email)
+
+  // cambia el workspace del tablero: se avisa de quién queda fuera y, al confirmar, se le retira
+  await pickOption(dlg.getByRole('combobox', { name: 'Workspace del tablero' }), dest)
+  const confirm = admin.page.getByRole('alertdialog', { name: /Mover el tablero/ })
+  await expect(confirm).toContainText(email)
+  await confirm.getByRole('button', { name: 'Mover y quitar acceso' }).click()
+  await expect(dlg.getByRole('combobox', { name: 'Workspace del tablero' })).toHaveText(
+    new RegExp(dest),
+  )
+  await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toHaveCount(0)
+
+  await admin.ctx.close()
+})

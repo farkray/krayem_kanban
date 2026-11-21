@@ -2083,6 +2083,37 @@ describe('workspaces', () => {
     expect(await directory(c.ana)).toEqual([])
   })
 
+  it('el dueño mueve su tablero de workspace: avisa del impacto y retira a quien queda fuera', async () => {
+    const { c, ids, merca, otra } = await setup()
+    await call('POST', '/api/sync/boards', c.ana, { rows: [bd('b1', merca)] })
+    await call('POST', '/api/boards/b1/members', c.ana, { email: 'beto@correo.com', role: 'editor' })
+    const impact = (cookie: string, to: string) =>
+      call('GET', `/api/boards/b1/workspace-impact?to=${to}`, cookie)
+    const move = (cookie: string, to: string) =>
+      call('PUT', '/api/boards/b1/workspace', cookie, { workspaceId: to })
+
+    // solo el dueño; y solo a un workspace del que es miembro
+    expect((await impact(c.beto, otra)).statusCode).toBe(404)
+    expect((await move(c.beto, otra)).statusCode).toBe(404)
+    expect((await move(c.ana, otra)).statusCode).toBe(403)
+    expect((await move(c.ana, 'no-existe')).statusCode).toBe(400)
+
+    await call('PUT', `/api/admin/workspaces/${otra}/members`, c.admin, { userIds: [ids.carla, ids.ana] })
+    // beto no está en "otra": perdería el acceso
+    expect((await impact(c.ana, otra)).json().removed).toMatchObject([{ email: 'beto@correo.com' }])
+    const res = await move(c.ana, otra)
+    expect(res.statusCode).toBe(200)
+    expect(res.json().removed).toHaveLength(1)
+
+    const mine = (await call('GET', '/api/sync/boards', c.ana)).json().rows as { id: string; workspaceId: string }[]
+    expect(mine.find((b) => b.id === 'b1')?.workspaceId).toBe(otra)
+    expect((await call('GET', '/api/shares', c.beto)).json().shared).toHaveLength(0)
+    expect((await call('GET', '/api/sync/boards', c.beto)).json().rows).toHaveLength(0)
+    // beto recibió el aviso de acceso retirado
+    const notes = (await call('GET', '/api/notifications', c.beto)).json()
+    expect(JSON.stringify(notes)).toContain('access_removed')
+  })
+
   it('renombrar, y borrar solo si está vacío', async () => {
     const { c, merca, otra } = await setup()
     expect(

@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { displayName } from '../lib/people'
 import { fetchDirectory, type DirectoryUser } from '../sync/directory'
-import { removeMember, shareBoard, useBoardAccess, type ShareRole } from '../sync/access'
+import {
+  boardWorkspaceImpact,
+  moveBoardToWorkspace,
+  removeMember,
+  shareBoard,
+  useAccess,
+  useBoardAccess,
+  type MovedOut,
+  type ShareRole,
+} from '../sync/access'
+import { useStore } from '../store/store'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Modal } from './Modal'
 import { Select } from './Select'
 import styles from './ShareDialog.module.css'
@@ -10,6 +21,7 @@ const MESSAGES: Record<string, string> = {
   user_not_found: 'Ese correo no tiene cuenta. Pídele al administrador que la cree primero.',
   cannot_share_with_self: 'Ese correo es el tuyo: ya eres el dueño.',
   bad_request: 'Revisa el correo y el permiso.',
+  forbidden: 'No perteneces a ese workspace.',
   offline: 'No hay conexión con el servidor.',
 }
 const message = (code: string) => MESSAGES[code] ?? 'No se pudo completar la acción.'
@@ -36,6 +48,26 @@ export function ShareDialog({
   const [role, setRole] = useState<ShareRole>('editor')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const workspaces = useAccess((s) => s.workspaces)
+  const workspaceId = useStore((s) => s.boards.find((b) => b.id === boardId)?.workspaceId)
+  const [pending, setPending] = useState<{ to: string; removed: MovedOut[] } | null>(null)
+
+  const moveTo = async (to: string) => {
+    setError(null)
+    const err = await moveBoardToWorkspace(boardId, to)
+    setPending(null)
+    if (err) setError(message(err))
+  }
+
+  // Cambiar de workspace: si alguien con acceso no pertenece al destino, se pide confirmar antes
+  const askMove = async (to: string) => {
+    if (to === workspaceId) return
+    setError(null)
+    const impact = await boardWorkspaceImpact(boardId, to)
+    if ('error' in impact) return setError(message(impact.error))
+    if (impact.removed.length === 0) void moveTo(to)
+    else setPending({ to, removed: impact.removed })
+  }
 
   useEffect(() => {
     void fetchDirectory().then(setDirectory)
@@ -72,6 +104,20 @@ export function ShareDialog({
   return (
     <Modal label={`Compartir ${title}`} onClose={onClose}>
       <h2 className={styles.title}>Compartir “{title}”</h2>
+
+      {workspaces.length > 1 && workspaceId && (
+        <div className={styles.workspace}>
+          <Select
+            label="Workspace del tablero"
+            value={workspaceId}
+            options={workspaces.map((w) => ({ value: w.id, label: w.name }))}
+            onChange={(v) => void askMove(v)}
+          />
+          <p className={styles.hint}>
+            Solo las personas de este workspace pueden recibir el tablero.
+          </p>
+        </div>
+      )}
 
       {members.length === 0 ? (
         <p className={styles.private}>
@@ -170,6 +216,24 @@ export function ShareDialog({
           </button>
         </div>
       </form>
+      {pending && (
+        <ConfirmDialog
+          title="Mover el tablero de workspace"
+          confirmLabel="Mover y quitar acceso"
+          onCancel={() => setPending(null)}
+          onConfirm={() => void moveTo(pending.to)}
+        >
+          <p>
+            {pending.removed.length === 1 ? 'Esta persona no pertenece' : 'Estas personas no pertenecen'} al
+            workspace de destino y perder{pending.removed.length === 1 ? 'á' : 'án'} el acceso al tablero:
+          </p>
+          <ul>
+            {pending.removed.map((m) => (
+              <li key={m.userId}>{m.alias ? `${m.alias} · ${m.email}` : m.email}</li>
+            ))}
+          </ul>
+        </ConfirmDialog>
+      )}
     </Modal>
   )
 }

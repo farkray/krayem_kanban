@@ -213,3 +213,33 @@ export function useParticipants(boardId: string | null | undefined): Participant
       )
   }, [all, boardId])
 }
+
+export interface MovedOut {
+  userId: string
+  email: string
+  alias?: string
+}
+
+/** Quiénes perderían el acceso si el tablero pasa al workspace `to` (los que no pertenecen a él). */
+export async function boardWorkspaceImpact(
+  boardId: string,
+  to: string,
+): Promise<{ removed: MovedOut[] } | { error: string }> {
+  try {
+    const res = await fetch(
+      api(`/boards/${encodeURIComponent(boardId)}/workspace-impact?to=${encodeURIComponent(to)}`),
+      { credentials: 'same-origin' },
+    )
+    const data = (await res.json().catch(() => ({}))) as { removed?: MovedOut[]; error?: string }
+    return res.ok ? { removed: data.removed ?? [] } : { error: data.error ?? 'error' }
+  } catch {
+    return { error: 'offline' }
+  }
+}
+
+/** Mueve un tablero propio a otro workspace. Devuelve el error o null. */
+export async function moveBoardToWorkspace(boardId: string, workspaceId: string) {
+  const err = await send('PUT', `/boards/${encodeURIComponent(boardId)}/workspace`, { workspaceId })
+  if (!err) await refreshAccess()
+  return err
+}

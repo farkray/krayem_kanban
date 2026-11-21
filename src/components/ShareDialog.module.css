@@ -142,3 +142,11 @@
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
+
+.workspace {
+  margin-bottom: var(--space-4);
+}
+
+.workspace .hint {
+  margin: var(--space-2) 0 0;
+}

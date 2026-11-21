@@ -884,6 +884,64 @@ export function buildApp(opts: AppOptions): BuiltApp {
     })
   })
 
+  /** Miembros de un tablero que no pertenecen al workspace `to` (perderían el acceso al mover el tablero ahí). */
+  const outsiders = (boardId: string, to: string) =>
+    (
+      db
+        .prepare(
+          `SELECT m.user_id AS id, u.email, u.alias FROM board_members m JOIN users u ON u.id = m.user_id
+           WHERE m.board_id = ? AND m.user_id NOT IN (SELECT user_id FROM workspace_members WHERE workspace_id = ?)`,
+        )
+        .all(boardId, to) as { id: string; email: string; alias: string }[]
+    ).map((u) => ({ userId: u.id, email: u.email, alias: u.alias }))
+
+  /** El dueño (o un admin que sea el dueño) puede mover su tablero a un workspace del que es miembro. */
+  const movableBoard = (req: FastifyRequest, reply: FastifyReply) => {
+    const user = requireUser(req, reply)
+    if (!user) return null
+    const { id } = req.params as { id: string }
+    if (!ownBoard(user.id, id)) {
+      void reply.code(404).send({ error: 'not_found' })
+      return null
+    }
+    return { user, id }
+  }
+
+  app.get('/api/boards/:id/workspace-impact', async (req, reply) => {
+    const ctx = movableBoard(req, reply)
+    if (!ctx) return
+    const to = (req.query as { to?: unknown }).to
+    if (!validId(to) || !workspaceExists.get(to)) return reply.code(400).send({ error: 'bad_request' })
+    return { removed: outsiders(ctx.id, to) }
+  })
+
+  app.put('/api/boards/:id/workspace', async (req, reply) => {
+    const ctx = movableBoard(req, reply)
+    if (!ctx) return
+    const { user, id } = ctx
+    const to = (req.body as { workspaceId?: unknown } | null)?.workspaceId
+    if (!validId(to) || !workspaceExists.get(to)) return reply.code(400).send({ error: 'bad_request' })
+    if (!isMember(db, to, user.id) && !user.isAdmin) return reply.code(403).send({ error: 'forbidden' })
+    const stored = boardRow.get(id) as { data: string } | undefined
+    if (!stored) return reply.code(404).send({ error: 'not_found' })
+    const removed = outsiders(id, to)
+    const ts = nextTs()
+    const row = { ...JSON.parse(stored.data), workspaceId: to, updatedAt: ts } as Record<string, unknown>
+    transaction(db, () => {
+      upsert.run(user.id, 'boards', id, JSON.stringify(row), ts, id)
+      for (const r of removed)
+        db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?').run(id, r.userId)
+    })
+    const clientId = String(req.headers['x-client-id'] ?? '')
+    for (const uid of recipients(user.id, id)) hub.publish(uid, 'boards', { ...row, ownerId: user.id }, clientId)
+    for (const r of removed) {
+      pushNotification(r.userId, { type: 'access_removed', actorId: user.id, boardId: id })
+      hub.publishAccess(r.userId)
+    }
+    hub.publishAccess(user.id)
+    return { workspaceId: to, removed }
+  })
+
   app.delete('/api/boards/:id/members/:userId', async (req, reply) => {
     const user = requireUser(req, reply)
     if (!user) return
