@@ -11,7 +11,7 @@ entrega la información por API o MCP.
 
 1. Nombre del agente (p. ej. «Hermes»), descripción y caducidad opcional.
 2. Permisos: leer (siempre), **avisar dentro de la app**, **ver el correo de las personas**.
-3. **Tableros autorizados**, cada uno con nivel **Solo leer** o **Leer y escribir** (crear/editar/mover tarjetas y comentar).
+3. **Tableros autorizados**, cada uno con nivel **Solo leer** o **Leer y escribir** (crear/editar/mover tarjetas y comentar). El selector **Nivel para todos los tableros** lo aplica a los ya elegidos y a los que marques después; cada tablero se puede ajustar por separado.
 4. Se genera un **token `kbn_…`**: se muestra **una sola vez**, junto con la guía de conexión (prueba `curl`, configuración MCP e
    instrucciones para pegar en el agente). Se comparte **fuera de la app**, por un canal seguro.
 

@@ -158,6 +158,11 @@ function AgentForm({
 }) {
   const [f, setF] = useState(initial)
   const [query, setQuery] = useState('')
+  // Nivel con el que se marcan los tableros nuevos; si todos los ya elegidos comparten nivel, arranca con ese
+  const [level, setLevel] = useState<AgentAccess>(() => {
+    const levels = Object.values(initial.boards)
+    return levels.length > 0 && levels.every((v) => v === 'write') ? 'write' : 'read'
+  })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -244,6 +249,28 @@ function AgentForm({
 
       <fieldset className={styles.perms}>
         <legend className={styles.legend}>Tableros autorizados ({chosen})</legend>
+        <div className={styles.levelAll}>
+          <Select
+            className={styles.levelAllSelect}
+            label="Nivel para todos los tableros"
+            value={level}
+            options={ACCESS_OPTIONS}
+            onChange={(v) => {
+              // se aplica a los ya elegidos y queda como nivel de los que marques después
+              setLevel(v as AgentAccess)
+              setF((cur) => ({
+                ...cur,
+                boards: Object.fromEntries(
+                  Object.keys(cur.boards).map((id) => [id, v as AgentAccess]),
+                ),
+              }))
+            }}
+          />
+          <p className={panel.hint}>
+            «Leer y escribir» permite crear y editar tarjetas, moverlas y poner actualizaciones.
+            Puedes ajustar cada tablero.
+          </p>
+        </div>
         <input
           type="search"
           className={panel.search}
@@ -263,7 +290,7 @@ function AgentForm({
                     checked={!!access}
                     onChange={(e) => {
                       const next = { ...f.boards }
-                      if (e.target.checked) next[b.id] = 'read'
+                      if (e.target.checked) next[b.id] = level
                       else delete next[b.id]
                       setF({ ...f, boards: next })
                     }}
