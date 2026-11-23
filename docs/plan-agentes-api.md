@@ -95,9 +95,31 @@ Servidor: token inválido/revocado/caducado, aislamiento por tablero y workspace
 tasa, nivel leer vs escribir, `/notify` solo a personas del tablero. Interfaz: crear, token visible una sola vez, revocar.
 E2E: agente lee un tablero autorizado y recibe 404 en uno no autorizado.
 
+## Decisiones tomadas
+
+- **Solo el administrador genera las conexiones (tokens).** El administrador puede **compartirlas con usuarios**: la persona
+  ve en «Mis conexiones» las que se le compartieron y puede **ver su guía de conexión, los tableros que cubre y su actividad**
+  (ver «Compartir una conexión» abajo).
+- **Permisos del agente (todos):** leer, responder preguntas (búsqueda), **crear y editar tarjetas**, **poner actualizaciones
+  (comentarios de estado)** y **avisar** a personas del tablero. Cada conexión activa solo los permisos que el administrador
+  marque, y solo sobre los **tableros autorizados**.
+- **Correos: los gestiona el propio agente.** La herramienta **no envía correos ni usa SMTP**: solo da la información por **API y
+  MCP** (qué tareas hay, de quién, con qué fechas, correos de contacto si el permiso «Ver contactos» está activo). `/notify`
+  crea únicamente el **aviso dentro de la app** (la campana), marcado como enviado por el agente, y **no** pasa por la cola de
+  n8n, para que no se dupliquen avisos si el agente ya escribe a la persona por su cuenta.
+- Clientes: **Hermes y Claude** → se entrega OpenAPI y servidor MCP.
+
+## Compartir una conexión (interpretación a confirmar)
+
+- El administrador crea la conexión y elige **a nombre de quién actúa** (por defecto, el suyo) y los tableros autorizados; el
+  alcance real es *lo concedido ∩ lo que esa persona ve*.
+- **Compartirla con un usuario** = ese usuario la ve en su lista, puede **copiar la guía/URL de conexión**, ver su actividad y
+  pedir **un token nuevo** (se le muestra una vez; el anterior queda revocado). El token no se muestra a quien no lo regeneró.
+  Así cada usuario puede entregar su propio token a su agente sin que el administrador tenga que pasárselo.
+
 ## Preguntas abiertas
 
-1. ¿Quién puede registrar conexiones: **cada usuario para sus tableros** o **solo el administrador**?
-2. ¿Qué puede hacer el agente: **leer y avisar**, o también **crear/editar tarjetas y comentar**?
-3. **Correo:** ¿por el flujo de n8n ya existente (según los canales de cada persona) o envío directo por SMTP?
-4. Cliente: **Hermes y Claude** (confirmado). ¿Hermes consume OpenAPI/HTTP o MCP? Con ambos disponibles no hace falta decidir.
+1. **Compartir tokens:** ¿basta con la interpretación de arriba (el usuario obtiene su propio token regenerándolo) o el
+   administrador quiere simplemente **copiar el token y dárselo** a la persona fuera de la app?
+2. «Poner actualizaciones sobre tarjetas de los status»: entiendo **actualizaciones (comentarios de estado) en tarjetas, y
+   mover tarjetas entre columnas de estado**. ¿Es así?
