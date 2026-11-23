@@ -218,7 +218,7 @@ function AgentForm({
             checked={f.canContacts}
             onChange={(e) => setF({ ...f, canContacts: e.target.checked })}
           />
-          Ver el correo de las personas (para que el agente les escriba)
+          Ver correo y WhatsApp de las personas (para que el agente les escriba)
         </label>
         <p className={panel.hint}>
           Crear y editar tarjetas, moverlas y poner actualizaciones se decide por tablero: «Leer y escribir».

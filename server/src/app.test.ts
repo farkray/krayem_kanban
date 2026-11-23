@@ -2449,6 +2449,72 @@ describe('conexiones de agentes (API con token)', () => {
     expect(last).toBe(429)
   })
 
+  it('WhatsApp: con el permiso de contactos cada persona trae su número en formato internacional y su consentimiento', async () => {
+    const { c, ana, create } = await setup()
+    // Ana guarda su WhatsApp (con espacios) y acepta avisos; el servidor lo guarda normalizado
+    const saved = await call('PUT', '/api/me/notifications', c.ana, { phone: '+52 55 1234 5678', email: false, whatsapp: true, digest: false })
+    expect(saved.statusCode).toBe(200)
+    const plain = await create({ name: 'Sin contactos' })
+    const t0 = (await agent('GET', '/tasks?due=overdue', plain.token)).json().tasks[0]
+    expect(t0.assignee.phone).toBeUndefined() // sin permiso no se entrega ni correo ni teléfono
+    expect(t0.assignee.whatsapp).toBeUndefined()
+
+    const { token } = await create({ name: 'Con contactos', canContacts: true })
+    const t = (await agent('GET', '/tasks?due=overdue', token)).json().tasks[0]
+    expect(t.assignee).toMatchObject({
+      id: ana.id,
+      email: 'ana@correo.com',
+      phone: '+525512345678',
+      whatsapp: { status: 'ok', e164: '+525512345678', number: '525512345678', optIn: true },
+    })
+    const people = (await agent('GET', '/people?board=b1', token)).json().people
+    expect(people[0].whatsapp.status).toBe('ok')
+    // sin número / formato inválido guardado por error: no se entrega como número
+    db.prepare("UPDATE users SET phone = '' WHERE id = ?").run(ana.id)
+    expect((await agent('GET', '/people?board=b1', token)).json().people[0]).toMatchObject({ phone: null, whatsapp: { status: 'missing', number: null } })
+    db.prepare("UPDATE users SET phone = '5512345678' WHERE id = ?").run(ana.id)
+    expect((await agent('GET', '/people?board=b1', token)).json().people[0]).toMatchObject({ phone: null, whatsapp: { status: 'invalid', number: null } })
+  })
+
+  it('recordatorios: pendientes con fecha agrupados por persona, con contacto y un texto sugerido', async () => {
+    const { c, ana, create, push } = await setup()
+    await call('PUT', '/api/me/notifications', c.ana, { phone: '+525512345678', email: false, whatsapp: true, digest: false })
+    await push(c.ana, 'cards', [
+      row('k6', { boardId: 'b1', columnId: 'todo', title: 'Sin responsable y vencida', position: 'a5', endDate: '2020-02-02' }),
+      row('k7', { boardId: 'b1', columnId: 'todo', title: 'Dentro de mucho', position: 'a6', endDate: '2099-01-01', assigneeId: ana.id }),
+    ])
+    const { token } = await create({ name: 'Recordador', canContacts: true })
+    const r = (await agent('GET', '/reminders', token)).json()
+    expect(r.people).toHaveLength(1)
+    expect(r.people[0].person).toMatchObject({ id: ana.id, phone: '+525512345678', whatsapp: { status: 'ok', optIn: true } })
+    // k1 (vencida, asignada a Ana); k3 está en Done y k7 es lejana: fuera
+    expect(r.people[0].tasks.map((t: { title: string }) => t.title)).toEqual(['Mandar cotización'])
+    expect(r.people[0].tasks[0]).toMatchObject({ overdue: true, board: 'Ventas', column: 'Por hacer' })
+    expect(r.people[0].suggestedText).toContain('Mandar cotización')
+    expect(r.people[0].suggestedText).toMatch(/^Hola ana@correo\.com, tienes 1 tarea pendiente/)
+    expect(r.unassigned.map((t: { title: string }) => t.title)).toEqual(['Sin responsable y vencida'])
+    // sin el permiso, el recordatorio no trae teléfono ni correo
+    const plain = await create({ name: 'Sin contactos' })
+    const p0 = (await agent('GET', '/reminders', plain.token)).json().people[0].person
+    expect(p0.phone).toBeUndefined()
+    expect(p0.email).toBeUndefined()
+    expect((await agent('GET', '/reminders?board=b2', token)).statusCode).toBe(404)
+  })
+
+  it('el admin ve el estado del WhatsApp de cada usuario y puede completarlo o corregirlo (mismo formato)', async () => {
+    const { c, ana, beto } = await setup()
+    db.prepare("UPDATE users SET phone = '5512345678' WHERE id = ?").run(beto.id) // dato antiguo sin formato
+    const users = (await call('GET', '/api/admin/users', c.admin)).json().users as { id: string; whatsapp: { status: string } }[]
+    const status = (id: string) => users.find((u) => u.id === id)?.whatsapp.status
+    expect(status(ana.id)).toBe('missing')
+    expect(status(beto.id)).toBe('invalid')
+    expect((await call('PATCH', `/api/admin/users/${ana.id}`, c.ana, { phone: '+525512345678' })).statusCode).toBe(403)
+    expect((await call('PATCH', `/api/admin/users/${beto.id}`, c.admin, { phone: '5512345678' })).statusCode).toBe(400)
+    const fixed = await call('PATCH', `/api/admin/users/${beto.id}`, c.admin, { phone: '+52 55 8765 4321' })
+    expect(fixed.json().user).toMatchObject({ phone: '+525587654321', whatsapp: { status: 'ok', number: '525587654321' } })
+    expect((await call('PATCH', `/api/admin/users/${beto.id}`, c.admin, { phone: '' })).json().user.whatsapp.status).toBe('missing')
+  })
+
   it('el contrato OpenAPI es público y describe las rutas; el admin edita los tableros y borra la conexión', async () => {
     const { c, create } = await setup()
     const spec = (await agent('GET', '/openapi.json', '')).json()

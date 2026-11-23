@@ -177,12 +177,15 @@ export interface UserSummary {
   isAdmin: boolean
   isGuest: boolean
   rows: number
+  /** Teléfono guardado tal cual (vacío = sin teléfono) y si activó los avisos por WhatsApp. */
+  phone: string
+  notifyWhatsapp: boolean
 }
 
 export function listUsers(db: DB): UserSummary[] {
   const rows = db
     .prepare(
-      `SELECT u.id, u.email, u.alias, u.created_at, u.is_admin, u.is_guest,
+      `SELECT u.id, u.email, u.alias, u.created_at, u.is_admin, u.is_guest, u.phone, u.notify_whatsapp,
               (SELECT COUNT(*) FROM rows r WHERE r.user_id = u.id) AS n
        FROM users u ORDER BY u.created_at`,
     )
@@ -193,6 +196,8 @@ export function listUsers(db: DB): UserSummary[] {
     created_at: string
     is_admin: number
     is_guest: number
+    phone: string
+    notify_whatsapp: number
     n: number
   }[]
   return rows.map((r) => ({
@@ -203,6 +208,8 @@ export function listUsers(db: DB): UserSummary[] {
     isAdmin: r.is_admin === 1,
     isGuest: r.is_guest === 1,
     rows: r.n,
+    phone: r.phone,
+    notifyWhatsapp: r.notify_whatsapp === 1,
   }))
 }
 

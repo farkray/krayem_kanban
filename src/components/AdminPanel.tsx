@@ -16,6 +16,7 @@ import {
   adminResetPassword,
   adminSetAlias,
   adminSetGuest,
+  adminSetPhone,
   type AdminUser,
   type AdminWorkspace,
 } from '../sync/admin'
@@ -55,6 +56,7 @@ const savedTab = (): Tab => {
 const MESSAGES: Record<string, string> = {
   invalid_email: 'Ese correo no es válido.',
   invalid_alias: 'El alias admite hasta 60 caracteres.',
+  invalid_phone: 'El WhatsApp debe ir con código de país, por ejemplo +52 55 1234 5678.',
   email_taken: 'Ya existe un usuario con ese correo.',
   weak_password: `La contraseña debe tener al menos ${MIN} caracteres (o déjala vacía para generar una).`,
   cannot_delete_self: 'No puedes eliminar tu propia cuenta.',
@@ -137,6 +139,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
   const [alias, setAlias] = useState('')
   const [guest, setGuest] = useState(false)
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null)
+  const [editingPhone, setEditingPhone] = useState<{ id: string; value: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<Shown | null>(null)
   const [toDelete, setToDelete] = useState<AdminUser | null>(null)
@@ -244,6 +247,15 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
     void load()
   }
 
+  const savePhone = async () => {
+    if (!editingPhone) return
+    setError(null)
+    const res = await adminSetPhone(editingPhone.id, editingPhone.value.trim())
+    if (!res.ok) return setError(message(res.error))
+    setEditingPhone(null)
+    void load()
+  }
+
   const reset = async (u: AdminUser) => {
     setError(null)
     const res = await adminResetPassword(u.id)
@@ -288,6 +300,11 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
     )
   }
 
+  const waCount = {
+    ok: users?.filter((u) => u.whatsapp?.status === 'ok').length ?? 0,
+    missing: users?.filter((u) => u.whatsapp?.status === 'missing').length ?? 0,
+    invalid: users?.filter((u) => u.whatsapp?.status === 'invalid').length ?? 0,
+  }
   const total = users?.length ?? 0
   const admins = users?.filter((u) => u.isAdmin).length ?? 0
 
@@ -300,6 +317,13 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
           {users
             ? `${total === 1 ? '1 usuario' : `${total} usuarios`} · ${admins === 1 ? '1 administrador' : `${admins} administradores`}`
             : 'Cargando…'}
+          {users && (
+            <span>
+              {' · '}WhatsApp: {waCount.ok} listos
+              {waCount.missing > 0 && `, ${waCount.missing} sin número`}
+              {waCount.invalid > 0 && `, ${waCount.invalid} con formato inválido`}
+            </span>
+          )}
         </p>
       </header>
 
@@ -476,6 +500,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                 <th scope="col">Usuario</th>
                 <th scope="col">Rol</th>
                 <th scope="col">Workspaces</th>
+                <th scope="col">WhatsApp</th>
                 <th scope="col">
                   <span className={styles.sr}>Acciones</span>
                 </th>
@@ -541,6 +566,61 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
                     )}
                   </td>
                   <td className={styles.meta}>{workspacesOf(u.id) || '—'}</td>
+                  <td className={styles.waCell}>
+                    {editingPhone?.id === u.id ? (
+                      <form
+                        className={styles.aliasForm}
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          void savePhone()
+                        }}
+                      >
+                        <input
+                          className={styles.input}
+                          type="tel"
+                          value={editingPhone.value}
+                          autoFocus
+                          aria-label={`WhatsApp de ${u.email}`}
+                          placeholder="+52 55 1234 5678"
+                          onChange={(e) => setEditingPhone({ id: u.id, value: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') setEditingPhone(null)
+                          }}
+                        />
+                        <button type="submit" className={styles.primary}>
+                          Guardar
+                        </button>
+                        <button type="button" className={styles.secondary} onClick={() => setEditingPhone(null)}>
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : (
+                      <div className={styles.wa}>
+                        <span
+                          className={
+                            u.whatsapp?.status === 'ok' ? styles.waOk : u.whatsapp?.status === 'invalid' ? styles.waBad : styles.waMissing
+                          }
+                        >
+                          {u.whatsapp?.status === 'ok'
+                            ? u.whatsapp.e164
+                            : u.whatsapp?.status === 'invalid'
+                              ? `Formato inválido: ${u.phone}`
+                              : 'Falta'}
+                        </span>
+                        {u.whatsapp?.status === 'ok' && (
+                          <span className={styles.meta}>{u.whatsapp.optIn ? 'avisos activados' : 'avisos desactivados'}</span>
+                        )}
+                        <button
+                          type="button"
+                          className={styles.waEdit}
+                          aria-label={`Editar WhatsApp de ${u.email}`}
+                          onClick={() => setEditingPhone({ id: u.id, value: u.phone })}
+                        >
+                          {u.whatsapp?.status === 'ok' ? 'Editar' : 'Agregar'}
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className={styles.actions}>
                     {editing?.id !== u.id && (
                       <div className={styles.actionsRow}>

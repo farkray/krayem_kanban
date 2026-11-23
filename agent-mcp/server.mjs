@@ -75,6 +75,16 @@ const TOOLS = [
       api('GET', `/tasks${qs({ board: a.board, assignee: a.assignee, due: a.due, pending: a.includeDone ? '0' : undefined })}`),
   },
   {
+    name: 'kanban_reminders',
+    description:
+      'Tareas pendientes con fecha, agrupadas por persona, con su contacto (correo, teléfono y estado de WhatsApp si hay permiso) y un texto sugerido. Es la base para recordar a quienes tienen pendientes. Envía por WhatsApp solo si whatsapp.status es «ok» y optIn es true.',
+    inputSchema: obj({
+      board: str('Limita a un tablero'),
+      due: { type: 'string', enum: ['overdue', 'today', 'week'], description: 'overdue (por defecto): vencidas y de hoy' },
+    }),
+    run: (a) => api('GET', `/reminders${qs({ board: a.board, due: a.due })}`),
+  },
+  {
     name: 'kanban_search',
     description: 'Busca texto en títulos, descripciones, actualizaciones y listas de tareas. Úsalo para responder preguntas.',
     inputSchema: obj({ query: str('Texto a buscar (mínimo 2 caracteres)'), board: str('Limita a un tablero') }, ['query']),

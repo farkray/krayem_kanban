@@ -27,9 +27,10 @@ Base: `https://<tu-dominio>/api/agent/v1` · `Authorization: Bearer kbn_…` · 
 | `GET /me` | Quién eres, permisos, tableros y fecha de hoy |
 | `GET /boards`, `GET /boards/:id` | Tableros; columnas (con tipo y límite), etiquetas, personas y tarjetas |
 | `GET /tasks?pending=&assignee=&due=&board=` | Tareas pendientes (no están en una columna Done): `due=overdue\|today\|week\|none`, `assignee=<id>\|none` |
+| `GET /reminders?due=&board=` | Pendientes con fecha **agrupados por persona**, con contacto (correo, **teléfono E.164** y estado de WhatsApp) y un texto sugerido |
 | `GET /search?q=&board=` | Busca en títulos, descripciones, actualizaciones y listas de tareas |
 | `GET /cards/:id` | Tarjeta con su lista de tareas y actualizaciones |
-| `GET /people?board=` | Participantes (con correo solo si la conexión lo permite) |
+| `GET /people?board=` | Participantes (con correo y WhatsApp solo si la conexión lo permite) |
 | `POST /cards` | Crea una tarjeta al final de una columna *(escritura)* |
 | `PATCH /cards/:id` | Edita; con `columnId` la mueve al final de esa columna *(escritura)* |
 | `POST /cards/:id/comments` | Pone una actualización firmada «Nombre (agente)» *(escritura)* |
@@ -45,6 +46,20 @@ curl -X POST -H "Authorization: Bearer kbn_…" -H "Content-Type: application/js
   -d '{"body":"Recordatorio enviado a Pedro"}' "https://<dominio>/api/agent/v1/cards/<id>/comments"
 ```
 
+## WhatsApp: formato del número
+
+Con el permiso **«Ver correo y WhatsApp»**, cada persona (en `/people`, `/tasks`, `/cards/:id` y `/reminders`) trae:
+
+```json
+{ "email": "ana@correo.com", "phone": "+525512345678",
+  "whatsapp": { "status": "ok", "e164": "+525512345678", "number": "525512345678", "optIn": true } }
+```
+
+- `status`: `ok` (formato correcto: `+`, código de país y 8 a 15 dígitos), `missing` (sin número) o `invalid`.
+- `number`: solo dígitos, tal como lo piden las APIs de WhatsApp. `phone` y `e164` son `null` si el formato no es válido.
+- `optIn`: la persona activó los avisos por WhatsApp en la app. **Envía por WhatsApp solo con `status: ok` y `optIn: true`.**
+- El administrador ve el estado de cada usuario en **Panel de control → Usuarios** y puede completar o corregir el número.
+
 ## Claude (servidor MCP)
 
 `agent-mcp/server.mjs` no tiene dependencias (Node 18+). Configuración del cliente MCP:
@@ -57,7 +72,7 @@ curl -X POST -H "Authorization: Bearer kbn_…" -H "Content-Type: application/js
 } } }
 ```
 
-Herramientas: `kanban_me`, `kanban_boards`, `kanban_board`, `kanban_tasks`, `kanban_search`, `kanban_card`, `kanban_people`,
+Herramientas: `kanban_me`, `kanban_boards`, `kanban_board`, `kanban_tasks`, `kanban_reminders`, `kanban_search`, `kanban_card`, `kanban_people`,
 `kanban_create_card`, `kanban_update_card`, `kanban_comment`, `kanban_notify`.
 
 ## Hermes y otros agentes

@@ -47,9 +47,22 @@ export function openApiSpec() {
       },
       '/people': {
         get: {
-          summary: 'Personas que participan en un tablero (con correo solo si la conexión tiene «contactos»)',
+          summary: 'Personas que participan en un tablero (con correo, teléfono y estado de WhatsApp solo si la conexión tiene «contactos»)',
           parameters: [{ ...query('board', 'Id del tablero'), required: true }],
           responses: ok('Personas'),
+        },
+      },
+      '/reminders': {
+        get: {
+          summary:
+            'Recordatorios listos: tareas pendientes con fecha agrupadas por persona, con su contacto y un texto sugerido (WhatsApp en formato internacional)',
+          description:
+            'Con el permiso de contactos, cada persona trae `email`, `phone` (E.164, p. ej. +525512345678) y `whatsapp` { status: ok|missing|invalid, number (solo dígitos, para APIs de WhatsApp), optIn (aceptó recibir avisos por WhatsApp) }. Si `whatsapp.status` no es `ok` o `optIn` es false, no debe enviarse por ese canal.',
+          parameters: [
+            query('board', 'Limita a un tablero'),
+            query('due', 'overdue (por defecto: vencidas y de hoy) | today | week', { type: 'string', enum: ['overdue', 'today', 'week'] }),
+          ],
+          responses: ok('Personas con sus tareas, y las tareas sin responsable'),
         },
       },
       '/tasks': {

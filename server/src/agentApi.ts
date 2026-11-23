@@ -5,6 +5,7 @@ import type { DB } from './db.ts'
 import type { Hub } from './events.ts'
 import type { Notifications } from './notifications.ts'
 import { openApiSpec } from './agentOpenApi.ts'
+import { whatsappOf } from './phone.ts'
 
 /** API para agentes externos (Hermes, Claude…): `Authorization: Bearer kbn_…`. Solo ve y toca los tableros autorizados. */
 export interface AgentCtx {
@@ -56,8 +57,24 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
        board_id = COALESCE(excluded.board_id, rows.board_id)`,
   )
   const members = db.prepare('SELECT user_id FROM board_members WHERE board_id = ?')
-  const userRow = db.prepare('SELECT id, email, alias FROM users WHERE id = ?')
+  const userRow = db.prepare('SELECT id, email, alias, phone, notify_whatsapp FROM users WHERE id = ?')
   const userByEmail = db.prepare('SELECT id, email, alias FROM users WHERE email = ?')
+
+  interface UserContact {
+    email: string
+    alias: string
+    phone: string
+    notify_whatsapp: number
+  }
+  /**
+   * Datos de contacto de una persona (solo si la conexión tiene el permiso): correo, teléfono en formato internacional y el
+   * estado de su WhatsApp (formato correcto o no, y si aceptó recibir avisos por ese canal).
+   */
+  const contactOf = (u: UserContact | undefined, agent: AgentView) => {
+    if (!agent.canContacts || !u) return {}
+    const wa = whatsappOf(u.phone, u.notify_whatsapp === 1)
+    return { email: u.email, phone: wa.e164, whatsapp: wa }
+  }
 
   /* ---------- lectura de un tablero ---------- */
 
@@ -116,13 +133,13 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
     const ids = new Set<string>([b.ownerId])
     for (const m of members.all(b.id) as { user_id: string }[]) ids.add(m.user_id)
     return [...ids].flatMap((id) => {
-      const u = userRow.get(id) as { id: string; email: string; alias: string } | undefined
+      const u = userRow.get(id) as unknown as (UserContact & { id: string }) | undefined
       if (!u) return []
       return [
         {
           id: u.id,
           name: u.alias || u.email,
-          ...(agent.canContacts ? { email: u.email } : {}),
+          ...contactOf(u, agent),
           role: id === b.ownerId ? 'owner' : 'member',
         },
       ]
@@ -137,7 +154,7 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
       const l = b.labels.find((x) => x.id === id)
       return l ? [{ id, name: str(l.name) }] : []
     })
-    const u = assignee ? (userRow.get(assignee) as { email: string; alias: string } | undefined) : undefined
+    const u = assignee ? (userRow.get(assignee) as unknown as UserContact | undefined) : undefined
     return {
       id: str(c.id),
       boardId: b.id,
@@ -153,7 +170,7 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
         ? {
             id: assignee,
             name: u ? u.alias || u.email : '',
-            ...(agent.canContacts && u ? { email: u.email } : {}),
+            ...contactOf(u, agent),
           }
         : null,
       labels: labelNames,
@@ -162,13 +179,14 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
     }
   }
 
-  const authorOf = (c: Row) => {
+  const authorOf = (c: Row, viewer?: AgentView) => {
     const a = str(c.authorId)
     if (a.startsWith('agent:')) {
       const ag = agents.get(a.slice(6))
       return { id: a, name: ag ? `${ag.name} (agente)` : 'Agente', agent: true }
     }
-    return { id: a, name: a ? personName(a) : '', agent: false }
+    const u = a && viewer ? (userRow.get(a) as unknown as UserContact | undefined) : undefined
+    return { id: a, name: a ? personName(a) : '', agent: false, ...(viewer ? contactOf(u, viewer) : {}) }
   }
 
   /* ---------- autenticación, límites y registro ---------- */
@@ -319,7 +337,7 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
           updates: own.map((m) => ({
             id: str(m.id),
             parentId: str(m.parentId) || null,
-            author: authorOf(m),
+            author: authorOf(m, me(req).agent),
             body: str(m.bodyMd),
             createdAt: str(m.createdAt),
             editedAt: str(m.editedAt) || null,
@@ -360,6 +378,63 @@ export function registerAgentApi(app: FastifyInstance, ctx: AgentCtx) {
           (a, z) => (a.endDate ?? '9999').localeCompare(z.endDate ?? '9999') || a.title.localeCompare(z.title, 'es'),
         )
         return { today, count: tasks.length, tasks: tasks.slice(0, 500) }
+      })
+
+      /**
+       * Recordatorios listos para enviar: las tareas pendientes agrupadas por persona, con su contacto (correo, teléfono y estado
+       * de WhatsApp si la conexión tiene el permiso) y un texto sugerido. `due`: overdue (por defecto: vencidas y de hoy) | today | week.
+       */
+      api.get('/reminders', async (req, reply) => {
+        const q = req.query as { board?: string; due?: string }
+        const { agent } = me(req)
+        const only = q.board ? board(req, reply, q.board) : null
+        if (q.board && !only) return
+        const all = only ? [only] : agent.boards.flatMap((g) => loadBoard(agent, g.boardId) ?? [])
+        const today = ctx.today()
+        const limit = q.due === 'week' ? addDays(today, 7) : q.due === 'today' ? today : today
+        const slim = (t: ReturnType<typeof cardView>) => ({
+          cardId: t.id,
+          title: t.title,
+          boardId: t.boardId,
+          board: t.boardTitle,
+          column: t.column,
+          endDate: t.endDate,
+          overdue: !!t.endDate && t.endDate < today,
+          daysLate: t.endDate && t.endDate < today ? Math.round((Date.parse(today) - Date.parse(t.endDate)) / 86_400_000) : 0,
+        })
+        const byPerson = new Map<string, { assignee: NonNullable<ReturnType<typeof cardView>['assignee']>; tasks: ReturnType<typeof slim>[] }>()
+        const unassigned: ReturnType<typeof slim>[] = []
+        for (const b of all) {
+          for (const c of b.cards) {
+            const col = b.columns.find((x) => x.id === c.columnId)
+            if (col?.kind === 'done') continue
+            const v = cardView(c, b, agent)
+            if (!v.endDate) continue
+            if (q.due === 'today' ? v.endDate !== today : v.endDate > limit) continue
+            if (!v.assignee) {
+              unassigned.push(slim(v))
+              continue
+            }
+            const g = byPerson.get(v.assignee.id) ?? { assignee: v.assignee, tasks: [] }
+            g.tasks.push(slim(v))
+            byPerson.set(v.assignee.id, g)
+          }
+        }
+        const people = [...byPerson.values()].map(({ assignee, tasks }) => {
+          tasks.sort((a, z) => (a.endDate ?? '').localeCompare(z.endDate ?? ''))
+          const late = tasks.filter((t) => t.overdue)
+          const line = (t: (typeof tasks)[number]) =>
+            `• ${t.title} (${t.board})${t.overdue ? ` — vencida hace ${t.daysLate} ${t.daysLate === 1 ? 'día' : 'días'}` : t.endDate === today ? ' — vence hoy' : ` — vence el ${t.endDate}`}`
+          const first = assignee.name.split(' ')[0]
+          return {
+            person: assignee,
+            overdue: late.length,
+            tasks,
+            suggestedText: `Hola ${first}, tienes ${tasks.length} ${tasks.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}:\n${tasks.map(line).join('\n')}`,
+          }
+        })
+        people.sort((a, z) => z.overdue - a.overdue || a.person.name.localeCompare(z.person.name, 'es'))
+        return { today, people, unassigned }
       })
 
       api.get('/search', async (req, reply) => {

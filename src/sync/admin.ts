@@ -9,6 +9,10 @@ export interface AdminUser {
   /** Invitado: no crea tableros, solo participa en los que le comparten. */
   isGuest: boolean
   rows: number
+  /** Teléfono guardado tal cual (vacío = sin teléfono). */
+  phone: string
+  /** Estado de su WhatsApp: formato correcto (`ok`), sin número (`missing`) o inválido (`invalid`). */
+  whatsapp?: { status: 'ok' | 'missing' | 'invalid'; e164: string | null; number: string | null; optIn: boolean }
 }
 
 export type AdminResult<T> = { ok: true; data: T } | { ok: false; error: string; detail?: string }
@@ -53,6 +57,10 @@ export const adminCreateUser = (
 
 export const adminSetGuest = (id: string, guest: boolean) =>
   call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { guest })
+
+/** Completa o corrige el WhatsApp de una persona (formato internacional: +52 55 1234 5678). Vacío = quitarlo. */
+export const adminSetPhone = (id: string, phone: string) =>
+  call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { phone })
 
 export const adminSetAlias = (id: string, alias: string) =>
   call<{ user: AdminUser }>('PATCH', `/users/${encodeURIComponent(id)}`, { alias })

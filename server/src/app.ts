@@ -33,6 +33,7 @@ import { Notifications, detect, type NotificationView, type RowChange } from './
 import { Delivery, cleanPhone, cleanWebhookUrl, validTimezone } from './delivery.ts'
 import { buildDigest, dayIn } from './digest.ts'
 import { Agents, type Access, type AgentBoard } from './agents.ts'
+import { whatsappOf } from './phone.ts'
 import { registerAgentApi } from './agentApi.ts'
 import { buildN8nWorkflow } from './n8nWorkflow.ts'
 import {
@@ -300,9 +301,15 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   /* ---------- administración de usuarios (solo admin) ---------- */
 
+  /** Usuario para el panel: con el estado de su WhatsApp (ok / falta / formato inválido). */
+  const withWhatsapp = (u: ReturnType<typeof listUsers>[number]) => ({
+    ...u,
+    whatsapp: whatsappOf(u.phone, u.notifyWhatsapp),
+  })
+
   app.get('/api/admin/users', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
-    return { users: listUsers(db) }
+    return { users: listUsers(db).map(withWhatsapp) }
   })
 
   app.post('/api/admin/users', async (req, reply) => {
@@ -313,6 +320,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
       alias?: unknown
       guest?: unknown
       workspaceIds?: unknown
+      phone?: unknown
     }
     const wsIds = body.workspaceIds ?? []
     if (!Array.isArray(wsIds) || !wsIds.every((w) => validId(w) && workspaceExists.get(w)))
@@ -329,6 +337,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
       if (body.password.length < MIN_PASSWORD)
         return reply.code(400).send({ error: 'weak_password' })
     }
+    const phone = cleanPhone(body.phone)
+    if (phone === null) return reply.code(400).send({ error: 'invalid_phone' })
     if (findUserByEmail(db, email)) return reply.code(409).send({ error: 'email_taken' })
     // Sin contraseña indicada se genera una temporal; solo se muestra en esta respuesta.
     const generated = !body.password
@@ -341,6 +351,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
       alias,
       body.guest === true,
     )
+    if (phone) db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, user.id)
     for (const w of wsIds)
       db.prepare('INSERT OR IGNORE INTO workspace_members (workspace_id, user_id) VALUES (?, ?)').run(
         w,
@@ -354,7 +365,13 @@ export function buildApp(opts: AppOptions): BuiltApp {
     const { id } = req.params as { id: string }
     if (!ID_RE.test(id) || !listUsers(db).some((u) => u.id === id))
       return reply.code(404).send({ error: 'not_found' })
-    const body = (req.body ?? {}) as { alias?: unknown; guest?: unknown }
+    const body = (req.body ?? {}) as { alias?: unknown; guest?: unknown; phone?: unknown }
+    if (body.phone !== undefined) {
+      // el admin puede completar o corregir el WhatsApp de una persona (mismo formato que ella: +código de país)
+      const phone = cleanPhone(body.phone)
+      if (phone === null) return reply.code(400).send({ error: 'invalid_phone' })
+      db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(phone, id)
+    }
     if (body.alias !== undefined) {
       const alias = cleanAlias(body.alias)
       if (alias === null) return reply.code(400).send({ error: 'invalid_alias' })
@@ -368,7 +385,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
         return reply.code(400).send({ error: 'admin_cannot_be_guest' })
       setGuest(db, id, body.guest)
     }
-    return { user: listUsers(db).find((u) => u.id === id) }
+    const updated = listUsers(db).find((u) => u.id === id)
+    return { user: updated && withWhatsapp(updated) }
   })
 
   app.post('/api/admin/users/:id/password', async (req, reply) => {

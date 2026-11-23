@@ -76,6 +76,51 @@ describe('AdminPanel', () => {
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
   })
 
+  it('muestra el estado del WhatsApp de cada usuario y permite completarlo con el formato internacional', async () => {
+    const withWa = [
+      { ...users[0], phone: '+525511112222', whatsapp: { status: 'ok', e164: '+525511112222', number: '525511112222', optIn: true } },
+      { ...users[1], phone: '5512345678', whatsapp: { status: 'invalid', e164: null, number: null, optIn: false } },
+      { ...users[1], id: 'u3', email: 'beto@correo.com', alias: '', phone: '', whatsapp: { status: 'missing', e164: null, number: null, optIn: false } },
+    ]
+    const calls: { url: string; body?: string }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const key = `${init?.method ?? 'GET'} ${String(url).replace(/^.*\/api/, '')}`
+        calls.push({ url: key, body: init?.body as string | undefined })
+        if (key === 'GET /admin/users') return Response.json({ users: withWa })
+        if (key === 'PATCH /admin/users/u3') {
+          const phone = JSON.parse(String(init?.body)).phone
+          return phone === '+525599998888'
+            ? Response.json({ user: withWa[2] })
+            : Response.json({ error: 'invalid_phone' }, { status: 400 })
+        }
+        return Response.json({})
+      }),
+    )
+    render(<AdminPanel me="admin@correo.com" isAdmin onBack={() => {}} />)
+    const list = await screen.findByRole('table', { name: 'Usuarios' })
+    expect(within(list).getByText('+525511112222')).toBeInTheDocument()
+    expect(within(list).getByText('avisos activados')).toBeInTheDocument()
+    expect(within(list).getByText(/Formato inválido: 5512345678/)).toBeInTheDocument()
+    expect(within(list).getByText('Falta')).toBeInTheDocument()
+    expect(screen.getByText(/WhatsApp: 1 listos/)).toHaveTextContent('1 sin número, 1 con formato inválido')
+
+    const user = userEvent.setup()
+    await user.click(within(list).getByRole('button', { name: 'Editar WhatsApp de beto@correo.com' }))
+    const field = within(list).getByLabelText('WhatsApp de beto@correo.com')
+    await user.type(field, '5599998888') // sin código de país: el servidor lo rechaza
+    await user.click(within(list).getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/con código de país/)
+    await user.clear(field)
+    await user.type(field, '+525599998888')
+    await user.click(within(list).getByRole('button', { name: 'Guardar' }))
+    expect(calls.filter((c) => c.url === 'PATCH /admin/users/u3').map((c) => JSON.parse(c.body!).phone)).toEqual([
+      '5599998888',
+      '+525599998888',
+    ])
+  })
+
   it('crear sin contraseña muestra la temporal generada', async () => {
     mockApi({
       'POST /admin/users': () =>
