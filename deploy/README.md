@@ -18,7 +18,8 @@ Hay dos variantes de `deploy.sh`, según el servidor:
 STACK=traefik BUILD=remote ./deploy/deploy.sh root@IP
 ```
 
-Basta con que `DOMAIN` (p. ej. `kanban.midominio.com`) tenga un registro A hacia la IP del servidor.
+Basta con que `DOMAIN` (p. ej. `kanban.midominio.com`) tenga un registro A (o un CNAME al servidor) hacia la IP del servidor.
+`EXTRA_DOMAIN` (opcional, en el mismo `.env`) añade una segunda dirección que sigue sirviendo la app, útil al cambiar de dominio sin romper los accesos instalados: las sesiones y los datos locales son por dirección, así que cada una pide iniciar sesión por separado.
 Los contenedores no publican puertos: Traefik llega a ellos por la red de compose. El volumen se llama `kanban_kanban_data`.
 Respaldo manual: `ssh root@IP 'cd /docker/kanban && REMOTE_DIR=/docker/kanban ./backup.sh'` (no hay cron instalado en esta variante; añádelo tú si lo quieres).
 

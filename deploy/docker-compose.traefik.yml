@@ -34,7 +34,8 @@ services:
       start_period: 5s
     labels:
       - traefik.enable=true
-      - traefik.http.routers.kanban.rule=Host(`${DOMAIN:?define DOMAIN en .env}`)
+      # DOMAIN es la dirección principal; EXTRA_DOMAIN (opcional) sigue sirviendo la app, p. ej. la dirección anterior
+      - traefik.http.routers.kanban.rule=Host(`${DOMAIN:?define DOMAIN en .env}`) || Host(`${EXTRA_DOMAIN:-extra.invalid}`)
       - traefik.http.routers.kanban.entrypoints=websecure
       - traefik.http.routers.kanban.tls.certresolver=letsencrypt
       - traefik.http.routers.kanban.middlewares=kanban-hsts
