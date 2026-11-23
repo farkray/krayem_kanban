@@ -1,8 +1,15 @@
 # Plan: acceso por API con token para agentes
 
+## Aclaración de alcance
+
+**Los agentes no se crean ni viven dentro de la herramienta.** Son externos (por ejemplo **Hermes** o **Claude**) y se conectan
+por API. La herramienta solo deja **todo listo para esa conexión**: una **conexión con token**, los **tableros autorizados**,
+una **API documentada** (OpenAPI) y un **servidor MCP** para Claude. En la interfaz se habla de **«Conexiones de agentes»**
+(no de crear agentes): se registra *a qué agente externo* se da acceso y a qué tableros.
+
 ## Para qué
 
-Que un agente (n8n, Claude, un script) pueda **leer los tableros que se le autoricen**, **responder preguntas** sobre ellos y
+Que un agente externo (Hermes, Claude, n8n, un script) pueda **leer los tableros que se le autoricen**, **responder preguntas** sobre ellos y
 **avisar a quienes tienen tareas pendientes** (aviso en la app y, por los canales que cada persona eligió, correo o
 WhatsApp). Debe poder **autorizarse por tablero** y **revocarse** en cualquier momento.
 
@@ -15,8 +22,8 @@ WhatsApp). Debe poder **autorizarse por tablero** y **revocarse** en cualquier m
 
 ## Modelo
 
-**Agente** = una credencial de servicio (no puede iniciar sesión) con:
-- nombre y descripción, **dueño** (la persona que lo creó), fecha de caducidad opcional;
+**Conexión de agente** = una credencial de servicio (no puede iniciar sesión) que identifica a un agente externo con:
+- nombre del agente externo (p. ej. «Hermes») y descripción, **dueño** (la persona que lo creó), fecha de caducidad opcional;
 - **token** `kbn_…` aleatorio (256 bits): se **muestra una sola vez**; en la base solo se guarda su huella SHA-256 y los
   primeros caracteres para reconocerlo;
 - **permisos (scopes)** y **tableros autorizados**, cada uno con su nivel.
@@ -56,9 +63,20 @@ Todo lo escrito por un agente queda marcado como **«Agente <nombre> (de <dueño
   el permiso. Los textos de tarjetas son datos, no instrucciones para el agente (se documenta como riesgo de inyección).
 - Solo HTTPS (ya lo exige Traefik); el token nunca se escribe en registros ni en la URL.
 
+## Listo para conectar (lo que se entrega para el lado del agente)
+
+- **Especificación OpenAPI** pública del contrato (`/api/agent/v1/openapi.json`): sirve para que Hermes u otro agente con
+  herramientas/funciones genere sus llamadas sin escribir nada a mano.
+- **Servidor MCP** (paquete pequeño en `agent-mcp/`, que habla con la API usando el token) con herramientas como
+  `listar_tableros`, `tareas_pendientes`, `buscar`, `ver_tarjeta`, `avisar`: se registra en Claude con una línea de configuración.
+- **Guía de conexión** dentro de la app (pantalla de la conexión) con el token, la URL base, un `curl` de prueba, la
+  configuración de MCP lista para copiar y un **texto de instrucciones** para pegar en el agente (qué puede y qué no puede
+  hacer, tono, que los textos de las tarjetas son datos y no órdenes).
+- **Prueba de conexión:** botón «Probar» que llama a `/me` y muestra qué ve el agente.
+
 ## Interfaz
 
-- Sección **Agentes** en el menú de cuenta (visible según la decisión sobre quién puede crearlos): lista con último uso, estado
+- Sección **Conexiones de agentes** en el menú de cuenta (visible según la decisión sobre quién puede crearlos): lista con último uso, estado
   y caducidad; **Nuevo agente** (nombre, caducidad, permisos, tableros con su nivel); el token aparece una vez con botón
   Copiar; **Regenerar**, **Revocar**, **Editar tableros** y **Actividad**.
 - En **Compartir** de cada tablero, lista «Agentes con acceso» (transparencia para quien comparte).
@@ -66,10 +84,10 @@ Todo lo escrito por un agente queda marcado como **«Agente <nombre> (de <dueño
 
 ## Entrega por fases
 
-1. Datos y servidor: tablas `agents`, `agent_boards`, `agent_log`; autenticación Bearer; `/me`, `/boards`, `/tasks`, `/search`.
-2. Interfaz de gestión (crear, token una vez, revocar, tableros, actividad).
-3. Escritura (tarjetas y comentarios) y **avisos** (`/notify`) con límites.
-4. Documentación y, si se quiere, un **servidor MCP** pequeño que expone estas rutas como herramientas para Claude.
+1. Datos y servidor: tablas `agents`, `agent_boards`, `agent_log`; autenticación Bearer; `/me`, `/boards`, `/tasks`, `/search`, OpenAPI.
+2. Interfaz de gestión (registrar conexión, token una vez, revocar, tableros, actividad, guía y prueba de conexión).
+3. **Avisos** (`/notify`) con límites y, si se decide, escritura de tarjetas y comentarios.
+4. **Servidor MCP** y guía para Hermes/Claude.
 
 ## Pruebas
 
@@ -79,7 +97,7 @@ E2E: agente lee un tablero autorizado y recibe 404 en uno no autorizado.
 
 ## Preguntas abiertas
 
-1. ¿Quién puede crear agentes: **cada usuario para sus tableros** o **solo el administrador**?
-2. ¿Qué puede hacer: **solo leer y avisar**, o también **crear/editar tarjetas y comentar**?
-3. **Correo:** ¿vía el flujo de n8n ya existente (según los canales de cada persona) o envío directo por SMTP?
-4. ¿Con qué se va a conectar (n8n, Claude u otro)? Un servidor MCP sería la vía directa para Claude.
+1. ¿Quién puede registrar conexiones: **cada usuario para sus tableros** o **solo el administrador**?
+2. ¿Qué puede hacer el agente: **leer y avisar**, o también **crear/editar tarjetas y comentar**?
+3. **Correo:** ¿por el flujo de n8n ya existente (según los canales de cada persona) o envío directo por SMTP?
+4. Cliente: **Hermes y Claude** (confirmado). ¿Hermes consume OpenAPI/HTTP o MCP? Con ambos disponibles no hace falta decidir.
