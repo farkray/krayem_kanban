@@ -19,6 +19,7 @@ import {
   type AdminUser,
   type AdminWorkspace,
 } from '../sync/admin'
+import { AdminAgents } from './AdminAgents'
 import { AdminNotifications } from './AdminNotifications'
 import { AdminWorkspaces } from './AdminWorkspaces'
 import { Avatar } from './Avatar'
@@ -34,10 +35,11 @@ const ROLE_OPTIONS = [
   { value: 'guest', label: 'Invitado' },
 ]
 
-type Tab = 'users' | 'workspaces' | 'alerts'
+type Tab = 'users' | 'workspaces' | 'agents' | 'alerts'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'users', label: 'Usuarios' },
   { id: 'workspaces', label: 'Workspaces' },
+  { id: 'agents', label: 'Conexiones' },
   { id: 'alerts', label: 'Avisos' },
 ]
 const TAB_KEY = 'kanban-admin-tab'
@@ -603,6 +605,12 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
             }
             onReload={() => void loadWorkspaces()}
           />
+        </div>
+      )}
+
+      {tab === 'agents' && (
+        <div role="tabpanel" id="panel-agents" aria-labelledby="tab-agents" className={styles.panel}>
+          <AdminAgents />
         </div>
       )}
 

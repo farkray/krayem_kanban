@@ -1,0 +1,9 @@
+{
+  "name": "kanban-agent-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor MCP para conectar a Claude (u otro cliente MCP) con la API de agentes del Kanban",
+  "bin": { "kanban-agent-mcp": "server.mjs" },
+  "engines": { "node": ">=18" }
+}

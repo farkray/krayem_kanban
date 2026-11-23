@@ -250,6 +250,8 @@ export interface Comment extends Base {
   editedAt?: string
   /** Quién la escribió (id de usuario). Ausente en las antiguas y en el modo solo-local. */
   authorId?: string
+  /** Nombre del agente externo (Hermes, Claude…) cuando la escribió un agente por API: `authorId` es `agent:<id>`. */
+  agentName?: string
   /** Si es una respuesta, la actualización a la que responde (las respuestas no se anidan más). */
   parentId?: string
 }

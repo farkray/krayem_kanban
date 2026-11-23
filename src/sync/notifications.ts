@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { getConfig } from '../lib/config'
 
 export type NotificationType =
-  'mention' | 'assignment' | 'access_granted' | 'access_role' | 'access_removed'
+  'mention' | 'assignment' | 'access_granted' | 'access_role' | 'access_removed' | 'agent'
 
 /** Un aviso del centro de notificaciones (lo genera el servidor). */
 export interface AppNotification {

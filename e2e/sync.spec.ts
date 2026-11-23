@@ -670,7 +670,7 @@ test('workspaces: el admin los crea y asigna; no se ven usuarios de otros worksp
   const main = admin.page.getByRole('main')
   const ws = `Mercabits ${Date.now()}`
   // pestañas: Usuarios, Workspaces y Avisos
-  await expect(main.getByRole('tab')).toHaveText([/Usuarios/, /Workspaces/, /Avisos/])
+  await expect(main.getByRole('tab')).toHaveText([/Usuarios/, /Workspaces/, /Conexiones/, /Avisos/])
   await expect(main.getByRole('tab', { name: /Usuarios/ })).toHaveAttribute('aria-selected', 'true')
   await main.getByRole('tab', { name: /Workspaces/ }).click()
   await main.getByLabel('Nombre del nuevo workspace').fill(ws)
@@ -770,6 +770,63 @@ test('el dueño mueve su tablero a otro workspace y quien queda fuera pierde el 
     new RegExp(dest),
   )
   await expect(dlg.getByRole('list', { name: 'Personas con acceso' })).toHaveCount(0)
+
+  await admin.ctx.close()
+})
+
+// Conexiones de agentes externos (Hermes, Claude…): el administrador autoriza tableros y entrega un token.
+test('conexiones de agentes: el admin crea una, ve el token una vez; el agente lee solo lo autorizado y al revocar pierde el acceso', async ({
+  browser,
+}) => {
+  test.skip(!ADMIN_PASSWORD, 'Define E2E_ADMIN_PASSWORD (la ADMIN_PASSWORD del stack).')
+  test.setTimeout(120_000)
+  const admin = await newDevice(browser)
+  await signIn(admin.page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(admin.page.getByRole('heading', { level: 1, name: 'Mis tableros' })).toBeVisible()
+  await admin.page.goto('/admin')
+  const main = admin.page.getByRole('main')
+  await main.getByRole('tab', { name: /Conexiones/ }).click()
+  await main.getByRole('button', { name: 'Nueva conexión' }).first().click()
+
+  const form = main.getByRole('form', { name: 'Nueva conexión' })
+  await form.getByLabel(/Nombre del agente/).fill('Hermes')
+  await form.getByLabel('Avisar dentro de la app a personas de esos tableros').check()
+  await form.getByRole('checkbox', { name: /Mi tablero/ }).first().check()
+  await pickOption(form.getByRole('combobox', { name: /Nivel en Mi tablero/ }), 'Leer y escribir')
+  await form.getByRole('button', { name: 'Crear conexión y generar token' }).click()
+
+  // el token aparece una sola vez, con la guía de conexión
+  const reveal = main.getByRole('status', { name: 'Token de la conexión' })
+  await expect(reveal).toContainText('no se vuelve a mostrar')
+  const token = (await reveal.locator('pre').first().innerText()).trim()
+  expect(token).toMatch(/^kbn_/)
+  await expect(reveal).toContainText('openapi.json')
+  await expect(reveal).toContainText('agent-mcp/server.mjs')
+  await reveal.getByRole('button', { name: 'Ya lo guardé' }).click()
+  await expect(reveal).toHaveCount(0)
+  await expect(main.getByRole('list', { name: 'Conexiones' })).toContainText('Hermes')
+  await expect(main.getByRole('list', { name: 'Conexiones' })).not.toContainText(token) // solo el prefijo
+
+  // el agente (sin cookie) lee el tablero autorizado
+  const call = (path: string) =>
+    admin.page.evaluate(
+      async ([p, t]) => {
+        const r = await fetch(`/api/agent/v1${p}`, { headers: { Authorization: `Bearer ${t}` }, credentials: 'omit' })
+        return { status: r.status, body: await r.json().catch(() => ({})) }
+      },
+      [path, token],
+    )
+  const me = await call('/me')
+  expect(me.status).toBe(200)
+  expect(me.body.boards[0]).toMatchObject({ access: 'write' })
+  expect((await call('/boards/otro-tablero')).status).toBe(404)
+
+  // revocar: el acceso termina al instante
+  const item = main.getByRole('list', { name: 'Conexiones' }).getByRole('listitem').first()
+  await item.getByRole('button', { name: 'Revocar' }).click()
+  await admin.page.getByRole('alertdialog').getByRole('button', { name: 'Revocar' }).click()
+  await expect(item).toContainText('Revocada')
+  expect((await call('/me')).status).toBe(401)
 
   await admin.ctx.close()
 })

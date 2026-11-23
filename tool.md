@@ -398,3 +398,11 @@ Decisiones de UX (apoyadas en una revisión de patrones de Jira, GitLab, Primer 
 - La **×**, **Esc** y pulsar fuera cierran **sin publicar**: el borrador queda guardado, se avisa «Borrador guardado en la tarjeta», la tarjeta muestra la marca «Borrador» y la pestaña Actualizaciones indica «· borrador».
 - Un borrador de respuesta o de edición reabre su cuadro solo, con el texto recuperado.
 
+## 27. Conexión de agentes externos por API (implementado)
+
+- **Panel de control → Conexiones**: el administrador registra la conexión de un agente externo (Hermes, Claude…), elige **qué tableros** ve (cada uno **Solo leer** o **Leer y escribir**) y qué permisos extra tiene (**avisar** dentro de la app, **ver correos**), y obtiene un **token `kbn_…`** que se muestra una sola vez y se comparte fuera de la app. También: editar, nuevo token, revocar, eliminar y ver la actividad.
+- **API** `/api/agent/v1` (Bearer): leer tableros, tareas pendientes, búsqueda y tarjetas; crear/editar/mover tarjetas y poner actualizaciones (firmadas «Nombre (agente)»); avisar a personas del tablero. Contrato OpenAPI público en `/api/agent/v1/openapi.json`. **Servidor MCP** sin dependencias en `agent-mcp/server.mjs`.
+- **Los correos los gestiona el propio agente**: la herramienta solo da la información. `/notify` crea únicamente el aviso de la campana (nunca entra a la cola de n8n).
+- Seguridad: huella SHA-256 del token, acceso solo a lo autorizado (404 si no), límites (120 peticiones/min; 30 avisos/h y 5 por persona), registro de actividad y respeto de los límites Next 4 / Doing 2.
+- Guía completa: `docs/agentes-api.md`.
+

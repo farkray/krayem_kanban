@@ -120,3 +120,61 @@ export const adminSetWorkspaceMembers = (id: string, userIds: string[]) =>
 
 export const adminDeleteWorkspace = (id: string) =>
   call<void>('DELETE', `/workspaces/${encodeURIComponent(id)}`)
+
+/* ---------- conexiones de agentes externos (API con token) ---------- */
+
+export type AgentAccess = 'read' | 'write'
+
+export interface AgentConnection {
+  id: string
+  name: string
+  description: string
+  tokenPrefix: string
+  createdAt: string
+  expiresAt: string | null
+  revokedAt: string | null
+  lastUsedAt: string | null
+  canNotify: boolean
+  canContacts: boolean
+  boards: { boardId: string; access: AgentAccess; title: string; ownerName: string; available: boolean }[]
+}
+
+export interface AdminBoard {
+  id: string
+  title: string
+  ownerEmail: string
+  ownerName: string
+  workspace: string
+}
+
+export interface AgentInput {
+  name: string
+  description: string
+  expiresAt: string | null
+  canNotify: boolean
+  canContacts: boolean
+  boards: { boardId: string; access: AgentAccess }[]
+}
+
+export interface AgentLogRow {
+  at: string
+  method: string
+  path: string
+  status: number
+  boardId: string | null
+}
+
+export const adminListBoards = () => call<{ boards: AdminBoard[] }>('GET', '/boards')
+export const adminListAgents = () => call<{ agents: AgentConnection[] }>('GET', '/agents')
+export const adminCreateAgent = (input: AgentInput) =>
+  call<{ agent: AgentConnection; token: string }>('POST', '/agents', input)
+export const adminUpdateAgent = (id: string, input: Partial<AgentInput>) =>
+  call<{ agent: AgentConnection }>('PATCH', `/agents/${encodeURIComponent(id)}`, input)
+export const adminRotateAgent = (id: string) =>
+  call<{ agent: AgentConnection; token: string }>('POST', `/agents/${encodeURIComponent(id)}/rotate`)
+export const adminRevokeAgent = (id: string) =>
+  call<{ agent: AgentConnection }>('POST', `/agents/${encodeURIComponent(id)}/revoke`)
+export const adminDeleteAgent = (id: string) =>
+  call<void>('DELETE', `/agents/${encodeURIComponent(id)}`)
+export const adminAgentLog = (id: string) =>
+  call<{ log: AgentLogRow[] }>('GET', `/agents/${encodeURIComponent(id)}/log?limit=50`)

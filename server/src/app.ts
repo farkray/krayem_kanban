@@ -31,7 +31,9 @@ import { createClock, isTable, transaction, type DB } from './db.ts'
 import { Hub } from './events.ts'
 import { Notifications, detect, type NotificationView, type RowChange } from './notifications.ts'
 import { Delivery, cleanPhone, cleanWebhookUrl, validTimezone } from './delivery.ts'
-import { buildDigest } from './digest.ts'
+import { buildDigest, dayIn } from './digest.ts'
+import { Agents, type Access, type AgentBoard } from './agents.ts'
+import { registerAgentApi } from './agentApi.ts'
 import { buildN8nWorkflow } from './n8nWorkflow.ts'
 import {
   cleanWorkspaceName,
@@ -110,6 +112,7 @@ export function buildApp(opts: AppOptions): BuiltApp {
   const notifications = new Notifications(db)
   const delivery = new Delivery(db, opts.fetch)
   const nextTs = createClock(db)
+  const agents = new Agents(db)
   const byEmail = new LoginLimiter(5)
   const byIp = new LoginLimiter(30)
 
@@ -171,6 +174,8 @@ export function buildApp(opts: AppOptions): BuiltApp {
 
   app.addHook('onRequest', async (req, reply) => {
     // CSRF: las peticiones que cambian algo deben venir del mismo origen (el navegador siempre envía Origin).
+    // La API de agentes usa un token Bearer (no una cookie): no hay credencial "ambiente" que proteger.
+    if (req.url.startsWith('/api/agent/v1/')) return
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
       const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '')
         .split(',')[0]
@@ -447,6 +452,159 @@ export function buildApp(opts: AppOptions): BuiltApp {
     db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
     for (const m of w.members) hub.publishAccess(m)
     return reply.code(204).send()
+  })
+
+  /* ---------- conexiones de agentes (solo admin) ---------- */
+
+  const boardInfo = (id: string) => {
+    const r = db
+      .prepare("SELECT user_id, data FROM rows WHERE tbl = 'boards' AND id = ? LIMIT 1")
+      .get(id) as { user_id: string; data: string } | undefined
+    if (!r) return null
+    const d = JSON.parse(r.data) as { title?: string; deletedAt?: string; parentId?: string; workspaceId?: string }
+    if (d.deletedAt || d.parentId) return null
+    const owner = db.prepare('SELECT email, alias FROM users WHERE id = ?').get(r.user_id) as
+      | { email: string; alias: string }
+      | undefined
+    const ws = d.workspaceId
+      ? (db.prepare('SELECT name FROM workspaces WHERE id = ?').get(d.workspaceId) as { name: string } | undefined)
+      : undefined
+    return {
+      id,
+      title: String(d.title ?? ''),
+      ownerEmail: owner?.email ?? '',
+      ownerName: owner ? owner.alias || owner.email : '',
+      workspace: ws?.name ?? '',
+    }
+  }
+
+  const agentView = (a: ReturnType<Agents['get']>) =>
+    a && {
+      ...a,
+      boards: a.boards.map((g) => ({
+        ...g,
+        title: boardInfo(g.boardId)?.title ?? '(tablero no disponible)',
+        ownerName: boardInfo(g.boardId)?.ownerName ?? '',
+        available: !!boardInfo(g.boardId),
+      })),
+    }
+
+  /** Valida y limpia los campos de una conexión; devuelve el error o los datos. */
+  const cleanAgent = (body: Record<string, unknown>, partial: boolean) => {
+    const out: {
+      name?: string
+      description?: string
+      expiresAt?: string | null
+      canNotify?: boolean
+      canContacts?: boolean
+      boards?: AgentBoard[]
+    } = {}
+    if (!partial || body.name !== undefined) {
+      const name = typeof body.name === 'string' ? body.name.replace(/\s+/g, ' ').trim() : ''
+      if (!name || name.length > 60) return { error: 'invalid_name' as const }
+      out.name = name
+    }
+    if (body.description !== undefined) {
+      if (typeof body.description !== 'string' || body.description.length > 300)
+        return { error: 'invalid_description' as const }
+      out.description = body.description.trim()
+    }
+    if (body.expiresAt !== undefined) {
+      if (body.expiresAt === null || body.expiresAt === '') out.expiresAt = null
+      else if (typeof body.expiresAt === 'string' && !Number.isNaN(Date.parse(body.expiresAt)))
+        out.expiresAt = new Date(body.expiresAt).toISOString()
+      else return { error: 'invalid_expires' as const }
+    }
+    for (const k of ['canNotify', 'canContacts'] as const) {
+      if (body[k] === undefined) continue
+      if (typeof body[k] !== 'boolean') return { error: 'bad_request' as const }
+      out[k] = body[k]
+    }
+    if (body.boards !== undefined) {
+      if (!Array.isArray(body.boards) || body.boards.length > 200) return { error: 'bad_request' as const }
+      const boards: AgentBoard[] = []
+      for (const b of body.boards as { boardId?: unknown; access?: unknown }[]) {
+        const access = b?.access
+        if (!validId(b?.boardId) || (access !== 'read' && access !== 'write') || !boardInfo(b.boardId))
+          return { error: 'invalid_board' as const }
+        if (!boards.some((x) => x.boardId === b.boardId))
+          boards.push({ boardId: b.boardId, access: access as Access })
+      }
+      out.boards = boards
+    }
+    return { data: out }
+  }
+
+  app.get('/api/admin/boards', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const ids = db.prepare("SELECT id FROM rows WHERE tbl = 'boards'").all() as { id: string }[]
+    return {
+      boards: ids
+        .flatMap((r) => boardInfo(r.id) ?? [])
+        .sort((a, b) => a.ownerName.localeCompare(b.ownerName, 'es') || a.title.localeCompare(b.title, 'es')),
+    }
+  })
+
+  app.get('/api/admin/agents', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    return { agents: agents.list().map((a) => agentView(a)) }
+  })
+
+  app.post('/api/admin/agents', async (req, reply) => {
+    const admin = requireAdmin(req, reply)
+    if (!admin) return
+    const c = cleanAgent((req.body ?? {}) as Record<string, unknown>, false)
+    if ('error' in c) return reply.code(400).send({ error: c.error })
+    const { agent, token } = agents.create({
+      name: c.data.name as string,
+      description: c.data.description ?? '',
+      createdBy: admin.id,
+      expiresAt: c.data.expiresAt ?? null,
+      canNotify: c.data.canNotify ?? false,
+      canContacts: c.data.canContacts ?? false,
+      boards: c.data.boards ?? [],
+    })
+    return reply.code(201).send({ agent: agentView(agent), token })
+  })
+
+  app.patch('/api/admin/agents/:id', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    const c = cleanAgent((req.body ?? {}) as Record<string, unknown>, true)
+    if ('error' in c) return reply.code(400).send({ error: c.error })
+    const a = validId(id) ? agents.update(id, c.data) : null
+    if (!a) return reply.code(404).send({ error: 'not_found' })
+    return { agent: agentView(a) }
+  })
+
+  app.post('/api/admin/agents/:id/rotate', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    const token = validId(id) ? agents.rotate(id) : null
+    if (!token) return reply.code(404).send({ error: 'not_found' })
+    return { agent: agentView(agents.get(id)), token }
+  })
+
+  app.post('/api/admin/agents/:id/revoke', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!validId(id) || !agents.get(id)) return reply.code(404).send({ error: 'not_found' })
+    agents.revoke(id)
+    return { agent: agentView(agents.get(id)) }
+  })
+
+  app.delete('/api/admin/agents/:id', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!validId(id) || !agents.remove(id)) return reply.code(404).send({ error: 'not_found' })
+    return reply.code(204).send()
+  })
+
+  app.get('/api/admin/agents/:id/log', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const { id } = req.params as { id: string }
+    if (!validId(id) || !agents.get(id)) return reply.code(404).send({ error: 'not_found' })
+    return { log: agents.activity(id, Number((req.query as { limit?: string }).limit) || 100) }
   })
 
   /* ---------- sincronización ---------- */
@@ -1135,12 +1293,23 @@ export function buildApp(opts: AppOptions): BuiltApp {
     return buildDigest(db, delivery)
   })
 
+  registerAgentApi(app, {
+    db,
+    agents,
+    hub,
+    notifications,
+    nextTs,
+    today: () => dayIn(delivery.settings().timezone, new Date()),
+  })
+
   notifications.purge()
   delivery.purge()
+  agents.purge()
   delivery.start()
   const purgeTimer = setInterval(() => {
     notifications.purge()
     delivery.purge()
+    agents.purge()
   }, 6 * 3_600_000)
   purgeTimer.unref()
   app.addHook('onClose', async () => {

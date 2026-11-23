@@ -2162,7 +2162,9 @@ describe('workspaces', () => {
     const file = join(mkdtempSync(join(tmpdir(), 'kanban-mig-')), 'k.db')
     const old = openDb(file)
     // simula una base anterior a los workspaces
-    old.exec('DROP TABLE workspace_members; DROP TABLE workspaces; PRAGMA user_version = 7')
+    old.exec(
+      'DROP TABLE agent_log; DROP TABLE agent_boards; DROP TABLE agents; DROP TABLE workspace_members; DROP TABLE workspaces; PRAGMA user_version = 7',
+    )
     const u = createUser(old, 'a@correo.com', await hashPassword(PASSWORD))
     old
       .prepare(
@@ -2184,5 +2186,356 @@ describe('workspaces', () => {
     expect(JSON.parse(row.data).workspaceId).toBe('general')
     expect(row.updated_at > '2026-01-01').toBe(true) // sube el cursor: los clientes lo descargan
     migrated.close()
+  })
+})
+
+describe('conexiones de agentes (API con token)', () => {
+  const call = (
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    url: string,
+    cookie: string,
+    payload?: object,
+  ) => built.app.inject({ method, url, headers: headers(cookie), payload })
+  /** Sin cookie ni Origin: así llama un agente. */
+  const agent = (
+    method: 'GET' | 'POST' | 'PATCH',
+    url: string,
+    token: string,
+    payload?: object,
+  ) =>
+    built.app.inject({
+      method,
+      url: `/api/agent/v1${url}`,
+      headers: { host: HOST, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      payload,
+    })
+  const ts = '2026-11-01T00:00:00.000Z'
+  const row = (id: string, extra: object) => ({ id, createdAt: ts, updatedAt: ts, ...extra })
+
+  /** Ana tiene el tablero b1 (3 columnas) y beto el b2; un admin gestiona las conexiones. */
+  async function setup() {
+    await makeApp()
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    const ana = await addUser('ana@correo.com')
+    const beto = await addUser('beto@correo.com')
+    const c = {
+      admin: (await login('admin@correo.com')).cookie,
+      ana: (await login('ana@correo.com')).cookie,
+      beto: (await login('beto@correo.com')).cookie,
+    }
+    const push = (cookie: string, table: string, rows: object[]) =>
+      call('POST', `/api/sync/${table}`, cookie, { rows })
+    await push(c.ana, 'boards', [row('b1', { title: 'Ventas', position: 'a0' })])
+    await push(c.ana, 'columns', [
+      row('todo', { boardId: 'b1', title: 'Por hacer', position: 'a0' }),
+      row('doing', { boardId: 'b1', title: 'En curso', position: 'a1', kind: 'doing' }),
+      row('done', { boardId: 'b1', title: 'Listo', position: 'a2', kind: 'done' }),
+    ])
+    await push(c.ana, 'cards', [
+      row('k1', { boardId: 'b1', columnId: 'todo', title: 'Mandar cotización', position: 'a0', endDate: '2020-01-01', assigneeId: ana.id }),
+      row('k2', { boardId: 'b1', columnId: 'todo', title: 'Llamar a Pedro', position: 'a1', description: 'Confirmar el presupuesto' }),
+      row('k3', { boardId: 'b1', columnId: 'done', title: 'Firmar contrato', position: 'a0', endDate: '2020-01-02' }),
+      row('k4', { boardId: 'b1', columnId: 'doing', title: 'Preparar demo', position: 'a0' }),
+      row('k5', { boardId: 'b1', columnId: 'doing', title: 'Revisar propuesta', position: 'a1' }),
+    ])
+    await push(c.ana, 'comments', [
+      row('m1', { cardId: 'k2', boardId: 'b1', bodyMd: 'Pedro pidió descuento del 10%', authorId: ana.id }),
+    ])
+    await push(c.beto, 'boards', [row('b2', { title: 'Privado de Beto', position: 'a0' })])
+    const create = async (body: object = {}) => {
+      const res = await call('POST', '/api/admin/agents', c.admin, {
+        name: 'Hermes',
+        canNotify: true,
+        boards: [{ boardId: 'b1', access: 'write' }],
+        ...body,
+      })
+      return { res, token: res.json().token as string, id: res.json().agent?.id as string }
+    }
+    return { c, ana, beto, create, push }
+  }
+
+  it('solo el administrador crea conexiones; el token se muestra una sola vez y no se guarda', async () => {
+    const { c, create } = await setup()
+    expect((await call('POST', '/api/admin/agents', c.ana, { name: 'X' })).statusCode).toBe(403)
+    expect((await call('GET', '/api/admin/agents', c.ana)).statusCode).toBe(403)
+    const { res, token } = await create()
+    expect(res.statusCode).toBe(201)
+    expect(token).toMatch(/^kbn_[A-Za-z0-9_-]{43}$/)
+    const list = (await call('GET', '/api/admin/agents', c.admin)).json().agents
+    expect(list).toHaveLength(1)
+    expect(JSON.stringify(list)).not.toContain(token) // la lista no trae el token
+    expect(list[0]).toMatchObject({ name: 'Hermes', tokenPrefix: token.slice(0, 12), boards: [{ boardId: 'b1', title: 'Ventas' }] })
+    // solo se guarda la huella
+    const stored = db.prepare('SELECT token_hash FROM agents').get() as { token_hash: string }
+    expect(stored.token_hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(stored.token_hash).not.toContain(token)
+    expect((await call('POST', '/api/admin/agents', c.admin, { name: '' })).statusCode).toBe(400)
+    expect((await call('POST', '/api/admin/agents', c.admin, { name: 'A', boards: [{ boardId: 'no-existe', access: 'read' }] })).statusCode).toBe(400)
+  })
+
+  it('autenticación: sin token, token falso, revocado, caducado y rotado', async () => {
+    const { c, create } = await setup()
+    const { token, id } = await create()
+    expect((await agent('GET', '/me', '')).statusCode).toBe(401)
+    expect((await agent('GET', '/me', 'kbn_falso')).statusCode).toBe(401)
+    expect((await agent('GET', '/me', token)).json()).toMatchObject({ agent: { name: 'Hermes' }, boards: [{ id: 'b1', access: 'write' }] })
+
+    const fresh = (await call('POST', `/api/admin/agents/${id}/rotate`, c.admin)).json().token as string
+    expect((await agent('GET', '/me', token)).statusCode).toBe(401) // el anterior deja de servir
+    expect((await agent('GET', '/me', fresh)).statusCode).toBe(200)
+
+    await call('POST', `/api/admin/agents/${id}/revoke`, c.admin)
+    expect((await agent('GET', '/me', fresh)).statusCode).toBe(401)
+
+    const old = await create({ name: 'Viejo', expiresAt: '2020-01-01' })
+    expect((await agent('GET', '/me', old.token)).statusCode).toBe(401)
+  })
+
+  it('solo ve los tableros autorizados: el resto es como si no existiera', async () => {
+    const { create } = await setup()
+    const { token } = await create()
+    expect((await agent('GET', '/boards', token)).json().boards).toMatchObject([{ id: 'b1', title: 'Ventas', cards: 5 }])
+    expect((await agent('GET', '/boards/b2', token)).statusCode).toBe(404)
+    expect((await agent('GET', '/tasks?board=b2', token)).statusCode).toBe(404)
+    expect((await agent('GET', '/search?q=Beto&board=b2', token)).statusCode).toBe(404)
+    // ni siquiera por el id de una tarjeta ajena
+    expect((await agent('GET', '/cards/no-existe', token)).statusCode).toBe(404)
+  })
+
+  it('un tablero borrado deja de verse', async () => {
+    const { c, ana, create, push } = await setup()
+    const { token } = await create()
+    await push(c.ana, 'boards', [row('b1', { title: 'Ventas', position: 'a0', deletedAt: ts, ownerId: ana.id })])
+    expect((await agent('GET', '/boards/b1', token)).statusCode).toBe(404)
+    expect((await agent('GET', '/boards', token)).json().boards).toEqual([])
+  })
+
+  it('tareas pendientes: sin las terminadas, con vencidas y filtros; el correo solo con el permiso', async () => {
+    const { ana, create } = await setup()
+    const { token } = await create()
+    const all = (await agent('GET', '/tasks', token)).json()
+    expect(all.tasks.map((t: { title: string }) => t.title)).toEqual([
+      'Mandar cotización', // vencida (2020) primero
+      'Llamar a Pedro',
+      'Preparar demo',
+      'Revisar propuesta',
+    ])
+    expect(all.tasks[0]).toMatchObject({ overdue: true, column: 'Por hacer', assignee: { id: ana.id, name: 'ana@correo.com' } })
+    expect(all.tasks[0].assignee.email).toBeUndefined() // sin permiso de contactos
+    expect((await agent('GET', '/tasks?due=overdue', token)).json().count).toBe(1)
+    expect((await agent('GET', `/tasks?assignee=${ana.id}`, token)).json().count).toBe(1)
+    expect((await agent('GET', '/tasks?assignee=none', token)).json().count).toBe(3)
+    expect((await agent('GET', '/tasks?pending=0', token)).json().count).toBe(5) // con las terminadas
+
+    const withContacts = await create({ name: 'Con contactos', canContacts: true })
+    const t = (await agent('GET', '/tasks?due=overdue', withContacts.token)).json().tasks[0]
+    expect(t.assignee.email).toBe('ana@correo.com')
+    const people = (await agent('GET', '/people?board=b1', withContacts.token)).json().people
+    expect(people).toMatchObject([{ email: 'ana@correo.com', role: 'owner' }])
+    expect((await agent('GET', '/people?board=b1', token)).json().people[0].email).toBeUndefined()
+  })
+
+  it('busca en títulos, descripciones y actualizaciones; una tarjeta trae sus actualizaciones', async () => {
+    const { create } = await setup()
+    const { token } = await create()
+    const found = (await agent('GET', '/search?q=descuento', token)).json()
+    expect(found.results).toMatchObject([{ type: 'update', cardId: 'k2', cardTitle: 'Llamar a Pedro' }])
+    expect((await agent('GET', '/search?q=presupuesto', token)).json().results[0].type).toBe('description')
+    expect((await agent('GET', '/search?q=x', token)).statusCode).toBe(400)
+    const card = (await agent('GET', '/cards/k2', token)).json()
+    expect(card.updates).toMatchObject([{ body: 'Pedro pidió descuento del 10%', author: { name: 'ana@correo.com', agent: false } }])
+  })
+
+  it('solo lectura no escribe; con escritura crea, edita y mueve (y la dueña lo ve por sincronización)', async () => {
+    const { c, create } = await setup()
+    const ro = await create({ name: 'Lector', boards: [{ boardId: 'b1', access: 'read' }] })
+    expect((await agent('POST', '/cards', ro.token, { boardId: 'b1', columnId: 'todo', title: 'X' })).statusCode).toBe(403)
+    expect((await agent('PATCH', '/cards/k1', ro.token, { title: 'X' })).statusCode).toBe(403)
+    expect((await agent('POST', '/cards/k1/comments', ro.token, { body: 'x' })).statusCode).toBe(403)
+
+    const { token } = await create()
+    const made = await agent('POST', '/cards', token, {
+      boardId: 'b1',
+      columnId: 'todo',
+      title: '  Enviar   recordatorio ',
+      endDate: '2030-05-01',
+    })
+    expect(made.statusCode).toBe(201)
+    const card = made.json().card
+    expect(card).toMatchObject({ title: 'Enviar recordatorio', column: 'Por hacer', endDate: '2030-05-01' })
+    const pulled = (await call('GET', '/api/sync/cards', c.ana)).json().rows as { id: string; position: string; title: string }[]
+    const mine = pulled.find((r) => r.id === card.id)!
+    expect(mine.title).toBe('Enviar recordatorio')
+    expect(mine.position > 'a1').toBe(true) // al final de la columna
+
+    // validaciones
+    expect((await agent('POST', '/cards', token, { boardId: 'b1', columnId: 'no', title: 'X' })).statusCode).toBe(404)
+    expect((await agent('POST', '/cards', token, { boardId: 'b1', columnId: 'todo', title: '' })).statusCode).toBe(400)
+    expect((await agent('PATCH', `/cards/${card.id}`, token, { startDate: '2030-06-01' })).statusCode).toBe(400) // inicio > final
+    expect((await agent('PATCH', `/cards/${card.id}`, token, { assigneeId: 'nadie' })).statusCode).toBe(400)
+
+    const edited = await agent('PATCH', `/cards/${card.id}`, token, { title: 'Recordatorio enviado', endDate: null, description: 'ok' })
+    expect(edited.json().card).toMatchObject({ title: 'Recordatorio enviado', endDate: null, description: 'ok' })
+  })
+
+  it('mover respeta el límite de la columna (Doing 2) y la deja al final', async () => {
+    const { c, create } = await setup()
+    const { token } = await create()
+    // "En curso" (Doing) ya tiene 2 tarjetas
+    expect((await agent('PATCH', '/cards/k2', token, { columnId: 'doing' })).statusCode).toBe(409)
+    expect((await agent('POST', '/cards', token, { boardId: 'b1', columnId: 'doing', title: 'Otra' })).statusCode).toBe(409)
+    const moved = await agent('PATCH', '/cards/k4', token, { columnId: 'done' })
+    expect(moved.json().card.column).toBe('Listo')
+    const rows = (await call('GET', '/api/sync/cards', c.ana)).json().rows as { id: string; columnId: string; position: string }[]
+    const k4 = rows.find((r) => r.id === 'k4')!
+    const k3 = rows.find((r) => r.id === 'k3')!
+    expect(k4.columnId).toBe('done')
+    expect(k4.position > k3.position).toBe(true)
+    // ahora sí cabe una en Doing
+    expect((await agent('PATCH', '/cards/k2', token, { columnId: 'doing' })).statusCode).toBe(200)
+  })
+
+  it('las actualizaciones del agente van firmadas como agente y respuestas solo a actualizaciones', async () => {
+    const { c, create } = await setup()
+    const { token, id } = await create()
+    const res = await agent('POST', '/cards/k2/comments', token, { body: 'Recordatorio enviado a Pedro' })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().update.author).toMatchObject({ name: 'Hermes (agente)', agent: true })
+    const synced = (await call('GET', '/api/sync/comments', c.ana)).json().rows as { bodyMd: string; authorId: string }[]
+    expect(synced.find((m) => m.bodyMd === 'Recordatorio enviado a Pedro')?.authorId).toBe(`agent:${id}`)
+    const parent = (await agent('GET', '/cards/k2', token)).json().updates[0].id
+    expect((await agent('POST', '/cards/k2/comments', token, { body: 'respuesta', parentId: parent })).statusCode).toBe(201)
+    expect((await agent('POST', '/cards/k2/comments', token, { body: 'x', parentId: 'no' })).statusCode).toBe(404)
+    expect((await agent('POST', '/cards/k2/comments', token, { body: '  ' })).statusCode).toBe(400)
+  })
+
+  it('avisos: solo con el permiso, solo a personas del tablero, con límite y sin pasar por la cola de correo', async () => {
+    const { c, ana, create } = await setup()
+    const quiet = await create({ name: 'Sin avisos', canNotify: false })
+    expect((await agent('POST', '/notify', quiet.token, { boardId: 'b1', userId: ana.id, message: 'hola' })).statusCode).toBe(403)
+
+    const { token } = await create()
+    const okRes = await agent('POST', '/notify', token, { boardId: 'b1', userId: ana.id, cardId: 'k1', message: 'Tu tarjeta venció' })
+    // Ana es la dueña: sí participa
+    expect(okRes.statusCode).toBe(201)
+    const inbox = (await call('GET', '/api/notifications', c.ana)).json()
+    expect(inbox.notifications[0]).toMatchObject({ type: 'agent', excerpt: 'Tu tarjeta venció', actorName: 'Hermes', cardId: 'k1' })
+    expect((await call('GET', '/api/notifications', c.ana)).json().unread).toBe(1)
+    // Beto no participa en b1: es como si no existiera
+    const beto = db.prepare("SELECT id FROM users WHERE email = 'beto@correo.com'").get() as { id: string }
+    expect((await agent('POST', '/notify', token, { boardId: 'b1', userId: beto.id, message: 'hola' })).statusCode).toBe(404)
+    expect((await agent('POST', '/notify', token, { boardId: 'b1', email: 'nadie@x.com', message: 'hola' })).statusCode).toBe(404)
+    expect((await agent('POST', '/notify', token, { boardId: 'b1', userId: ana.id, message: '' })).statusCode).toBe(400)
+    // no entra a la cola de WhatsApp/correo
+    expect((db.prepare('SELECT COUNT(*) AS n FROM outbox').get() as { n: number }).n).toBe(0)
+    // máximo 5 por persona y hora (ya van 1)
+    for (let i = 0; i < 4; i++)
+      expect((await agent('POST', '/notify', token, { boardId: 'b1', userId: ana.id, message: `aviso ${i}` })).statusCode).toBe(201)
+    expect((await agent('POST', '/notify', token, { boardId: 'b1', userId: ana.id, message: 'uno más' })).statusCode).toBe(429)
+  })
+
+  it('límite de peticiones por minuto y registro de actividad', async () => {
+    const { c, create } = await setup()
+    const { token, id } = await create()
+    await agent('GET', '/boards', token)
+    await agent('GET', '/boards/b2', token)
+    const log = (await call('GET', `/api/admin/agents/${id}/log`, c.admin)).json().log
+    expect(log[0]).toMatchObject({ method: 'GET', path: '/api/agent/v1/boards/b2', status: 404, boardId: 'b2' })
+    expect(log[1]).toMatchObject({ path: '/api/agent/v1/boards', status: 200 })
+    const listed = (await call('GET', '/api/admin/agents', c.admin)).json().agents[0]
+    expect(listed.lastUsedAt).toBeTruthy()
+    let last = 200
+    for (let i = 0; i < 125; i++) last = (await agent('GET', '/me', token)).statusCode
+    expect(last).toBe(429)
+  })
+
+  it('el contrato OpenAPI es público y describe las rutas; el admin edita los tableros y borra la conexión', async () => {
+    const { c, create } = await setup()
+    const spec = (await agent('GET', '/openapi.json', '')).json()
+    expect(spec.openapi).toMatch(/^3\./)
+    expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/tasks', '/notify', '/cards/{id}']))
+    const { token, id } = await create()
+    const boards = (await call('GET', '/api/admin/boards', c.admin)).json().boards
+    expect(boards.map((b: { id: string }) => b.id).sort()).toEqual(['b1', 'b2'])
+    await call('PATCH', `/api/admin/agents/${id}`, c.admin, { boards: [{ boardId: 'b2', access: 'read' }] })
+    expect((await agent('GET', '/boards/b1', token)).statusCode).toBe(404)
+    expect((await agent('GET', '/boards/b2', token)).statusCode).toBe(200)
+    expect((await call('DELETE', `/api/admin/agents/${id}`, c.admin)).statusCode).toBe(204)
+    expect((await agent('GET', '/me', token)).statusCode).toBe(401)
+  })
+
+  it('la clave de orden de keyAfter coincide con la de fractional-indexing', async () => {
+    const { keyAfter } = await import('./agents.ts')
+    const { generateKeyBetween } = await import('fractional-indexing')
+    for (const k of [null, 'a0', 'a1', 'a9', 'aA', 'az', 'a0V', 'a1G', 'b00', 'azz'])
+      expect(keyAfter(k)).toBe(generateKeyBetween(k, null))
+  })
+})
+
+describe('servidor MCP para agentes', () => {
+  it('habla MCP por stdio: lista herramientas y las traduce a la API con el token', async () => {
+    const { spawn } = await import('node:child_process')
+    await makeApp()
+    createUser(db, 'admin@correo.com', await hashPassword(PASSWORD), true)
+    const owner = await addUser('ana@correo.com')
+    const cookie = (await login('ana@correo.com')).cookie
+    const admin = (await login('admin@correo.com')).cookie
+    const ts = '2026-11-01T00:00:00.000Z'
+    const push = (table: string, rows: object[]) =>
+      built.app.inject({ method: 'POST', url: `/api/sync/${table}`, headers: headers(cookie), payload: { rows } })
+    await push('boards', [{ id: 'b1', title: 'Ventas', position: 'a0', createdAt: ts, updatedAt: ts }])
+    await push('columns', [{ id: 'c1', boardId: 'b1', title: 'Por hacer', position: 'a0', createdAt: ts, updatedAt: ts }])
+    await push('cards', [
+      { id: 'k1', boardId: 'b1', columnId: 'c1', title: 'Mandar cotización', position: 'a0', endDate: '2020-01-01', assigneeId: owner.id, createdAt: ts, updatedAt: ts },
+    ])
+    const created = await built.app.inject({
+      method: 'POST',
+      url: '/api/admin/agents',
+      headers: headers(admin),
+      payload: { name: 'Claude', boards: [{ boardId: 'b1', access: 'write' }] },
+    })
+    const token = created.json().token as string
+    await built.app.listen({ port: 0, host: '127.0.0.1' })
+    const port = (built.app.server.address() as AddressInfo).port
+
+    const child = spawn(process.execPath, ['agent-mcp/server.mjs'], {
+      env: { ...process.env, KANBAN_URL: `http://127.0.0.1:${port}`, KANBAN_TOKEN: token },
+    })
+    const pending = new Map<number, (m: Record<string, unknown>) => void>()
+    let buf = ''
+    child.stdout.on('data', (d: Buffer) => {
+      buf += d.toString()
+      let i
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const msg = JSON.parse(buf.slice(0, i)) as { id: number }
+        buf = buf.slice(i + 1)
+        pending.get(msg.id)?.(msg as Record<string, unknown>)
+      }
+    })
+    const rpc = (id: number, method: string, params?: object) =>
+      new Promise<Record<string, any>>((resolve) => {
+        pending.set(id, resolve)
+        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+      })
+    try {
+      const init = await rpc(1, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '0' } })
+      expect(init.result.serverInfo.name).toBe('kanban')
+      const list = await rpc(2, 'tools/list')
+      const names = list.result.tools.map((t: { name: string }) => t.name)
+      expect(names).toEqual(expect.arrayContaining(['kanban_tasks', 'kanban_search', 'kanban_create_card', 'kanban_notify']))
+      const tasks = await rpc(3, 'tools/call', { name: 'kanban_tasks', arguments: { due: 'overdue' } })
+      const body = JSON.parse(tasks.result.content[0].text)
+      expect(body.tasks).toMatchObject([{ title: 'Mandar cotización', overdue: true }])
+      // crear y mover por herramienta
+      const made = await rpc(4, 'tools/call', { name: 'kanban_create_card', arguments: { boardId: 'b1', columnId: 'c1', title: 'Desde MCP' } })
+      expect(JSON.parse(made.result.content[0].text).card.title).toBe('Desde MCP')
+      // un error de la API llega como resultado de herramienta con isError
+      const bad = await rpc(5, 'tools/call', { name: 'kanban_board', arguments: { boardId: 'b2' } })
+      expect(bad.result.isError).toBe(true)
+      expect(bad.result.content[0].text).toContain('404')
+      expect((await rpc(6, 'tools/call', { name: 'no_existe', arguments: {} })).error.code).toBe(-32602)
+    } finally {
+      child.kill()
+    }
   })
 })

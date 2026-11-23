@@ -146,6 +146,40 @@ const MIGRATIONS: string[] = [
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     WHERE tbl = 'boards' AND EXISTS (SELECT 1 FROM workspaces WHERE id = 'general');
   `,
+  // 9: conexiones de agentes externos (Hermes, Claude…) por API con token. Solo se guarda la huella SHA-256 del token.
+  // `agent_boards` dice a qué tableros llega cada conexión y con qué nivel; `agent_log` es su registro de actividad.
+  `
+  CREATE TABLE agents (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    token_hash TEXT NOT NULL UNIQUE,
+    token_prefix TEXT NOT NULL,
+    created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT,
+    revoked_at TEXT,
+    last_used_at TEXT,
+    can_notify INTEGER NOT NULL DEFAULT 0,
+    can_contacts INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE agent_boards (
+    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    board_id TEXT NOT NULL,
+    access TEXT NOT NULL CHECK (access IN ('read', 'write')),
+    PRIMARY KEY (agent_id, board_id)
+  );
+  CREATE TABLE agent_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    at TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    board_id TEXT
+  );
+  CREATE INDEX agent_log_agent ON agent_log(agent_id, id);
+  `,
 ]
 
 export function openDb(file: string): DB {

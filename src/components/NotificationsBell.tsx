@@ -35,6 +35,8 @@ function describe(n: AppNotification): string {
       return `${who} cambió tu permiso a ${n.excerpt || 'otro'}`
     case 'access_removed':
       return `${who} te quitó el acceso a un tablero`
+    case 'agent':
+      return `${who} (agente) te avisó`
   }
 }
 
@@ -193,7 +195,7 @@ export function NotificationsBell({
                     <span className={styles.body}>
                       <span className={styles.what}>{describe(n)}</span>
                       {n.title && <span className={styles.card}>{n.title}</span>}
-                      {n.type === 'mention' && n.excerpt && (
+                      {(n.type === 'mention' || n.type === 'agent') && n.excerpt && (
                         <span className={styles.excerpt}>{n.excerpt}</span>
                       )}
                       <span className={styles.time}>{relativeTime(n.createdAt)}</span>

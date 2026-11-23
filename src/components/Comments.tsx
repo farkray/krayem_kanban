@@ -35,7 +35,14 @@ function useAuthors(cardId: string) {
   const mine: Author | null = myEmail
     ? { name: displayName({ email: myEmail, alias: myAlias }), email: myEmail, alias: myAlias }
     : null
-  return (authorId?: string): Author => {
+  return (authorId?: string, agentName?: string): Author => {
+    // Escrita por un agente externo: se muestra con su nombre y la marca «(agente)»
+    if (authorId?.startsWith('agent:'))
+      return {
+        name: `${agentName ?? 'Agente'} (agente)`,
+        email: `${authorId}@agente`,
+        alias: agentName ?? 'Agente',
+      }
     if (authorId) {
       if (authorId === me && mine) return mine
       const p = people.find((x) => x.userId === authorId)
@@ -393,7 +400,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
             <li key={update.id} className={styles.card}>
               <Post
                 comment={update}
-                author={authorOf(update.authorId)}
+                author={authorOf(update.authorId, update.agentName)}
                 likes={likes.get(update.id)}
                 canManage={canManage(update)}
                 canReply={canEdit}
@@ -407,7 +414,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
                         <li key={r.id}>
                           <Post
                             comment={r}
-                            author={authorOf(r.authorId)}
+                            author={authorOf(r.authorId, r.agentName)}
                             likes={likes.get(r.id)}
                             canManage={canManage(r)}
                             canReply={false}
@@ -421,7 +428,7 @@ export function Comments({ cardId, variant = 'updates' }: CommentsProps) {
                     <Composer
                       cardId={cardId}
                       draftKey={replyDraftKey(cardId, update.id)}
-                      label={`Responder a ${authorOf(update.authorId).name}`}
+                      label={`Responder a ${authorOf(update.authorId, update.agentName).name}`}
                       placeholder="Escribe una respuesta y menciona a otros con @"
                       submitLabel="Responder"
                       avatar={you}

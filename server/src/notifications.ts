@@ -3,7 +3,7 @@ import type { StatementSync } from 'node:sqlite'
 import type { DB } from './db.ts'
 
 export type NotificationType =
-  'mention' | 'assignment' | 'access_granted' | 'access_role' | 'access_removed'
+  'mention' | 'assignment' | 'access_granted' | 'access_role' | 'access_removed' | 'agent'
 
 export interface NotificationInput {
   userId: string
@@ -142,7 +142,8 @@ export class Notifications {
 
     const createdAt = now.toISOString()
     const since = new Date(now.getTime() - COALESCE_MS).toISOString()
-    const recent = this.findRecent.get(n.userId, n.type, n.boardId, n.cardId ?? '', since) as
+    // los avisos de un agente no se funden: cada mensaje es distinto
+    const recent = (n.type === 'agent' ? undefined : this.findRecent.get(n.userId, n.type, n.boardId, n.cardId ?? '', since)) as
       { id: string; count: number } | undefined
     let id: string
     if (recent) {
@@ -177,8 +178,9 @@ export class Notifications {
     const rows = this.db
       .prepare(
         `SELECT n.id, n.type, n.board_id, n.card_id, n.title, n.excerpt, n.count, n.actor_id,
-                n.created_at, n.read_at, u.email AS actor_email, u.alias AS actor_alias
+                n.created_at, n.read_at, u.email AS actor_email, u.alias AS actor_alias, g.name AS agent_name
          FROM notifications n LEFT JOIN users u ON u.id = n.actor_id
+         LEFT JOIN agents g ON 'agent:' || g.id = n.actor_id
          WHERE n.user_id = ?1
            AND (?2 = 0 OR n.read_at IS NULL)
            AND (?3 = '' OR n.id = ?3)
@@ -197,6 +199,7 @@ export class Notifications {
       read_at: string | null
       actor_email: string | null
       actor_alias: string | null
+      agent_name: string | null
     }[]
     const unread = (
       this.db
@@ -214,7 +217,7 @@ export class Notifications {
         excerpt: r.excerpt,
         count: r.count,
         actorId: r.actor_id,
-        actorName: r.actor_alias || r.actor_email || '',
+        actorName: r.actor_alias || r.actor_email || r.agent_name || '',
         createdAt: r.created_at,
         readAt: r.read_at,
       })),
