@@ -823,7 +823,8 @@ test('conexiones de agentes: el admin crea una, ve el token una vez; el agente l
 
   // revocar: el acceso termina al instante
   const item = main.getByRole('list', { name: 'Conexiones' }).getByRole('listitem').first()
-  await item.getByRole('button', { name: 'Revocar' }).click()
+  await item.getByRole('button', { name: 'Más acciones de Hermes' }).click()
+  await item.getByRole('menuitem', { name: 'Revocar acceso' }).click()
   await admin.page.getByRole('alertdialog').getByRole('button', { name: 'Revocar' }).click()
   await expect(item).toContainText('Revocada')
   expect((await call('/me')).status).toBe(401)

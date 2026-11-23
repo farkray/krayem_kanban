@@ -586,3 +586,24 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
+
+/* Buscador: cuadro con esquinas suaves, como los demás campos */
+.search {
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 640px) {
+  /* Cuatro pestañas no caben en un teléfono: se desplazan en horizontal con la activa a la vista */
+  .tab {
+    padding: 0 var(--space-3);
+  }
+
+  .tabs {
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .tab {
+    scroll-snap-align: center;
+  }
+}

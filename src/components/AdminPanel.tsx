@@ -3,10 +3,8 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
-  type ReactNode,
 } from 'react'
 import {
   adminCreateUser,
@@ -25,7 +23,7 @@ import { AdminNotifications } from './AdminNotifications'
 import { AdminWorkspaces } from './AdminWorkspaces'
 import { Avatar } from './Avatar'
 import { ConfirmDialog } from './ConfirmDialog'
-import { MoreIcon } from './Icons'
+import { RowMenu } from './RowMenu'
 import { Select } from './Select'
 import styles from './AdminPanel.module.css'
 
@@ -72,55 +70,6 @@ interface Shown {
   password: string
 }
 
-/** Menú "⋯" de una fila: acciones secundarias (restablecer contraseña, eliminar). */
-function RowMenu({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false)
-  const wrap = useRef<HTMLDivElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        trigger.current?.focus()
-      }
-    }
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onDown)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onDown)
-    }
-  }, [open])
-
-  return (
-    <div ref={wrap} className={styles.menuWrap}>
-      <button
-        ref={trigger}
-        type="button"
-        className={styles.iconBtn}
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <MoreIcon width={18} height={18} />
-      </button>
-      {open && (
-        // Un clic en una opción cierra el menú
-        <div className={styles.menu} role="menu" onClick={() => setOpen(false)}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
-
 interface Props {
   /** Correo de la cuenta en uso (no se puede eliminar a sí misma). */
   me: string | null
@@ -151,6 +100,7 @@ export function AdminPanel({ me, isAdmin, onBack }: Props) {
 
   const pickTab = (t: Tab) => {
     setTab(t)
+    document.getElementById(`tab-${t}`)?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
     try {
       sessionStorage.setItem(TAB_KEY, t)
     } catch {

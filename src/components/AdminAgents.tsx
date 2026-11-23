@@ -16,6 +16,7 @@ import {
   type AgentLogRow,
 } from '../sync/admin'
 import { ConfirmDialog } from './ConfirmDialog'
+import { RowMenu } from './RowMenu'
 import { Select } from './Select'
 import { TextField } from './TextField'
 import panel from './AdminPanel.module.css'
@@ -36,8 +37,16 @@ const ACCESS_OPTIONS = [
 
 type Status = 'active' | 'revoked' | 'expired'
 const statusOf = (a: AgentConnection): Status =>
-  a.revokedAt ? 'revoked' : a.expiresAt && Date.parse(a.expiresAt) <= Date.now() ? 'expired' : 'active'
-const STATUS_LABEL: Record<Status, string> = { active: 'Activa', revoked: 'Revocada', expired: 'Caducada' }
+  a.revokedAt
+    ? 'revoked'
+    : a.expiresAt && Date.parse(a.expiresAt) <= Date.now()
+      ? 'expired'
+      : 'active'
+const STATUS_LABEL: Record<Status, string> = {
+  active: 'Activa',
+  revoked: 'Revocada',
+  expired: 'Caducada',
+}
 
 const baseUrl = () => `${window.location.origin}/api/agent/v1`
 
@@ -86,11 +95,20 @@ function Guide({ name, token, onClose }: { name: string; token: string; onClose:
   )
 
   return (
-    <section className={`${panel.card} ${styles.reveal}`} role="status" aria-label="Token de la conexión">
-      <h2 className={panel.sub}>Token de «{name}»</h2>
+    <section
+      className={`${panel.card} ${styles.reveal}`}
+      role="status"
+      aria-label="Token de la conexión"
+    >
+      <div className={styles.revealHead}>
+        <h2 className={panel.sub}>Token de «{name}»</h2>
+        <button type="button" className={panel.primary} onClick={onClose}>
+          Ya lo guardé
+        </button>
+      </div>
       <p className={styles.warn}>
-        Cópialo ahora: <strong>no se vuelve a mostrar</strong>. Compártelo por un canal seguro y solo con quien lo va a usar; si se
-        filtra, genera uno nuevo o revoca la conexión.
+        Cópialo ahora: <strong>no se vuelve a mostrar</strong>. Compártelo por un canal seguro y
+        solo con quien lo va a usar; si se filtra, genera uno nuevo o revoca la conexión.
       </p>
       {block('token', 'Token', token)}
       {block('curl', 'Prueba rápida', curl)}
@@ -99,9 +117,6 @@ function Guide({ name, token, onClose }: { name: string; token: string; onClose:
       <p className={panel.hint}>
         Contrato de la API (OpenAPI, para Hermes u otros agentes): <code>{url}/openapi.json</code>
       </p>
-      <button type="button" className={panel.primary} onClick={onClose}>
-        Ya lo guardé
-      </button>
     </section>
   )
 }
@@ -175,11 +190,12 @@ function AgentForm({
   }
 
   return (
-    <form className={panel.card} onSubmit={submit} aria-label={title}>
+    <form className={`${panel.card} ${styles.form}`} onSubmit={submit} aria-label={title}>
       <h2 className={panel.sub}>{title}</h2>
       <div className={styles.fields}>
         <TextField
-          label="Nombre del agente (Hermes, Claude…)"
+          label="Nombre del agente (obligatorio)"
+          placeholder="Hermes, Claude…"
           value={f.name}
           maxLength={60}
           required
@@ -201,9 +217,9 @@ function AgentForm({
 
       <fieldset className={styles.perms}>
         <legend className={styles.legend}>Permisos</legend>
-        <label className={styles.check}>
-          <input type="checkbox" checked disabled /> Leer los tableros autorizados, buscar y responder preguntas
-        </label>
+        <p className={styles.always}>
+          Siempre puede leer los tableros autorizados, buscar y responder preguntas.
+        </p>
         <label className={styles.check}>
           <input
             type="checkbox"
@@ -221,7 +237,8 @@ function AgentForm({
           Ver correo y WhatsApp de las personas (para que el agente les escriba)
         </label>
         <p className={panel.hint}>
-          Crear y editar tarjetas, moverlas y poner actualizaciones se decide por tablero: «Leer y escribir».
+          Crear y editar tarjetas, moverlas y poner actualizaciones se decide por tablero: «Leer y
+          escribir».
         </p>
       </fieldset>
 
@@ -266,7 +283,9 @@ function AgentForm({
                     label={`Nivel en ${b.title}`}
                     value={access}
                     options={ACCESS_OPTIONS}
-                    onChange={(v) => setF({ ...f, boards: { ...f.boards, [b.id]: v as AgentAccess } })}
+                    onChange={(v) =>
+                      setF({ ...f, boards: { ...f.boards, [b.id]: v as AgentAccess } })
+                    }
                   />
                 )}
               </li>
@@ -282,7 +301,7 @@ function AgentForm({
         </p>
       )}
       <div className={styles.actions}>
-        <button type="submit" className={panel.primary} disabled={busy || f.name.trim() === ''}>
+        <button type="submit" className={panel.primary} disabled={busy}>
           {submitLabel}
         </button>
         <button type="button" className={panel.secondary} onClick={onCancel}>
@@ -309,7 +328,10 @@ export function AdminAgents() {
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<{ kind: 'new' } | { kind: 'edit'; id: string } | null>(null)
   const [reveal, setReveal] = useState<{ name: string; token: string } | null>(null)
-  const [confirm, setConfirm] = useState<{ kind: 'revoke' | 'delete' | 'rotate'; agent: AgentConnection } | null>(null)
+  const [confirm, setConfirm] = useState<{
+    kind: 'revoke' | 'delete' | 'rotate'
+    agent: AgentConnection
+  } | null>(null)
   const [log, setLog] = useState<{ id: string; rows: AgentLogRow[] } | null>(null)
 
   const load = useCallback(async () => {
@@ -370,8 +392,9 @@ export function AdminAgents() {
   return (
     <div className={panel.panel}>
       <p className={styles.intro}>
-        Aquí se da acceso por API a <strong>agentes externos</strong> (Hermes, Claude…). Cada conexión tiene su token y solo ve los
-        tableros que autorices. Los correos los envía el propio agente; la herramienta solo le da la información.
+        Aquí se da acceso por API a <strong>agentes externos</strong> (Hermes, Claude…). Cada
+        conexión tiene su token y solo ve los tableros que autorices. Los correos los envía el
+        propio agente; la herramienta solo le da la información.
       </p>
       {error && (
         <p className={panel.error} role="alert">
@@ -407,13 +430,21 @@ export function AdminAgents() {
           <h2 id="agents-title" className={panel.sub}>
             Conexiones de agentes
           </h2>
-          <button type="button" className={panel.primary} onClick={() => setMode({ kind: 'new' })}>
-            Nueva conexión
-          </button>
+          {mode === null && (
+            <button
+              type="button"
+              className={panel.primary}
+              onClick={() => setMode({ kind: 'new' })}
+            >
+              Nueva conexión
+            </button>
+          )}
         </div>
         {agents === null && !error && <p className={panel.hint}>Cargando…</p>}
         {agents?.length === 0 && (
-          <p className={panel.hint}>Aún no hay conexiones. Crea una para que un agente pueda leer tus tableros.</p>
+          <p className={panel.hint}>
+            Aún no hay conexiones. Crea una para que un agente pueda leer tus tableros.
+          </p>
         )}
         <ul className={styles.list} aria-label="Conexiones">
           {agents?.map((a) => {
@@ -440,62 +471,95 @@ export function AdminAgents() {
                 </p>
                 <ul className={styles.tags} aria-label={`Tableros de ${a.name}`}>
                   {a.boards.map((b) => (
-                    <li key={b.boardId} className={b.available ? styles.tag : `${styles.tag} ${styles.gone}`}>
+                    <li
+                      key={b.boardId}
+                      className={b.available ? styles.tag : `${styles.tag} ${styles.gone}`}
+                    >
                       {b.title} · {b.access === 'write' ? 'escribir' : 'leer'}
                     </li>
                   ))}
                 </ul>
-                <div className={styles.actions}>
-                  <button type="button" className={panel.secondary} onClick={() => setMode({ kind: 'edit', id: a.id })}>
-                    Editar
-                  </button>
-                  <button type="button" className={panel.secondary} onClick={() => setConfirm({ kind: 'rotate', agent: a })}>
-                    Nuevo token
-                  </button>
-                  <button type="button" className={panel.secondary} onClick={() => void showLog(a)}>
-                    {log?.id === a.id ? 'Ocultar actividad' : 'Actividad'}
-                  </button>
-                  {st === 'active' && (
-                    <button type="button" className={panel.secondary} onClick={() => setConfirm({ kind: 'revoke', agent: a })}>
-                      Revocar
-                    </button>
-                  )}
+                <div className={styles.itemActions}>
                   <button
                     type="button"
-                    className={`${panel.secondary} ${styles.danger}`}
-                    onClick={() => setConfirm({ kind: 'delete', agent: a })}
+                    className={panel.secondary}
+                    onClick={() => setMode({ kind: 'edit', id: a.id })}
                   >
-                    Eliminar
+                    Editar
                   </button>
+                  <button
+                    type="button"
+                    className={panel.secondary}
+                    aria-expanded={log?.id === a.id}
+                    onClick={() => void showLog(a)}
+                  >
+                    {log?.id === a.id ? 'Ocultar actividad' : 'Actividad'}
+                  </button>
+                  <span className={styles.spacer} />
+                  <RowMenu label={`Más acciones de ${a.name}`}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={panel.menuItem}
+                      onClick={() => setConfirm({ kind: 'rotate', agent: a })}
+                    >
+                      Generar token nuevo
+                    </button>
+                    {st === 'active' && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={panel.menuItem}
+                        onClick={() => setConfirm({ kind: 'revoke', agent: a })}
+                      >
+                        Revocar acceso
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`${panel.menuItem} ${panel.menuDanger}`}
+                      onClick={() => setConfirm({ kind: 'delete', agent: a })}
+                    >
+                      Eliminar conexión
+                    </button>
+                  </RowMenu>
                 </div>
                 {log?.id === a.id && (
-                  <table className={styles.log} aria-label={`Actividad de ${a.name}`}>
-                    <thead>
-                      <tr>
-                        <th scope="col">Cuándo</th>
-                        <th scope="col">Petición</th>
-                        <th scope="col">Resultado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {log.rows.map((r, i) => (
-                        <tr key={i}>
-                          <td>{relativeTime(r.at)}</td>
-                          <td>
-                            <code>
-                              {r.method} {r.path.replace('/api/agent/v1', '')}
-                            </code>
-                          </td>
-                          <td className={r.status >= 400 ? styles.bad : undefined}>{r.status}</td>
-                        </tr>
-                      ))}
-                      {log.rows.length === 0 && (
+                  <div
+                    className={styles.logWrap}
+                    role="region"
+                    aria-label={`Actividad de ${a.name}`}
+                    tabIndex={0}
+                  >
+                    <table className={styles.log}>
+                      <thead>
                         <tr>
-                          <td colSpan={3}>Sin actividad todavía.</td>
+                          <th scope="col">Cuándo</th>
+                          <th scope="col">Petición</th>
+                          <th scope="col">Resultado</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {log.rows.map((r, i) => (
+                          <tr key={i}>
+                            <td>{relativeTime(r.at)}</td>
+                            <td>
+                              <code>
+                                {r.method} {r.path.replace('/api/agent/v1', '')}
+                              </code>
+                            </td>
+                            <td className={r.status >= 400 ? styles.bad : undefined}>{r.status}</td>
+                          </tr>
+                        ))}
+                        {log.rows.length === 0 && (
+                          <tr>
+                            <td colSpan={3}>Sin actividad todavía.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </li>
             )
@@ -512,7 +576,13 @@ export function AdminAgents() {
                 ? `Revocar «${confirm.agent.name}»`
                 : `Nuevo token para «${confirm.agent.name}»`
           }
-          confirmLabel={confirm.kind === 'delete' ? 'Eliminar' : confirm.kind === 'revoke' ? 'Revocar' : 'Generar token'}
+          confirmLabel={
+            confirm.kind === 'delete'
+              ? 'Eliminar'
+              : confirm.kind === 'revoke'
+                ? 'Revocar'
+                : 'Generar token'
+          }
           onCancel={() => setConfirm(null)}
           onConfirm={() => void act()}
         >

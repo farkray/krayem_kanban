@@ -5,6 +5,42 @@
   font-size: var(--text-sm);
 }
 
+.form {
+  max-width: 760px;
+}
+
+.always {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.revealHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* Acciones de cada conexión: las habituales a la izquierda y el menú «⋯» (token nuevo, revocar, eliminar) a la derecha */
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.logWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .fields {
   display: grid;
   gap: var(--space-3);
@@ -103,9 +139,13 @@
 .item {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.item:first-child {
+  padding-top: var(--space-2);
+  border-top: 0;
 }
 
 .head {
@@ -167,9 +207,10 @@
 }
 
 .tag {
-  padding: 2px 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-xs);
-  background: var(--color-chip);
+  background: var(--color-surface);
   font-size: var(--text-xs);
 }
 
