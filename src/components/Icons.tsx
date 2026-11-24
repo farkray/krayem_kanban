@@ -236,3 +236,9 @@ export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M6 9l6 6 6-6" />
   </Svg>
 )
+
+export const RefreshIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9M18.5 3.5v4h-4M5.5 20.5v-4h4" />
+  </Svg>
+)

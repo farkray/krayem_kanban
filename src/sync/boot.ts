@@ -16,6 +16,7 @@ import { setBlobFetcher } from './blobs'
 import { createEngine, type Engine } from './engine'
 import { setGuestMode } from '../lib/access'
 import { loadCachedAccess, refreshAccess, resetAccess } from './access'
+import { useSync } from './status'
 import { createHttpRemote } from './httpRemote'
 import {
   receiveNotification,
@@ -164,6 +165,24 @@ export const signUp = async (email: string, password: string, alias?: string) =>
   finish(await apiSignup(email, password, alias))
 export const authConfig = apiAuthConfig
 export const changePassword = apiChangePassword
+
+/**
+ * Sincroniza ahora: envía lo pendiente, descarga lo nuevo, y refresca permisos y avisos.
+ * `offline` si no hay red; `error` si el servidor falló (lo pendiente se reintenta solo); `skipped` si no hay sesión.
+ */
+export async function syncNow(): Promise<'ok' | 'offline' | 'error' | 'skipped'> {
+  if (!engine) return 'skipped'
+  if (!navigator.onLine) return 'offline'
+  try {
+    await engine.flush()
+    await engine.pull()
+    await refreshAccess()
+    await refreshNotifications()
+    return useSync.getState().error ? 'error' : 'ok'
+  } catch {
+    return 'error'
+  }
+}
 
 /** Cierra sesión: intenta enviar lo pendiente y borra los datos locales del dispositivo. */
 export async function signOut(): Promise<void> {

@@ -593,17 +593,16 @@
 }
 
 @media (max-width: 640px) {
-  /* Cuatro pestañas no caben en un teléfono: se desplazan en horizontal con la activa a la vista */
+  /* Las cuatro pestañas caben en un teléfono (antes «Avisos», donde se configura n8n, quedaba fuera de la vista):
+     sin contador, relleno chico y repartidas a lo ancho; si aun así no cupieran, se desplazan */
   .tab {
-    padding: 0 var(--space-3);
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
   }
 
-  .tabs {
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-  }
-
-  .tab {
-    scroll-snap-align: center;
+  .tab .count {
+    display: none;
   }
 }
